@@ -1,0 +1,2267 @@
+/********************************************
+ * GOFAST — BASE & VARIABLES
+ ********************************************/
+ :root {
+    --gofast-bg: #000;
+    --gofast-fg: #fff;
+    --gofast-card: #fff;
+    --gofast-text-dark: #000;
+    --gofast-gray-100: #fafafa;
+    --gofast-gray-200: #f4f4f4;
+    --gofast-gray-300: #eee;
+    --gofast-gray-400: #ddd;
+    --gofast-gray-500: #cfcfcf;
+    --gofast-yellow: #f4c524;
+    --gofast-yellow-hover: #e6b91d;
+    --gofast-amber: #e0a800;
+    --gofast-danger: #ff4d4d;
+    --gofast-danger-hover: #d63c3c;
+    --radius-s: 6px;
+    --radius-m: 8px;
+    --radius-l: 10px;
+  }
+  
+  html,
+  body {
+    background: var(--gofast-bg);
+    color: var(--gofast-fg);
+    overflow-x: visible !important;
+    box-sizing: border-box;
+  }
+  
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  
+  /********************************************
+   * HEADER GENERATEPRESS
+   ********************************************/
+  .site-logo img,
+  .custom-logo {
+    max-height: 42px;
+    width: auto;
+  }
+  
+  .site-header {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  .main-navigation {
+    display: flex;
+    align-items: center;
+  }
+  
+  .main-navigation .main-nav ul li a {
+    color: var(--gofast-fg);
+  }
+  
+  .main-navigation .main-nav ul li a:hover,
+  .main-navigation .main-nav ul li.current-menu-item > a {
+    color: var(--gofast-yellow);
+  }
+  
+  .menu-toggle,
+  .gp-icon svg {
+    color: var(--gofast-fg);
+  }
+  
+  .gofast-cta-btn {
+    background: var(--gofast-yellow);
+    padding: 10px 20px;
+    border-radius: var(--radius-m);
+    font-weight: 700;
+    color: #000;
+    display: inline-block;
+  }
+  
+  /********************************************
+   * GOFAST — HEADER MODERNO Y RESPONSIVE
+   ********************************************/
+  .gofast-menu {
+    background: #000;
+    border-bottom: 1px solid #222;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+  }
+  
+  .gofast-menu-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  
+  .gofast-logo img {
+    height: 60px;
+    width: auto;
+    display: block;
+  }
+  
+  .gofast-menu-links {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .gofast-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 28px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .gofast-tab::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.5s;
+  }
+  
+  .gofast-tab:hover::before {
+    left: 100%;
+  }
+  
+  .gofast-tab:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 16px rgba(244, 197, 36, 0.25), 0 0 0 1px rgba(244, 197, 36, 0.1);
+    transform: translateY(-2px);
+  }
+  
+  .gofast-tab-primary {
+    background: linear-gradient(135deg, var(--gofast-yellow) 0%, var(--gofast-yellow-hover) 100%);
+    color: #000;
+    border: 1px solid rgba(244, 197, 36, 0.3);
+    box-shadow: 0 4px 16px rgba(244, 197, 36, 0.3), 0 0 0 1px rgba(244, 197, 36, 0.2);
+    font-weight: 700;
+  }
+  
+  .gofast-tab-primary:hover {
+    background: linear-gradient(135deg, var(--gofast-yellow-hover) 0%, var(--gofast-yellow) 100%);
+    box-shadow: 0 6px 20px rgba(244, 197, 36, 0.4), 0 0 0 1px rgba(244, 197, 36, 0.3);
+    transform: translateY(-2px);
+  }
+  
+  .gofast-hamburger {
+    display: none;
+    background: #24252b;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-l);
+    color: #fff;
+    font-size: 24px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .gofast-menu-close {
+    display: none;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(36, 37, 43, 0.95);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    color: #fff;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10001;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+  }
+
+  .gofast-menu-close:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+  }
+
+  .gofast-menu-close .gofast-close-icon {
+    display: block;
+    font-size: 32px;
+    line-height: 1;
+    color: #FFFFFF;
+    font-weight: 300;
+    font-family: Arial, sans-serif;
+    pointer-events: none;
+    user-select: none;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /********************************************
+   * FORMULARIO INICIAL
+   ********************************************/
+  .gofast-form {
+    max-width: 900px;
+    margin: 20px auto;
+    overflow: visible !important;
+  }
+  
+  .gofast-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 12px;
+  }
+  
+  .gofast-form label {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+  }
+  
+  .gofast-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--gofast-gray-400);
+    border-radius: var(--radius-s);
+    font-size: 15px;
+    background: #fff;
+    color: #000;
+  }
+  
+  /********************************************
+   * DESTINOS ADICIONALES
+   ********************************************/
+  .gofast-destinos-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 15px;
+    margin-bottom: 10px;
+  }
+  
+  .gofast-destino-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  
+  .gofast-remove {
+    background: var(--gofast-danger);
+    color: #fff;
+    border: 0;
+    border-radius: var(--radius-s);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  
+  .gofast-remove:hover {
+    background: var(--gofast-danger-hover);
+  }
+  
+  .gofast-add-button {
+    width: 100%;
+    border: 0;
+    background: var(--gofast-gray-200);
+    padding: 8px 12px;
+    border-radius: var(--radius-s);
+    cursor: pointer;
+    margin-top: 5px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #000;
+  }
+  
+  .gofast-add-button:hover {
+    background: var(--gofast-gray-500);
+  }
+  
+  /********************************************
+   * CHECKOUT / COTIZACIÓN
+   ********************************************/
+  .gofast-checkout-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    max-width: 1400px;
+    margin: 20px auto;
+    padding: 0 20px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* Cuando contiene tabla de negocios, usar una sola columna */
+  .gofast-checkout-wrapper .gofast-box-negocios {
+    grid-column: 1 / -1;
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  /* Cuando solo hay un formulario (editar/crear), usar una sola columna centrada */
+  .gofast-checkout-wrapper > .gofast-box:only-child:not(.gofast-box-negocios) {
+    grid-column: 1 / -1;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  
+  /* Campo tipo otro - evitar que quede por encima del Select2 */
+  #tipo_otro_wrapper {
+    position: relative;
+    z-index: 1 !important;
+    margin-top: 16px;
+    margin-bottom: 16px;
+  }
+  
+  #tipo_otro_wrapper input {
+    position: relative;
+    z-index: 1 !important;
+  }
+  
+  /* Select2 dropdown - z-index moderado para no quedar por encima de todo */
+  .select2-dropdown {
+    z-index: 1000 !important;
+    position: absolute !important;
+  }
+  
+  .select2-container {
+    z-index: 999 !important;
+    position: relative;
+  }
+  
+  /* Cuando está abierto, z-index moderado */
+  .select2-container--open {
+    z-index: 1000 !important;
+  }
+  
+  .select2-container--open .select2-dropdown {
+    z-index: 1000 !important;
+    position: absolute !important;
+  }
+  
+  /* Dropdown de barrio específicamente - z-index más bajo */
+  select[name="barrio_id"] + .select2-container,
+  select[name="barrio_id"] + .select2-container--open,
+  select[name="barrio_id"] + .select2-container .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  /* Asegurar que el dropdown siempre esté por encima del campo tipo otro pero no de todo */
+  body .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  body .select2-container--open .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  /* Asegurar que el campo tipo otro siempre esté por debajo - incluso al hacer scroll */
+  #tipo_otro_wrapper,
+  #tipo_otro_wrapper *,
+  body #tipo_otro_wrapper,
+  body #tipo_otro_wrapper * {
+    z-index: 1 !important;
+    position: relative !important;
+  }
+  
+  /* Asegurar que el contenedor del formulario no cree un nuevo contexto de apilamiento */
+  .gofast-box form {
+    position: relative;
+    z-index: auto;
+  }
+  
+  .gofast-box {
+    position: relative;
+    z-index: auto;
+  }
+  
+  /* Asegurar que el dropdown siempre esté por encima - reglas muy específicas */
+  body .select2-dropdown,
+  html body .select2-dropdown,
+  .gofast-box .select2-dropdown,
+  .gofast-checkout-wrapper .select2-dropdown {
+    z-index: 1000 !important;
+    position: absolute !important;
+  }
+  
+  body .select2-container--open .select2-dropdown,
+  html body .select2-container--open .select2-dropdown,
+  .gofast-box .select2-container--open .select2-dropdown,
+  .gofast-checkout-wrapper .select2-container--open .select2-dropdown {
+    z-index: 1000 !important;
+    position: absolute !important;
+  }
+  
+  /* Dropdown de barrio específicamente - z-index más bajo */
+  select[name="barrio_id"] + .select2-container,
+  select[name="barrio_id"] + .select2-container--open,
+  select[name="barrio_id"] + .select2-container .select2-dropdown,
+  body select[name="barrio_id"] + .select2-container .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  .gofast-box {
+    background: var(--gofast-card);
+    color: var(--gofast-text-dark);
+    padding: 26px;
+    border-radius: var(--radius-l);
+    border: 1px solid var(--gofast-gray-300);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    max-width: 100%;
+    width: 100% !important;
+    margin: 0 auto;
+  }
+  
+  .gofast-total-box {
+    font-size: 22px;
+    font-weight: 700;
+    background: #fff9d6;
+    padding: 14px;
+    border-left: 5px solid var(--gofast-yellow);
+    border-radius: var(--radius-m);
+    margin-bottom: 24px;
+  }
+  
+  .gofast-recargo-box {
+    background: #fff3cd;
+    border-left: 6px solid var(--gofast-amber);
+    padding: 12px;
+    border-radius: var(--radius-m);
+    margin-bottom: 18px;
+    color: #735c00;
+    font-size: 14px;
+  }
+  
+  .gofast-route-item {
+    background: var(--gofast-gray-100);
+    padding: 10px 12px;
+    border-radius: var(--radius-s);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 10px;
+    border-left: 4px solid var(--gofast-yellow);
+  }
+  
+  /********************************************
+   * INPUTS / CAMPOS
+   ********************************************/
+  .gofast-box label {
+    font-weight: 600;
+    margin-bottom: 5px;
+    display: block;
+    color: #000;
+  }
+  
+  .gofast-box input,
+  .gofast-box select,
+  .gofast-box textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--gofast-gray-400);
+    border-radius: var(--radius-s);
+    margin-bottom: 16px;
+    font-size: 15px;
+    background: #fff;
+    color: #000;
+  }
+  
+  .gofast-box input[type="text"],
+  .gofast-box input[type="email"],
+  .gofast-box input[type="password"] {
+    height: 46px;
+    font-size: 16px;
+    padding: 10px 12px;
+  }
+  
+  .gofast-box input::placeholder,
+  .gofast-box textarea::placeholder {
+    color: #777;
+  }
+  
+  .gofast-box input:focus,
+  .gofast-box select:focus,
+  .gofast-box textarea:focus {
+    outline: none;
+    border-color: var(--gofast-yellow);
+    box-shadow: 0 0 0 3px rgba(244, 197, 36, 0.25);
+  }
+  
+  /********************************************
+   * BOTONES
+   ********************************************/
+  .gofast-btn,
+  .gofast-btn-request,
+  .gofast-submit,
+  .gofast-btn-action {
+    display: block;
+    width: 100%;
+    padding: 16px;
+    border-radius: var(--radius-m);
+    font-weight: 700;
+    font-size: 18px;
+    text-align: center;
+    cursor: pointer;
+    border: 0;
+    text-decoration: none;
+    background: var(--gofast-yellow);
+    color: #000;
+    transition: background 0.2s;
+  }
+  
+  .gofast-btn:hover,
+  .gofast-btn-request:hover,
+  .gofast-submit:hover,
+  .gofast-btn-action:hover {
+    background: var(--gofast-yellow-hover);
+  }
+  
+  .gofast-secondary {
+    background: #eaeaea;
+    color: #000;
+  }
+  
+  .gofast-secondary:hover {
+    background: #d5d5d5;
+  }
+  
+  .gofast-btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .gofast-small-btn,
+  .gofast-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 0;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--gofast-gray-200);
+    color: #000;
+    text-decoration: none;
+  }
+  
+  .gofast-small-btn {
+    margin-top: 6px;
+  }
+  
+  .gofast-small-btn:hover,
+  .gofast-icon-btn:hover {
+    background: var(--gofast-gray-500);
+  }
+  
+  .gofast-icon-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 14px;
+  }
+  
+  .gofast-chip-danger {
+    background: #ffe5e5;
+    color: #b00020;
+  }
+  
+  .gofast-chip-danger:hover {
+    background: #ffcccc;
+  }
+  
+  .gofast-btn-mini {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 0;
+    background: var(--gofast-yellow);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #000;
+  }
+  
+  .gofast-btn-mini:hover {
+    background: var(--gofast-yellow-hover);
+  }
+  
+  .gofast-btn-outline {
+    background: #fff;
+    border: 1px solid var(--gofast-gray-400);
+  }
+  
+  .gofast-btn-outline:hover {
+    background: var(--gofast-gray-200);
+  }
+  
+  .gofast-cookie-btn {
+    background: var(--gofast-yellow);
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--radius-s);
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  
+  .gofast-cookie-btn:hover {
+    background: var(--gofast-yellow-hover);
+  }
+  
+  /********************************************
+   * SECCIONES / LAYOUT
+   ********************************************/
+  .container,
+  .site,
+  .site-content,
+  .inside-article {
+    overflow-x: visible;
+    max-width: 100%;
+  }
+  
+  /* En móvil, permitir overflow horizontal para tablas */
+  @media (max-width: 768px) {
+    .inside-article {
+      overflow-x: visible !important;
+    }
+    
+    .content-area {
+      overflow-x: visible !important;
+    }
+  }
+  
+  .page .entry-title {
+    display: none;
+  }
+  
+  .page .inside-article {
+    padding-top: 10px;
+  }
+  
+  /********************************************
+   * GOFAST — HOME LAYOUT
+   ********************************************/
+  .gofast-home {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+  }
+  
+  .gofast-home-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.1fr);
+    gap: 24px;
+    align-items: stretch;
+    margin-bottom: 32px;
+  }
+  
+  .gofast-home-hero-text h1 {
+    font-size: 32px;
+    margin: 10px 0 8px;
+  }
+  
+  .gofast-home-hero-text h1 span {
+    color: var(--gofast-yellow);
+  }
+  
+  .gofast-home-subtitle {
+    margin: 0 0 16px;
+    font-size: 15px;
+    color: #f5f5f5;
+  }
+  
+  .gofast-home-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 12px;
+  }
+  
+  .gofast-home-hero-ctas {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  
+  .gofast-home-links {
+    font-size: 13px;
+    color: #ddd;
+  }
+  
+  .gofast-home-links a {
+    color: #fff;
+    text-decoration: none;
+  }
+  
+  .gofast-home-links a:hover {
+    text-decoration: underline;
+  }
+  
+  .gofast-home-bullets {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #e4e4e4;
+  }
+  
+  .gofast-home-bullets li::before {
+    content: "• ";
+    color: var(--gofast-yellow);
+  }
+  
+  .gofast-home-hero-panel h3 {
+    margin-top: 0;
+  }
+  
+  .gofast-home-panel-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0;
+  }
+  
+  .gofast-home-panel-list li {
+    margin-bottom: 6px;
+  }
+  
+  .gofast-home-panel-list a {
+    display: block;
+    text-decoration: none;
+    color: var(--gofast-text-dark);
+    font-weight: 500;
+  }
+  
+  .gofast-home-panel-list a:hover {
+    text-decoration: underline;
+  }
+  
+  .gofast-home-section {
+    margin-bottom: 32px;
+  }
+  
+  .gofast-home-section h2 {
+    margin: 0 0 12px;
+  }
+  
+  .gofast-home-text {
+    margin: 0 0 14px;
+    font-size: 14px;
+    color: #f5f5f5;
+  }
+  
+  .gofast-home-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  
+  .gofast-home-clients .gofast-box {
+    text-align: center;
+    font-weight: 600;
+  }
+  
+  .gofast-home-work {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .gofast-home-work-cta {
+    min-width: 220px;
+    text-align: right;
+  }
+  
+  /********************************************
+   * GOFAST — ADMIN RECARGOS
+   ********************************************/
+  .gofast-recargos-table,
+  .gofast-rangos-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+  
+  .gofast-recargos-table th,
+  .gofast-recargos-table td,
+  .gofast-rangos-table th,
+  .gofast-rangos-table td {
+    border-bottom: 1px solid var(--gofast-gray-300);
+    padding: 6px 8px;
+  }
+  
+  .gofast-recargos-table th,
+  .gofast-rangos-table th {
+    background: var(--gofast-gray-100);
+    text-align: left;
+  }
+  
+  .gofast-recargo-bloque {
+    border: 1px solid var(--gofast-gray-300);
+    border-radius: var(--radius-m);
+    padding: 10px;
+    margin-bottom: 12px;
+    background: var(--gofast-gray-100);
+  }
+  
+  .gofast-recargo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  
+  .gofast-recargo-nuevo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin-bottom: 8px;
+  }
+  
+  .gofast-recargo-nuevo > div {
+    min-width: 160px;
+  }
+  
+  .gofast-recargo-nuevo label {
+    font-size: 13px;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 2px;
+  }
+  
+  .gofast-recargos-table tr.gofast-row-active td,
+  .gofast-row-active td {
+    background: #fffdf2;
+  }
+  
+  .gofast-recargos-table tr.gofast-row-inactive td,
+  .gofast-row-inactive td {
+    opacity: 0.6;
+  }
+  
+  /********************************************
+   * GOFAST — SWITCH ACTIVO / INACTIVO
+   ********************************************/
+  .gofast-box label.gofast-switch,
+  .gofast-switch {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    user-select: none;
+    margin-bottom: 4px;
+    color: #000;
+  }
+  
+  .gofast-switch input {
+    display: none;
+  }
+  
+  .gofast-switch-slider {
+    position: relative;
+    width: 42px;
+    height: 22px;
+    background: #d0d0d0;
+    border-radius: 999px;
+    border: 1px solid #bfbfbf;
+    transition: background 0.2s;
+  }
+  
+  .gofast-switch-slider::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s;
+  }
+  
+  .gofast-switch input:checked + .gofast-switch-slider {
+    background: var(--gofast-yellow);
+    border-color: var(--gofast-yellow-hover);
+  }
+  
+  .gofast-switch input:checked + .gofast-switch-slider::before {
+    transform: translateX(18px);
+  }
+  
+  .gofast-switch-label {
+    font-weight: 600;
+    margin: 0;
+  }
+  
+  /********************************************
+   * GOFAST — LISTADO DE PEDIDOS
+   ********************************************/
+  .gofast-pedidos-filtros {
+    margin-bottom: 14px;
+  }
+  
+  .gofast-pedidos-filtros-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: flex-end;
+  }
+  
+  .gofast-pedidos-filtros-row > div {
+    min-width: 160px;
+  }
+  
+  .gofast-pedidos-filtros label {
+    font-size: 13px;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 2px;
+  }
+  
+  .gofast-pedidos-filtros input,
+  .gofast-pedidos-filtros select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--gofast-gray-400);
+    font-size: 14px;
+  }
+  
+  .gofast-pedidos-filtros-actions {
+    display: flex;
+    gap: 6px;
+  }
+  
+  .gofast-table-wrap,
+  .gofast-recargos-table-wrap,
+  .gofast-table-responsive,
+  .gofast-recargos-table-responsive {
+    width: 100%;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+  }
+  
+  .gofast-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  
+  .gofast-table th,
+  .gofast-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--gofast-gray-300);
+    text-align: left;
+  }
+  
+  .gofast-table th {
+    background: var(--gofast-gray-100);
+    font-weight: 700;
+  }
+  
+  .gofast-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+  
+  .gofast-badge-estado {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  
+  .gofast-badge-estado-pendiente {
+    background: #fff3cd;
+    color: #856404;
+  }
+  
+  .gofast-badge-estado-asignado {
+    background: #d1ecf1;
+    color: #0c5460;
+  }
+  
+  .gofast-badge-estado-en_ruta {
+    background: #cce5ff;
+    color: #004085;
+  }
+  
+  .gofast-badge-estado-entregado {
+    background: #d4edda;
+    color: #155724;
+  }
+  
+  .gofast-badge-estado-cancelado {
+    background: #f8d7da;
+    color: #721c24;
+  }
+  
+  .gofast-link-ver {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: #007bff;
+  }
+  
+  .gofast-link-ver:hover {
+    text-decoration: underline;
+  }
+  
+  .gofast-pagination {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .gofast-page-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--gofast-gray-300);
+    font-size: 13px;
+    text-decoration: none;
+    color: #000;
+    background: #fff;
+  }
+  
+  .gofast-page-link:hover {
+    background: var(--gofast-gray-200);
+  }
+  
+  .gofast-page-current {
+    background: var(--gofast-yellow);
+    border-color: var(--gofast-yellow);
+    font-weight: 700;
+  }
+  
+  .gofast-estado-form {
+    margin: 0;
+  }
+  
+  .gofast-estado-form select {
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--gofast-gray-400);
+    font-size: 12px;
+    background: #fff;
+  }
+  
+  .gofast-alert-info {
+    background: #e8f4ff;
+    border-left: 4px solid #1f6feb;
+    padding: 8px 12px;
+    border-radius: var(--radius-s);
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+  
+  .gofast-mensajero-select {
+    min-width: 140px;
+  }
+  
+  .gofast-recargos-table {
+    min-width: 500px;
+    width: max-content !important;
+  }
+  
+  .gofast-recargos-table td,
+  .gofast-recargos-table th {
+    white-space: nowrap;
+  }
+  
+  .gofast-actions {
+    display: flex;
+    gap: 6px;
+  }
+  
+  .gofast-actions a {
+    display: inline-block;
+    padding: 4px 8px;
+    border: 1px solid #dcdcdc;
+    border-radius: var(--radius-s);
+    font-size: 13px;
+    transition: 0.2s;
+    white-space: nowrap;
+  }
+  
+  .gofast-btn-edit {
+    background: #fafafa;
+    color: #444;
+  }
+  
+  .gofast-btn-edit:hover {
+    background: #eaeaea;
+  }
+  
+  .gofast-btn-delete {
+    background: #fafafa;
+    color: #c00;
+  }
+  
+  .gofast-btn-delete:hover {
+    background: #ffecec;
+    border-color: #f3b5b5;
+  }
+  
+  /********************************************
+   * GOFAST — TABLAS DEL SHORTCODE "MI NEGOCIO"
+   ********************************************/
+  .gofast-negocios-table-wrapper,
+  .gofast-negocios-table-wrap {
+    width: 100%;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
+  
+  /* Asegurar scroll horizontal en móvil */
+  @media (max-width: 768px) {
+    .gofast-negocios-table-wrapper,
+    .gofast-negocios-table-wrap {
+      overflow-x: scroll !important;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    
+    .gofast-negocios-table-wrapper::-webkit-scrollbar {
+      height: 8px;
+    }
+    
+    .gofast-negocios-table-wrapper::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    
+    .gofast-negocios-table-wrapper::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+  }
+  
+  .gofast-negocios-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    table-layout: auto;
+  }
+  
+  /* En desktop, asegurar que la tabla use todo el espacio disponible */
+  @media (min-width: 769px) {
+    /* Formulario de editar/crear centrado y con ancho máximo */
+    .gofast-checkout-wrapper > .gofast-box:only-child:not(.gofast-box-negocios) {
+      grid-column: 1 / -1;
+      max-width: 800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    
+    .gofast-checkout-wrapper .gofast-box-negocios {
+      grid-column: 1 / -1;
+      max-width: 100%;
+      width: 100%;
+    }
+    
+    /* Campo tipo otro en desktop */
+    #tipo_otro_wrapper {
+      position: relative;
+      z-index: 1 !important;
+    }
+    
+    /* Select2 dropdown - z-index moderado para no quedar por encima de todo */
+    .select2-dropdown {
+      z-index: 1000 !important;
+      position: absolute !important;
+    }
+    
+    .select2-container--open {
+      z-index: 1000 !important;
+    }
+    
+    .select2-container--open .select2-dropdown {
+      z-index: 1000 !important;
+      position: absolute !important;
+    }
+    
+    /* Dropdown de barrio específicamente - z-index más bajo */
+    select[name="barrio_id"] + .select2-container,
+    select[name="barrio_id"] + .select2-container--open,
+    select[name="barrio_id"] + .select2-container .select2-dropdown {
+      z-index: 1000 !important;
+    }
+    
+    /* Asegurar que el dropdown siempre esté por encima del campo tipo otro pero no de todo */
+    body .select2-dropdown {
+      z-index: 1000 !important;
+    }
+    
+    body .select2-container--open .select2-dropdown {
+      z-index: 1000 !important;
+    }
+    
+    .gofast-negocios-table-wrapper {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: visible;
+    }
+    
+    .gofast-negocios-table {
+      width: 100%;
+      table-layout: auto;
+    }
+    
+    .gofast-negocios-table th:nth-child(1),
+    .gofast-negocios-table td:nth-child(1) {
+      width: 20%;
+    }
+    
+    .gofast-negocios-table th:nth-child(2),
+    .gofast-negocios-table td:nth-child(2) {
+      width: 30%;
+    }
+    
+    .gofast-negocios-table th:nth-child(3),
+    .gofast-negocios-table td:nth-child(3) {
+      width: 25%;
+    }
+    
+    .gofast-negocios-table th:nth-child(4),
+    .gofast-negocios-table td:nth-child(4) {
+      width: 25%;
+    }
+    
+    .gofast-negocios-table th,
+    .gofast-negocios-table td {
+      white-space: normal;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+  }
+  
+  .gofast-negocios-table th,
+  .gofast-negocios-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--gofast-gray-300);
+    text-align: left;
+  }
+  
+  .gofast-negocios-table th {
+    background: var(--gofast-gray-100);
+    font-weight: 700;
+  }
+  
+  .gofast-negocios-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+  
+  .gofast-negocios-table .gofast-actions {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .gofast-negocios-table .gofast-btn-edit,
+  .gofast-negocios-table .gofast-btn-delete {
+    padding: 6px 12px;
+    border-radius: var(--radius-s);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid #dcdcdc;
+    white-space: nowrap;
+  }
+  
+  .gofast-negocios-table .gofast-btn-edit {
+    background: #f8f8f8;
+    color: #444;
+  }
+  
+  .gofast-negocios-table .gofast-btn-edit:hover {
+    background: #eaeaea;
+  }
+  
+  .gofast-negocios-table .gofast-btn-delete {
+    background: #fff5f5;
+    color: #c00;
+  }
+  
+  .gofast-negocios-table .gofast-btn-delete:hover {
+    background: #ffecec;
+    border-color: #f3b5b5;
+  }
+  
+  /* Botón registrar negocio - mejor responsive */
+  .gofast-btn-registrar-negocio {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .gofast-btn-registrar-negocio .gofast-btn-icon {
+    flex-shrink: 0;
+    font-size: 18px;
+  }
+  
+  .gofast-btn-registrar-negocio .gofast-btn-text {
+    flex: 1;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  /********************************************
+   * SELECT2 — DROPDOWNS SIEMPRE HACIA ABAJO
+   ********************************************/
+  .select2-container--default .select2-selection--single {
+    background: #fff !important;
+    border: 1px solid var(--gofast-gray-400);
+    border-radius: var(--radius-s);
+    height: 42px;
+    padding: 6px 10px;
+  }
+  
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    background: #fff !important;
+    color: #000 !important;
+    line-height: 30px;
+  }
+  
+  .select2-selection__rendered {
+    color: #000 !important;
+    line-height: 30px;
+    background: #fff !important;
+  }
+  
+  /* Asegurar fondo blanco en TODOS los estados del select */
+  .select2-container--default.select2-container--focus .select2-selection--single,
+  .select2-container--default.select2-container--open .select2-selection--single,
+  .select2-container--default .select2-selection--single[aria-expanded="false"],
+  .select2-container--default .select2-selection--single[aria-expanded="true"] {
+    background: #fff !important;
+  }
+  
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    background: #fff !important;
+  }
+  
+  /* Asegurar fondo blanco cuando está seleccionado */
+  .select2-container--default .select2-selection--single[aria-expanded="false"] {
+    background: #fff !important;
+  }
+  
+  .select2-container--default .select2-selection--single[aria-expanded="true"] {
+    background: #fff !important;
+  }
+  
+  .select2-selection__arrow b {
+    border-color: #555 transparent transparent transparent;
+  }
+  
+  /* FORZAR DROPDOWN SIEMPRE HACIA ABAJO - REGLAS ULTRA AGRESIVAS */
+  /* Aplicar a TODOS los estados posibles */
+  .select2-dropdown,
+  .select2-container--open .select2-dropdown,
+  .select2-container--below .select2-dropdown,
+  .select2-container--above .select2-dropdown,
+  .select2-container.select2-container--open .select2-dropdown,
+  .select2-container.select2-container--open.select2-container--below .select2-dropdown,
+  .select2-container.select2-container--open.select2-container--above .select2-dropdown {
+    top: 100% !important;
+    bottom: auto !important;
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+    position: absolute !important;
+    transform: none !important;
+  }
+  
+  /* Forzar que siempre use la clase --below y remover --above */
+  .select2-container.select2-container--open {
+    z-index: 1000 !important;
+  }
+  
+  .select2-container.select2-container--open .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  /* Dropdown de barrio específicamente - z-index más bajo */
+  select[name="barrio_id"] + .select2-container,
+  select[name="barrio_id"] + .select2-container--open,
+  select[name="barrio_id"] + .select2-container .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  /* Convertir cualquier --above a --below visualmente */
+  .select2-container--above,
+  .select2-container.select2-container--above {
+    /* Forzar que se comporte como --below */
+  }
+  
+  .select2-container,
+  .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  .select2-container--open,
+  .select2-container--open .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  /* Dropdown de barrio específicamente - z-index más bajo */
+  select[name="barrio_id"] + .select2-container,
+  select[name="barrio_id"] + .select2-container--open,
+  select[name="barrio_id"] + .select2-container .select2-dropdown {
+    z-index: 1000 !important;
+  }
+  
+  /* Asegurar que el dropdown nunca se posicione arriba - REGLAS MÁS ESPECÍFICAS */
+  .select2-dropdown[style*="bottom"],
+  .select2-dropdown[style*="top: auto"],
+  .select2-dropdown[style*="top:auto"],
+  .select2-dropdown[style*="bottom: 100%"],
+  .select2-dropdown[style*="bottom:100%"] {
+    top: 100% !important;
+    bottom: auto !important;
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Forzar posición incluso con estilos inline */
+  .select2-dropdown {
+    top: 100% !important;
+    bottom: auto !important;
+  }
+
+  /* Cuando el menú móvil está abierto, ocultar completamente los dropdowns Select2 */
+  body.gofast-menu-open .select2-container,
+  body.gofast-menu-open .select2-container--open,
+  body.gofast-menu-open .select2-dropdown,
+  body.gofast-menu-open .select2-container.select2-container--open .select2-dropdown {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  
+  /* Ocultar los campos select2 dentro del contenido cuando el menú está abierto */
+  @media (max-width: 768px) {
+    body.gofast-menu-open .gofast-form .select2-container,
+    body.gofast-menu-open .gofast-checkout-wrapper .select2-container,
+    body.gofast-menu-open .gofast-form .select2-selection,
+    body.gofast-menu-open .gofast-checkout-wrapper .select2-selection {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+    }
+  }
+  
+  .select2-dropdown {
+    background: #fff;
+    border: 1px solid var(--gofast-gray-400);
+  }
+  
+  /* Campo de búsqueda más visible e intuitivo - SIEMPRE VISIBLE */
+  .select2-search--dropdown {
+    padding: 12px !important;
+    background: #f8f9fa !important;
+    border-bottom: 2px solid var(--gofast-primary) !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+  }
+  
+  /* Forzar que el campo de búsqueda siempre se muestre */
+  .select2-dropdown .select2-search--dropdown {
+    display: block !important;
+  }
+  
+  .select2-search--dropdown .select2-search__field {
+    width: 100% !important;
+    padding: 12px 16px !important;
+    font-size: 16px !important;
+    border: 2px solid var(--gofast-primary) !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    outline: none !important;
+    transition: all 0.2s ease !important;
+    color: #000 !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    z-index: 1 !important;
+  }
+  
+  /* Ocultar cualquier elemento que pueda estar ocultando el campo */
+  .select2-search--dropdown.hide,
+  .select2-search--dropdown[style*="display: none"],
+  .select2-search__field[style*="display: none"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  .select2-search--dropdown .select2-search__field:focus {
+    border-color: var(--gofast-primary) !important;
+    box-shadow: 0 0 0 3px rgba(244, 197, 36, 0.2) !important;
+    background: #fff !important;
+  }
+  
+  .select2-search--dropdown .select2-search__field::placeholder {
+    color: #999 !important;
+    font-style: italic !important;
+  }
+  
+  /* Mejoras específicas para móvil - Campo de búsqueda optimizado */
+  @media (max-width: 768px) {
+    .select2-search--dropdown {
+      padding: 16px !important;
+      background: #fff !important;
+      border-bottom: 3px solid var(--gofast-primary) !important;
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 10 !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+    }
+    
+    .select2-search--dropdown .select2-search__field {
+      font-size: 18px !important;
+      padding: 16px 20px !important;
+      border: 3px solid var(--gofast-primary) !important;
+      border-radius: 12px !important;
+      min-height: 56px !important;
+      -webkit-appearance: none !important;
+      -moz-appearance: none !important;
+      appearance: none !important;
+    }
+    
+    .select2-search--dropdown .select2-search__field:focus {
+      border-color: var(--gofast-primary) !important;
+      box-shadow: 0 0 0 4px rgba(244, 197, 36, 0.3) !important;
+      transform: scale(1.02) !important;
+    }
+    
+    /* Hacer el dropdown más grande en móvil */
+    .select2-dropdown {
+      max-height: 70vh !important;
+      border-radius: 0 0 16px 16px !important;
+    }
+    
+    .select2-results {
+      max-height: calc(70vh - 100px) !important;
+      padding: 8px 0 !important;
+    }
+    
+    .select2-results__option {
+      padding: 14px 16px !important;
+      font-size: 16px !important;
+      line-height: 1.5 !important;
+    }
+    
+    /* Mejorar el contenedor principal en móvil */
+    .select2-container--default .select2-selection--single {
+      height: 50px !important;
+      padding: 8px 12px !important;
+      font-size: 16px !important;
+    }
+    
+    .select2-selection__rendered {
+      line-height: 34px !important;
+      font-size: 16px !important;
+    }
+  }
+  
+  .select2-results__option {
+    background: #fff;
+    color: #000;
+  }
+  
+  .select2-results__option--highlighted {
+    background: var(--gofast-gray-200);
+  }
+  
+  /* Permitir que los dropdowns se muestren correctamente */
+  .gofast-form,
+  .gofast-box,
+  .gofast-checkout-wrapper {
+    overflow: visible !important;
+    position: relative;
+  }
+  
+  /* Dropdowns nativos de HTML también hacia abajo */
+  .gofast-box select,
+  .gofast-form select,
+  .gofast-pedidos-filtros select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 35px;
+  }
+  
+  /* Asegurar que los select nativos se abran hacia abajo */
+  select:focus {
+    position: relative;
+    z-index: 1;
+  }
+  
+  /********************************************
+   * PASSWORD TOGGLE
+   ********************************************/
+  .gofast-password-wrapper {
+    position: relative;
+    margin-bottom: 16px;
+  }
+  
+  .gofast-password-wrapper input[type="password"],
+  .gofast-password-wrapper input[type="text"] {
+    padding-right: 48px !important;
+  }
+  
+  .gofast-password-toggle,
+  .gofast-toggle-password {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 38px;
+    height: 38px;
+    background: #f1f1f1;
+    border-radius: var(--radius-m);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: 0.2s;
+    z-index: 10;
+  }
+  
+  .gofast-password-toggle:hover,
+  .gofast-toggle-password:hover {
+    background: #e2e2e2;
+  }
+  
+  .gofast-password-toggle img,
+  .gofast-toggle-password img {
+    width: 22px;
+    opacity: 0.7;
+  }
+  
+  /********************************************
+   * GOFAST — LOGIN UI PRO
+   ********************************************/
+  .gofast-login-container {
+    max-width: 420px;
+    margin: 40px auto;
+    background: var(--gofast-card);
+    padding: 30px;
+    border-radius: 14px;
+    box-shadow: 0 3px 16px rgba(0, 0, 0, 0.2);
+    color: var(--gofast-text-dark);
+  }
+  
+  .gofast-login-container input[type="text"],
+  .gofast-login-container input[type="email"],
+  .gofast-login-container input[type="password"] {
+    width: 100%;
+    height: 48px;
+    padding: 10px 12px;
+    font-size: 16px;
+    border: 1px solid var(--gofast-gray-400);
+    border-radius: var(--radius-m);
+    background: #fff;
+    color: #000;
+    margin-bottom: 16px;
+  }
+  
+  .gofast-auth-title {
+    font-size: 28px;
+    font-weight: 800;
+    margin-bottom: 20px;
+    text-align: left;
+    color: #000;
+  }
+  
+  .gofast-remember-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -4px 0 18px;
+  }
+  
+  .gofast-remember-row input {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .gofast-remember-row label {
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+  }
+  
+  .gofast-auth-footer {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 15px;
+  }
+  
+  .gofast-auth-footer a {
+    color: #3b82f6;
+    font-weight: 600;
+  }
+  
+  .gofast-auth-footer a:hover {
+    text-decoration: underline;
+  }
+  
+  .gofast-alert,
+  .gofast-alert-error {
+    background: #ffe5e5;
+    border-left: 5px solid #e03434;
+    padding: 12px 14px;
+    border-radius: var(--radius-m);
+    font-weight: 600;
+    color: #820000;
+    margin-bottom: 18px;
+  }
+  
+  .gofast-cookie-box {
+    background: #fff8d1;
+    border-left: 4px solid #f4c524;
+    padding: 12px;
+    border-radius: var(--radius-l);
+    color: #6a5300;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  
+  /********************************************
+   * ACCESIBILIDAD
+   ********************************************/
+  a {
+    color: #cbd3ff;
+  }
+  
+  a:hover {
+    color: #edf0ff;
+  }
+  
+  :focus-visible {
+    outline: 2px solid var(--gofast-yellow);
+    outline-offset: 2px;
+    border-radius: var(--radius-s);
+  }
+  
+  /********************************************
+   * MEDIA QUERIES
+   ********************************************/
+  @media (max-width: 900px) {
+    .gofast-home-hero {
+      grid-template-columns: 1fr;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .gofast-row,
+    .gofast-destinos-grid {
+      flex-direction: column;
+    }
+  
+    .gofast-destinos-grid {
+      grid-template-columns: 1fr;
+    }
+  
+    .gofast-checkout-wrapper {
+      grid-template-columns: 1fr !important;
+      padding: 0 10px !important;
+      max-width: 100% !important;
+      margin: 10px auto !important;
+      gap: 20px !important;
+    }
+    
+    .gofast-checkout-wrapper .gofast-box {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 20px !important;
+      box-sizing: border-box !important;
+    }
+    
+    .gofast-checkout-wrapper .gofast-box-negocios {
+      grid-column: 1 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      padding: 20px !important;
+      margin: 0 !important;
+    }
+    
+    /* Campo tipo otro en móvil - asegurar z-index correcto */
+    #tipo_otro_wrapper {
+      position: relative;
+      z-index: 1 !important;
+    }
+  
+    .gofast-cta-btn {
+      display: block;
+      margin-top: 10px;
+      text-align: center;
+    }
+  
+    .gofast-menu-inner {
+      padding: 8px 12px;
+    }
+  
+    .gofast-logo img {
+      height: 52px;
+    }
+  
+    .gofast-hamburger {
+      display: flex;
+      margin-left: auto;
+    }
+  
+    .gofast-menu-links {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100vh;
+      background: #000;
+      padding: 80px 24px 24px;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-12px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 10000 !important;
+    }
+
+    .gofast-menu-close {
+      display: flex;
+      top: 16px;
+      right: 16px;
+    }
+  
+    body.gofast-menu-open .gofast-menu-links {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+  
+    .gofast-tab {
+      width: 100%;
+      max-width: 340px;
+      text-align: center;
+      border-radius: 999px;
+      font-size: 16px;
+      padding: 16px 32px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .gofast-tab-primary {
+      font-size: 17px;
+      padding: 18px 36px;
+    }
+  
+    .gofast-menu {
+      height: auto;
+    }
+  
+    .inside-article,
+    .content-area {
+      padding-inline: 10px;
+      overflow-x: visible !important;
+    }
+    
+    /* Forzar que el body y html permitan overflow horizontal */
+    body,
+    html {
+      overflow-x: visible !important;
+    }
+    
+    /* Asegurar que ningún contenedor corte la tabla */
+    .gofast-box-negocios,
+    .gofast-checkout-wrapper,
+    .inside-article,
+    .content-area,
+    .site-content,
+    .site-main {
+      overflow-x: visible !important;
+      max-width: 100% !important;
+    }
+    
+    /* Asegurar que el contenedor principal no corte el contenido */
+    .gofast-checkout-wrapper,
+    .gofast-checkout-wrapper * {
+      box-sizing: border-box;
+    }
+    
+    /* Botón registrar negocio en móvil */
+    .gofast-btn-registrar-negocio {
+      padding: 14px 12px !important;
+      font-size: 15px !important;
+    }
+    
+    .gofast-btn-registrar-negocio .gofast-btn-icon {
+      font-size: 16px;
+    }
+    
+    .gofast-btn-registrar-negocio .gofast-btn-text {
+      font-size: 14px;
+    }
+    
+    /* Tabla de negocios responsive - mismo ancho que vista editar/crear */
+    .gofast-checkout-wrapper {
+      padding: 0 10px !important;
+      margin: 10px auto !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      overflow-x: visible !important;
+      overflow-y: visible !important;
+      box-sizing: border-box !important;
+    }
+    
+    .gofast-box-negocios {
+      padding: 20px !important;
+      margin: 0 auto !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      overflow-x: visible !important;
+      overflow-y: visible !important;
+      box-sizing: border-box !important;
+    }
+    
+    .gofast-negocios-table-wrapper {
+      margin: 0;
+      padding: 0;
+      overflow-x: visible !important;
+      overflow-y: visible !important;
+      position: relative;
+      width: 100%;
+      max-width: 100%;
+      display: block;
+    }
+    
+    .gofast-negocios-table {
+      font-size: 12px;
+      width: 100% !important;
+      min-width: 100% !important;
+      table-layout: auto;
+      border-collapse: collapse;
+    }
+    
+    /* Ocultar columnas Dirección (2) y Barrio (3) en móvil */
+    .gofast-negocios-table th:nth-child(2),
+    .gofast-negocios-table td:nth-child(2),
+    .gofast-negocios-table th:nth-child(3),
+    .gofast-negocios-table td:nth-child(3) {
+      display: none !important;
+    }
+    
+    /* Mostrar solo Nombre (1) y Acciones (4) */
+    .gofast-negocios-table th:nth-child(1),
+    .gofast-negocios-table td:nth-child(1),
+    .gofast-negocios-table th:nth-child(4),
+    .gofast-negocios-table td:nth-child(4) {
+      display: table-cell !important;
+    }
+    
+    .gofast-negocios-table th,
+    .gofast-negocios-table td {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+    
+    .gofast-negocios-table th {
+      white-space: normal;
+      font-size: 14px;
+      font-weight: 700;
+      background: var(--gofast-gray-100);
+    }
+    
+    .gofast-negocios-table td {
+      white-space: normal;
+      word-wrap: break-word;
+    }
+    
+    /* Ajustar ancho de columnas visibles en móvil */
+    .gofast-negocios-table th:nth-child(1),
+    .gofast-negocios-table td:nth-child(1) {
+      width: 40%;
+    }
+    
+    .gofast-negocios-table th:nth-child(4),
+    .gofast-negocios-table td:nth-child(4) {
+      width: 60%;
+    }
+    
+    .gofast-negocios-table .gofast-actions {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 8px !important;
+      align-items: stretch !important;
+      width: 100% !important;
+    }
+    
+    .gofast-negocios-table .gofast-btn-edit,
+    .gofast-negocios-table .gofast-btn-delete {
+      width: 100% !important;
+      text-align: center !important;
+      padding: 10px 12px !important;
+      font-size: 13px !important;
+      white-space: normal !important;
+      display: block !important;
+      box-sizing: border-box !important;
+    }
+  }
+  
+  @media (max-width: 700px) {
+    .gofast-home-work-cta {
+      text-align: left;
+    }
+  }
+  
+  @media (max-width: 600px) {
+    .gofast-home {
+      padding-inline: 10px;
+    }
+  
+    .gofast-home-hero-text h1 {
+      font-size: 26px;
+    }
+  
+    .gofast-pedidos-filtros-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  
+    .gofast-actions a {
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+  
+    .gofast-btn-request {
+      font-size: 16px !important;
+      padding: 14px !important;
+      width: 100% !important;
+      text-align: center !important;
+    }
+  }
+  
+  @media (max-width: 360px) {
+    .gofast-checkout-wrapper {
+      padding: 0 6px !important;
+      margin: 10px auto !important;
+    }
+    
+    .gofast-box-negocios {
+      padding: 18px !important;
+    }
+  
+    .gofast-box {
+      padding: 18px;
+    }
+  
+    .gofast-submit {
+      font-size: 16px;
+    }
+  }
+
+  /********************************************
+   * GOFAST — RESPONSIVE DASHBOARD ADMIN
+   ********************************************/
+  @media (max-width: 768px) {
+    .gofast-dashboard-links {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+
+    .gofast-dashboard-links .gofast-box {
+      padding: 20px !important;
+    }
+
+    .gofast-dashboard-links h3 {
+      font-size: 18px !important;
+    }
+
+    .gofast-dashboard-links p {
+      font-size: 13px !important;
+    }
+
+    .gofast-dashboard-stats {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 12px !important;
+    }
+
+    .gofast-dashboard-stats .gofast-box {
+      padding: 16px !important;
+    }
+
+    .gofast-dashboard-stats .gofast-box > div:first-child {
+      font-size: 28px !important;
+    }
+
+    .gofast-dashboard-stats .gofast-box > div:nth-child(2) {
+      font-size: 24px !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .gofast-dashboard-stats {
+      grid-template-columns: 1fr !important;
+    }
+
+    .gofast-dashboard-links .gofast-box {
+      padding: 16px !important;
+    }
+
+    .gofast-dashboard-links > div:first-child {
+      font-size: 36px !important;
+    }
+  }
+
+  /********************************************
+   * GOFAST — RESPONSIVE USUARIOS ADMIN
+   ********************************************/
+  @media (max-width: 768px) {
+    .gofast-recargo-nuevo {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .gofast-recargo-nuevo > div {
+      min-width: 100% !important;
+    }
+
+    .gofast-table th,
+    .gofast-table td {
+      padding: 6px 8px !important;
+      font-size: 12px !important;
+    }
+
+    .gofast-table th:nth-child(5),
+    .gofast-table td:nth-child(5),
+    .gofast-table th:nth-child(6),
+    .gofast-table td:nth-child(6) {
+      display: none !important;
+    }
+
+    .gofast-table th:nth-child(7),
+    .gofast-table td:nth-child(7) {
+      display: table-cell !important;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .gofast-table th,
+    .gofast-table td {
+      padding: 4px 6px !important;
+      font-size: 11px !important;
+    }
+
+    .gofast-table th:nth-child(3),
+    .gofast-table td:nth-child(3),
+    .gofast-table th:nth-child(4),
+    .gofast-table td:nth-child(4) {
+      display: none !important;
+    }
+  }
+
+  /********************************************
+   * GOFAST — RESPONSIVE PEDIDOS
+   ********************************************/
+  @media (max-width: 768px) {
+    .gofast-table th:nth-child(2),
+    .gofast-table td:nth-child(2),
+    .gofast-table th:nth-child(4),
+    .gofast-table td:nth-child(4),
+    .gofast-table th:nth-child(5),
+    .gofast-table td:nth-child(5),
+    .gofast-table th:nth-child(6),
+    .gofast-table td:nth-child(6) {
+      display: none !important;
+    }
+
+    .gofast-table th,
+    .gofast-table td {
+      padding: 8px 6px !important;
+      font-size: 12px !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .gofast-table th:nth-child(7),
+    .gofast-table td:nth-child(7) {
+      display: none !important;
+    }
+
+    .gofast-table th,
+    .gofast-table td {
+      padding: 6px 4px !important;
+      font-size: 11px !important;
+    }
+
+    .gofast-mensajero-select {
+      min-width: 100px !important;
+      font-size: 11px !important;
+    }
+
+    .gofast-estado-form select {
+      font-size: 11px !important;
+      padding: 3px 6px !important;
+    }
+  }
+  

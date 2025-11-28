@@ -1,0 +1,154 @@
+/***************************************************
+ * GOFAST – MENÚ DINÁMICO MODERNO + RESPONSIVE
+ ***************************************************/
+function gofast_menu_topbar() {
+    global $wpdb;
+
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $rol = 'visitante';
+
+    if (!empty($_SESSION['gofast_user_id'])) {
+
+        if (!empty($_SESSION['gofast_user_rol'])) {
+
+            $rol = strtolower($_SESSION['gofast_user_rol']);
+
+        } else {
+            $user_id = (int) $_SESSION['gofast_user_id'];
+
+            $user = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT id, nombre, rol 
+                     FROM usuarios_gofast 
+                     WHERE id=%d AND activo=1",
+                    $user_id
+                )
+            );
+
+            if ($user) {
+                $rol = strtolower($user->rol);
+                $_SESSION['gofast_user_rol'] = $rol;
+            }
+        }
+    }
+    ?>
+    <header class="gofast-menu">
+        <div class="gofast-menu-inner">
+            <!-- LOGO -->
+            <a href="<?php echo esc_url( home_url('/') ); ?>" class="gofast-logo" aria-label="Ir al inicio">
+                <img src="https://gofastdomicilios.com/wp-content/uploads/2025/11/GoFast.png" alt="GoFast Mensajería Express">
+            </a>
+
+            <!-- BOTÓN HAMBURGUESA (solo móvil) -->
+            <button class="gofast-hamburger" type="button" aria-label="Abrir menú">
+                ☰
+            </button>
+
+            <!-- MENÚ -->
+            <nav class="gofast-menu-links" aria-label="Menú principal">
+                <!-- BOTÓN CERRAR (solo móvil) -->
+                <button class="gofast-menu-close" type="button" aria-label="Cerrar menú">
+                    <span class="gofast-close-icon">×</span>
+                </button>
+                
+                <?php if ($rol === 'visitante'): ?>
+
+                    <a href="<?php echo esc_url( home_url('/cotizar') ); ?>" class="gofast-tab gofast-tab-primary">
+                        🛵 Cotizar envío
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/auth') ); ?>" class="gofast-tab">
+                        Iniciar sesión
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/auth/?registro=1') ); ?>" class="gofast-tab">
+                        Registrarse
+                    </a>
+
+                <?php elseif ($rol === 'cliente'): ?>
+
+                    <a href="<?php echo esc_url( home_url('/mis-pedidos') ); ?>" class="gofast-tab gofast-tab-primary">
+                        📦 Mis pedidos
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/mi-negocio') ); ?>" class="gofast-tab">
+                        Mi negocio
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/cotizar') ); ?>" class="gofast-tab">
+                        🛵 Nuevo envío
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/?gofast_logout=1') ); ?>" class="gofast-tab">
+                        Salir
+                    </a>
+
+                <?php elseif ($rol === 'mensajero'): ?>
+
+                    <a href="<?php echo esc_url( home_url('/mis-servicios') ); ?>" class="gofast-tab gofast-tab-primary">
+                        🚚 Mis servicios
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/?gofast_logout=1') ); ?>" class="gofast-tab">
+                        Salir
+                    </a>
+
+                <?php elseif ($rol === 'admin'): ?>
+
+                    <a href="<?php echo esc_url( home_url('/dashboard-admin') ); ?>" class="gofast-tab gofast-tab-primary">
+                        📊 Panel admin
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/usuarios') ); ?>" class="gofast-tab">
+                        👥 Usuarios
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/?gofast_logout=1') ); ?>" class="gofast-tab">
+                        Salir
+                    </a>
+
+                <?php endif; ?>
+            </nav>
+        </div>
+    </header>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const btn  = document.querySelector('.gofast-hamburger');
+        const menu = document.querySelector('.gofast-menu-links');
+        const closeBtn = document.querySelector('.gofast-menu-close');
+
+        if (!btn || !menu) return;
+
+        // Función para cerrar el menú
+        function closeMenu() {
+            document.body.classList.remove('gofast-menu-open');
+        }
+
+        // Abrir menú
+        btn.addEventListener('click', function () {
+            document.body.classList.toggle('gofast-menu-open');
+        });
+
+        // Cerrar menú con botón X
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeMenu);
+        }
+
+        // Cerrar menú al hacer clic en enlaces
+        menu.querySelectorAll('a').forEach(function (link) {
+            link.addEventListener('click', closeMenu);
+        });
+
+        // Cerrar menú al redimensionar
+        window.addEventListener('resize', function () {
+            if (window.innerWidth > 768) {
+                closeMenu();
+            }
+        });
+    });
+    </script>
+    <?php
+}
+add_action('generate_before_header', 'gofast_menu_topbar');
+
+add_action('wp', function() {
+    remove_action( 'generate_after_header',  'generate_add_navigation_after_header', 5 );
+    remove_action( 'generate_before_header', 'generate_add_navigation_before_header', 5 );
+    remove_action( 'generate_header',        'generate_construct_header', 10 );
+});

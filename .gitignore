@@ -1,0 +1,67 @@
+# WordPress
+wp-config.php
+wp-content/uploads/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+wp-content/cache/
+wp-content/cache/supercache/
+
+# Archivos del sistema
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+error_log
+access_log
+
+# Archivos temporales
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Node modules (si se usa npm)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Archivos de base de datos (excepto los SQL de estructura)
+*.sql.gz
+*.sql.bak
+
+# Archivos comprimidos
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# Archivos de configuración local
+wp-config-local.php
+local-config.php
+

@@ -1,0 +1,376 @@
+-- phpMyAdmin SQL Dump
+-- version 5.2.2
+-- https://www.phpmyadmin.net/
+--
+-- Servidor: 127.0.0.1:3306
+-- Tiempo de generación: 28-11-2025 a las 14:17:38
+-- Versión del servidor: 11.8.3-MariaDB-log
+-- Versión de PHP: 7.2.34
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Base de datos: `u946523207_DyHix`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `barrios`
+--
+
+CREATE TABLE `barrios` (
+  `id` int(11) NOT NULL,
+  `nombre` varchar(100) NOT NULL,
+  `sector_id` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `barrios`
+--
+
+INSERT INTO `barrios` (`id`, `nombre`, `sector_id`) VALUES
+(1, 'Balcones del Lago ', 1),
+(2, 'Doce de Octubre', 1),
+(3, 'Lago', 1),
+(4, 'Laguito', 1),
+(5, 'San Carlos', 1),
+(6, 'Avenida Cali', 2),
+(7, 'Balcones del Empedrado', 2),
+(8, 'Bastilla', 2),
+(9, 'Olímpico', 2),
+(10, 'Quintas de San Felipe', 2),
+(11, 'Conjunto Residencial Lusitania', 3),
+(12, 'Edficio Normandia', 3),
+(13, 'Lusitania', 4),
+(14, 'Nuevo Príncipe', 4),
+(15, 'Príncipe', 4),
+(16, 'Principito', 4),
+(17, 'Herradura', 5),
+(18, 'Progresar', 5),
+(19, 'Pueblo Nuevo', 5),
+(20, 'Palmas de Progresar', 5),
+(21, 'Acacias', 6),
+(22, 'Merced', 6),
+(23, 'Salesianos', 6),
+(24, 'Sajonia', 6),
+(25, 'Alamedas de la Union', 7),
+(26, 'Arboledas del Darien', 7),
+(27, 'Bosques de Alcala', 7),
+(28, 'Parque de Versalles', 7),
+(29, 'Senderos de Ginebra', 7),
+(30, 'Centro', 8),
+(31, 'Fátima', 9),
+(32, 'Parque de la Familia', 9),
+(33, 'Nuevo Fátima', 9),
+(34, 'Villa del Rio', 9),
+(35, 'Alvernia', 10),
+(36, 'Entrerios', 10),
+(37, 'Nuevo Alvernia', 10),
+(38, 'Cespedes', 11),
+(39, 'Conjunto Residencial Franciscanos', 11),
+(40, 'Franciscanos', 11),
+(41, 'Villanueva', 11),
+(42, 'Brisas del Morales', 12),
+(43, 'Cóndor 1', 12),
+(44, 'Dorado', 12),
+(45, 'Morales', 12),
+(46, 'Nuevo Morales', 12),
+(47, 'Urbanizacion la Villa ', 12),
+(48, 'Miraflores', 13),
+(49, 'Panamericano', 13),
+(50, 'San Vicente', 13),
+(51, 'Victoria', 14),
+(52, 'Jazmin', 15),
+(53, 'San Benito', 15),
+(54, 'Bloques del Retiro', 16),
+(55, 'Lomitas', 16),
+(56, 'Retiro', 16),
+(57, 'Villa Campestre', 16),
+(58, 'Brisas de San Antonio ', 17),
+(59, 'Casona', 17),
+(60, 'Manguitos', 17),
+(61, 'Mercado Campesino', 17),
+(62, 'Popular', 17),
+(63, 'San Antonio', 17),
+(64, 'Coliseo de ferias', 18),
+(65, 'Colegio Industrial', 18),
+(66, 'ICA ( Instituto Colombiano Agropecuario)', 18),
+(67, 'Transito ', 18),
+(68, 'Frigotimana / Matadero', 18),
+(69, 'Bosque', 19),
+(70, 'Moralito', 19),
+(71, 'Nueva Holanda', 20),
+(72, 'Peñaranda', 20),
+(73, 'Santa Rita del Rio Etapa 1', 20),
+(74, 'Santa Rita del Rio Etapa 2', 20),
+(75, 'Academia Militar', 21),
+(76, 'San Benito Campestre', 21),
+(77, 'Colegio Franciscanos Sede Campestre', 21),
+(78, 'Ciudad Jardin Campestre', 22),
+(79, 'Casa de los Abuelos', 23),
+(80, 'Ciudad Campestre', 23),
+(81, 'Umbral Casa de Retiro', 23),
+(82, 'Loma 1', 24),
+(83, 'Loma 2 ', 24),
+(84, 'Cóndor 2', 25),
+(85, 'Santa Lucia', 25),
+(86, 'Estambull', 26),
+(87, 'Motel Aventura', 26),
+(88, 'Motel Caricias', 26),
+(89, 'Nutriavicola Huevos Oro', 26),
+(90, 'Rancho Panorama', 26),
+(91, '350 Años', 27),
+(92, 'Ceiba', 27),
+(93, 'Delicias', 27),
+(94, 'Esperanza', 27),
+(95, 'Oasis', 27),
+(96, 'Pinar', 27),
+(97, 'Campiña ', 28),
+(98, 'Graciela', 28),
+(99, 'Maracaibo', 28),
+(100, 'Quinta', 28),
+(101, 'Rojas', 28),
+(102, 'Siete de Agosto', 28),
+(103, 'Trinidad', 28),
+(104, 'Escobar ', 29),
+(105, 'Palobonito', 29),
+(106, 'Tomas Uribe ', 29),
+(107, 'Olas', 29),
+(108, 'Alameda 1', 30),
+(109, 'Internacional', 30),
+(110, 'Municipal', 30),
+(111, 'Palmar', 30),
+(112, 'Samán del Norte', 30),
+(113, 'Villa Colombia', 30),
+(114, 'Bosquecito', 31),
+(115, 'Juan XXIII', 31),
+(116, 'Portales del Rio', 31),
+(117, 'Bello Horizonte', 32),
+(118, 'Chiminangos', 32),
+(119, 'Diablos Rojos 1 ', 32),
+(120, 'Daiblos Rojos 2', 32),
+(121, 'Horizonte', 32),
+(122, 'Independencia', 32),
+(123, 'Refugio', 32),
+(124, 'Santa Isabel', 32),
+(125, 'Ruben Cruz Velez ', 33),
+(126, 'Olmos', 33),
+(127, 'Jardín', 34),
+(128, 'Departamental', 34),
+(129, 'Juan Lemus Aguirre', 34),
+(130, 'Bloques de San Luis', 35),
+(131, 'Jorge Eliecer Gaitán', 35),
+(132, 'San Luis', 35),
+(133, 'Buenos Aires', 36),
+(134, 'Comuneros Corazon del Valle', 36),
+(135, 'Primero de Mayo', 36),
+(136, 'Bolívar', 37),
+(137, 'Marandua', 37),
+(138, 'Playas', 37),
+(139, 'Porvenir', 37),
+(140, 'Américas', 38),
+(141, 'San pedro Claver', 38),
+(142, 'Jose Antonio Galan', 39),
+(143, 'Prados del Norte', 39),
+(144, 'Asoagrín ', 40),
+(145, 'Descanso', 40),
+(146, 'Laureles 1', 40),
+(147, 'Laureles 2', 40),
+(148, 'Tolues', 40),
+(149, 'Nieves', 41),
+(150, 'Nuevo Farfan', 41),
+(151, 'Urbanizacion Terranova', 41),
+(152, 'Villa del Lago', 41),
+(153, 'Alameda 2', 42),
+(154, 'Bosques de Maracaibo', 42),
+(155, 'Comfamiliar', 42),
+(156, 'Flor de la Campana', 42),
+(157, 'Portales de Riopaila', 42),
+(158, 'Santa Ines de Comfamiliar', 42),
+(159, 'Sintra San Carlos', 42),
+(160, 'Tercer Milenio', 42),
+(161, 'Guayacanes', 43),
+(162, 'Portales de guayacanes ', 43),
+(163, 'Avicola La Chica', 44),
+(164, 'Colegio de Occidente', 44),
+(165, 'Portales de san Felipe', 44),
+(166, 'Villa Margarita', 44),
+(167, 'Senderos de Villa Liliana', 45),
+(168, 'Villa Liliana', 45),
+(169, 'Limonar', 45),
+(170, 'San Marino', 45),
+(171, 'Farfán', 46),
+(172, 'Veraneras', 46),
+(173, 'Villa del Sur', 46),
+(174, 'UCEVA', 47),
+(175, 'Univalle Sede Nuevo Principe ', 47),
+(176, 'Clinica Maria Angel Cirugia', 48),
+(177, 'Clinica San Francisco Cirugia', 48),
+(178, 'UNIDES (Unidad Medica del Valle UMEVA)', 48),
+(179, 'Cabañas de la Policia', 49),
+(180, 'Escuela Simon Bolivar ', 49),
+(181, 'Univalle Sede Villacampestre', 49),
+(182, 'Clinica Mariangel Puerta Principal ', 50),
+(183, 'Clinica San Francisco', 50),
+(184, 'Clinica San Francisco  Unidad Renal', 50),
+(185, 'Hospital Tomas Uribe', 50),
+(186, 'Clinica Alvernia', 51),
+(187, 'Clinica Bonsana', 51),
+(188, 'Clinica Dolormed', 51),
+(189, 'Clinica Hematoncologos', 51),
+(190, 'Hospital Ruben Cruz Velez', 52),
+(191, 'Callejon la Bastilla ', 53),
+(192, 'Colegio Levapan', 53),
+(193, 'Nutrium', 53),
+(194, 'Parque Carlos Sarmiento Lora', 53),
+(195, 'Parque de la Guadua', 53),
+(196, 'Parque Industrial', 53),
+(197, 'Cenal', 54),
+(198, 'Colegio Bilingüe Hispanoamericano', 54),
+(199, 'Coliseo Benicio Echeverry', 54),
+(200, 'CVC (Corporacion Autonoma Valle del Cauca)', 54),
+(201, 'Discenters', 54),
+(202, 'Levapan', 54),
+(203, 'Nutricion de Plantas', 54),
+(204, 'Piscinas Olimpicas', 54),
+(205, 'Colegio San Juan de la Loma', 55),
+(206, 'Villa Argelia', 56),
+(207, 'Villa de Cesoedes', 56),
+(208, 'Villa Pradera', 56),
+(209, 'Villa de las Palmas ', 57),
+(210, 'Alcaldia Municipal', 58),
+(211, 'Bancoomeva', 58),
+(212, 'Bancos', 58),
+(213, 'Bicentenario Plaza', 58),
+(214, 'Camara de Comercio', 58),
+(215, 'Cañaveral', 58),
+(216, 'Centro Aguas Oficina', 58),
+(217, 'Centro Comercial del Parque ', 58),
+(218, 'DIAN ', 58),
+(219, 'DK Fabrica Decada', 58),
+(220, 'Decada Almacenes', 58),
+(221, 'Edificios Plenocentro / Octavio Montoya', 58),
+(222, 'Fiscalia', 58),
+(223, 'Galeria Pabellon', 58),
+(224, 'Gane Academia de Aprendizaje', 58),
+(225, 'Gane Principal', 58),
+(226, 'Hoteles, Residencias, Hospedajes ( Centro)', 58),
+(227, 'ICBF Instituto Colombiano de Bienestar Familiar', 58),
+(228, 'Notarias', 58),
+(229, 'Oficinas de Telefonia Claro, Tigo, Wom', 58),
+(230, 'Palacio de Justicia', 58),
+(231, 'Plenocentro ', 58),
+(232, 'Registraduria Nacional', 58),
+(233, 'Colegio Salesianos', 59),
+(234, 'Harinas Tulua', 59),
+(235, 'Profamilia', 59),
+(236, 'Centro Comercial Madeira Plaza', 60),
+(237, 'Club Colonial ', 60),
+(238, 'Colegio Franciscanos', 60),
+(239, 'Edificio Sinergia', 60),
+(240, 'Centro Comercial La Herradura', 61),
+(241, 'Smarfit', 61),
+(242, 'Bodyfitness', 62),
+(243, 'Centro comercial Tulua', 62),
+(244, 'Dollarcity Centro Comercial Tulua', 62),
+(245, 'Éxito Wow', 62),
+(246, 'Homecenter', 62),
+(247, 'Dollarcity Alvernia', 63),
+(248, 'Edficio Vitta 1 y 2', 63),
+(249, 'Oficina Movistar Alvernia', 63),
+(250, 'Aguaclara hasta el CAI', 64),
+(251, 'Agua Viva', 64),
+(252, 'Mana', 64),
+(253, 'Nuevo Aguaclara', 64),
+(254, 'Casas Huertas', 65),
+(255, 'Aguaclara Hasta la Iglesia', 66),
+(256, 'Callejon Diamante Antes de la Carrilera', 66),
+(257, 'Callejon San Antonio Antes de la Carrilera', 66),
+(258, 'Paraíso ', 66),
+(259, 'Paz', 66),
+(260, 'Aguaclara Después de la Iglesia', 67),
+(261, 'Callejon Diamante Despues de la Carrilera', 67),
+(262, 'Callejon San Antonio Despues de la Carrilera', 67),
+(263, 'Santa Teresa', 67),
+(264, 'Urbanizacion el Diamante', 67),
+(265, 'Cruz', 68),
+(266, 'Pinos ', 68),
+(267, 'San Gabriel', 68),
+(268, 'Solares de Gualanday', 69),
+(269, 'Urbanización Belén', 69),
+(270, 'Terminal Nuevo ', 70),
+(271, 'Caficentro', 71),
+(272, 'Altos de la Colina', 72),
+(273, 'Colina', 72),
+(274, 'Hacienda la Colina', 72),
+(275, 'Rivera', 73),
+(276, 'Parcelacion Bella Vista ( Rivera)', 74),
+(277, 'Parcelacion La maria (Rivera)', 74),
+(278, 'Llanito', 75),
+(279, 'Maria Clara', 75),
+(280, 'Nariño', 75),
+(281, 'Tres Esquinas', 76),
+(282, 'Tres Jardines', 76),
+(283, 'Quintas de San Luis (Tres Esquinas)', 76),
+(284, 'Cairo ', 77),
+(285, 'Batallon de Alta Montaña', 78),
+(286, 'Batallon Antinarcoticos', 79),
+(287, 'Aeropuerto', 80),
+(288, 'Batallon Fuerza Aerea', 80),
+(289, 'Carcel', 81),
+(290, 'Comando de la Policia', 81),
+(291, 'Colombina', 82),
+(292, 'SENA', 83),
+(293, 'Comfandi Centro Turistico', 84),
+(294, 'Confenalco La Rivera ', 85),
+(295, 'Centroaguas Planta de Tratamiento La Rivera', 85),
+(296, 'Rancho Las Palmas', 85),
+(297, 'Caravans', 86),
+(298, 'Containers', 86),
+(299, 'Mall de Villacampestre', 86),
+(300, 'Mall de la 40 (San benito)', 87);
+
+--
+-- Índices para tablas volcadas
+--
+
+--
+-- Indices de la tabla `barrios`
+--
+ALTER TABLE `barrios`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `sector_id` (`sector_id`);
+
+--
+-- AUTO_INCREMENT de las tablas volcadas
+--
+
+--
+-- AUTO_INCREMENT de la tabla `barrios`
+--
+ALTER TABLE `barrios`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=301;
+
+--
+-- Restricciones para tablas volcadas
+--
+
+--
+-- Filtros para la tabla `barrios`
+--
+ALTER TABLE `barrios`
+  ADD CONSTRAINT `barrios_ibfk_1` FOREIGN KEY (`sector_id`) REFERENCES `sectores` (`id`);
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

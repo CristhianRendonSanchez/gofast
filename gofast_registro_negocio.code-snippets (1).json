@@ -1,0 +1,665 @@
+/***************************************************
+ * GOFAST – SHORTCODE REGISTRO MULTIPLE DE NEGOCIOS
+ ***************************************************/
+function gofast_registro_negocio_shortcode() {
+    global $wpdb;
+
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (empty($_SESSION['gofast_user_id'])) {
+        return "<div class='gofast-box'>Debes iniciar sesión para registrar tu negocio.</div>";
+    }
+
+    $user_id = intval($_SESSION['gofast_user_id']);
+
+    /* Modo */
+    $editing_id = isset($_GET['edit']) ? intval($_GET['edit']) : 0;
+    $add_new    = isset($_GET['add']);
+
+    $negocio = null;
+
+    /* Si edita, obtener datos */
+    if ($editing_id) {
+        $negocio = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM negocios_gofast WHERE id=%d AND user_id=%d",
+            $editing_id, $user_id
+        ));
+    }
+
+    /* Listado */
+    $negocios = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM negocios_gofast WHERE user_id=%d ORDER BY id DESC",
+        $user_id
+    ));
+
+    /* Para mostrar errores */
+    $errores = [];
+    
+    // Mostrar errores si vienen de la redirección (si hay parámetros de error)
+    if (isset($_GET['error'])) {
+        $error_msg = sanitize_text_field($_GET['error']);
+        if ($error_msg) {
+            $errores[] = $error_msg;
+        }
+    }
+
+    /* ======================
+       Valores del FORM
+    ====================== */
+    $tipos_default = ["Restaurante", "Tienda", "Cafetería", "Papelería", "Farmacia", "Otro"];
+
+    if ($negocio) {
+        if (!in_array($negocio->tipo, $tipos_default)) {
+            $tipo_val      = "Otro";
+            $tipo_otro_val = esc_attr($negocio->tipo);
+        } else {
+            $tipo_val      = esc_attr($negocio->tipo);
+            $tipo_otro_val = "";
+        }
+    } else {
+        $tipo_val      = "";
+        $tipo_otro_val = "";
+    }
+
+    $whatsapp_val = $negocio ? esc_attr($negocio->whatsapp) : '';
+
+    $nombre_val = $negocio ? esc_attr($negocio->nombre) : '';
+    $dir_val    = $negocio ? esc_attr($negocio->direccion_full) : '';
+    $barrio_val = $negocio ? intval($negocio->barrio_id) : 0;
+
+    $barrios = $wpdb->get_results("SELECT id, nombre FROM barrios ORDER BY nombre ASC");
+
+    ob_start();
+?>
+
+<div class="gofast-checkout-wrapper">
+
+    <?php if (!empty($errores)): ?>
+        <div class="gofast-recargo-box" style="background:#ffe0e0;border-left-color:#ff3333;">
+            <?php foreach ($errores as $e): ?>
+                • <?= esc_html($e) ?><br>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($add_new || $editing_id): ?>
+    <div class="gofast-box">
+        <h3><?= $editing_id ? "Editar negocio" : "Registrar nuevo negocio" ?></h3>
+
+        <form method="post">
+
+            <label>Nombre del negocio</label>
+            <input type="text" name="nombre_negocio" value="<?= $nombre_val ?>" required>
+
+            <label>Tipo de negocio</label>
+            <select name="tipo_negocio" id="tipo_negocio" class="gofast-select" required>
+                <option value="">— Selecciona —</option>
+                <?php foreach ($tipos_default as $t): ?>
+                    <option value="<?= esc_attr($t) ?>" <?= $tipo_val === $t ? "selected" : "" ?>>
+                        <?= esc_html($t) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+
+            <div id="tipo_otro_wrapper" style="display:none;">
+                <label>Especifica el tipo</label>
+                <input type="text" name="tipo_otro" id="tipo_otro" 
+                       value="<?= $tipo_otro_val ?>" placeholder="Ej: Barbería">
+            </div>
+
+            <label>Barrio</label>
+            <select name="barrio_id" class="gofast-select" required>
+                <option value="">— Seleccionar barrio —</option>
+                <?php foreach ($barrios as $b): ?>
+                    <option value="<?= $b->id ?>" <?= ($barrio_val == $b->id ? "selected" : "") ?>>
+                        <?= esc_html($b->nombre) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+
+            <label>Dirección completa</label>
+            <input type="text" name="direccion_full" value="<?= $dir_val ?>" required>
+
+            <label>WhatsApp del negocio</label>
+            <input type="number" name="whatsapp" value="<?= $whatsapp_val ?>" placeholder="Ej: 3001234567">
+
+            <div class="gofast-btn-group" style="margin-top:20px;">
+                <button name="gofast_guardar_negocio" class="gofast-btn-request">💾 Guardar</button>
+                <a href="/mi-negocio" class="gofast-btn-action gofast-secondary">⬅ Cancelar</a>
+            </div>
+
+        </form>
+    </div>
+
+    <?php else: ?>
+
+    <div class="gofast-box gofast-box-negocios">
+        <a href="?add=1" class="gofast-btn-request gofast-btn-registrar-negocio" style="margin-bottom:16px;">
+            <span class="gofast-btn-icon">➕</span>
+            <span class="gofast-btn-text">Registrar nuevo negocio</span>
+        </a>
+
+        <div class="gofast-negocios-table-wrapper">
+            <table class="gofast-negocios-table">
+
+                <tr>
+                    <th>Nombre</th>
+                    <th>Dirección</th>
+                    <th>Barrio</th>
+                    <th>Acciones</th>
+                </tr>
+
+                <?php foreach ($negocios as $n): ?>
+                <tr>
+                    <td><?= esc_html($n->nombre) ?></td>
+                    <td><?= esc_html($n->direccion_full) ?></td>
+                    <td><?= esc_html($wpdb->get_var("SELECT nombre FROM barrios WHERE id={$n->barrio_id}")) ?></td>
+                    <td class="gofast-actions">
+                        <a href="?edit=<?= $n->id ?>" class="gofast-btn-edit">Editar</a>
+                        <a href="?delete=<?= $n->id ?>" class="gofast-btn-delete"
+                           onclick="return confirm('¿Eliminar este negocio?');">Eliminar</a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+
+            </table>
+        </div>
+    </div>
+
+    <?php endif; ?>
+</div>
+
+<?php return ob_get_clean(); }
+
+add_shortcode('gofast_registro_negocio', 'gofast_registro_negocio_shortcode');
+
+
+/***************************************************
+ * JS + SELECT2 + LÓGICA DEL CAMPO OTRO + Z-INDEX CORREGIDO
+ ***************************************************/
+add_action('wp_footer', function(){ ?>
+<script>
+(function(){
+
+const normalize = s => s.toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+/***************************************************
+ *  Función para obtener z-index correcto
+ ***************************************************/
+function getSelect2ZIndex() {
+    // Si el menú móvil está abierto, usar z-index más bajo
+    if (document.body.classList.contains('gofast-menu-open')) {
+        return 9998;
+    }
+    // Si no, usar z-index moderado para no quedar por encima de todo
+    return 1000;
+}
+
+function initSelect2(container){
+    if (!window.jQuery || !jQuery.fn.select2) return;
+
+    const zIndex = getSelect2ZIndex();
+
+    jQuery(container).find('.gofast-select').select2({
+        placeholder: "🔍 Escribe para buscar...",
+        width: '100%',
+        dropdownParent: jQuery('body'),
+        allowClear: true,
+        minimumResultsForSearch: 0,
+        selectOnClose: true,
+        dropdownAutoWidth: true,
+        dropdownCssClass: "gofast-select-down",
+        language: {
+            noResults: function() {
+                return "No se encontraron resultados";
+            },
+            searching: function() {
+                return "Buscando...";
+            }
+        },
+
+        matcher: function(params, data){
+            // Validaciones básicas
+            if (!data) return null;
+            // Permitir optgroups (separadores)
+            if (data.id === undefined || data.id === null || data.id === '') return data;
+            if (!data.text) return null;
+
+            // Si no hay término de búsqueda, mostrar todo
+            const searchTerm = params.term || "";
+            if (!searchTerm.trim()) return data;
+
+            // Normalizar término de búsqueda y texto de la opción
+            const normalizedTerm = normalize(searchTerm.trim().toLowerCase());
+            const normalizedText = normalize(data.text.trim().toLowerCase());
+            
+            // Si el término está vacío después de normalizar, mostrar todo
+            if (!normalizedTerm) return data;
+            
+            // BUSCAR DESDE LA PRIMERA LETRA - Verificar si el texto contiene el término desde algún punto
+            // Primero verificar coincidencia exacta (mayor prioridad) - "villa campestre" = "villa campestre"
+            if (normalizedText === normalizedTerm) {
+                data.matchScore = 10000;
+                return data;
+            }
+            
+            // Verificar si empieza con el término completo - "villa campestre" empieza con "villa campestre"
+            if (normalizedText.startsWith(normalizedTerm)) {
+                data.matchScore = 9000;
+                return data;
+            }
+            
+            // Verificar si contiene el término completo como frase (palabras consecutivas)
+            // "villa campestre" dentro de "zona villa campestre norte"
+            if (normalizedText.indexOf(normalizedTerm) !== -1) {
+                data.matchScore = 8000;
+                return data;
+            }
+            
+            // Dividir término en palabras individuales
+            const searchWords = normalizedTerm.split(/\s+/).filter(Boolean);
+            
+            // Función para verificar si una palabra está presente como palabra completa (no subcadena)
+            function wordExists(text, word) {
+                // Si la palabra es muy corta (menos de 2 caracteres), buscar como subcadena
+                if (word.length < 2) {
+                    return text.indexOf(word) !== -1;
+                }
+                // Para palabras más largas, buscar como palabra completa (con límites de palabra)
+                const regex = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+                return regex.test(text);
+            }
+            
+            // Si solo hay una palabra, buscar que contenga esa palabra
+            if (searchWords.length === 1) {
+                const word = searchWords[0];
+                // Si empieza con la palabra
+                if (normalizedText.startsWith(word)) {
+                    data.matchScore = 7000;
+                    return data;
+                }
+                // Si contiene la palabra (como palabra completa o subcadena si es muy corta)
+                if (wordExists(normalizedText, word)) {
+                    data.matchScore = 5000;
+                    return data;
+                }
+                // NO COINCIDENCIA - no mostrar
+                return null;
+            }
+            
+            // Para múltiples palabras: TODAS deben estar presentes
+            // Verificar cada palabra individualmente
+            const allWordsFound = searchWords.every(word => {
+                // Si la palabra es muy corta (1-2 caracteres), solo coincidir si está al inicio de una palabra
+                if (word.length <= 2) {
+                    // Buscar que la palabra esté al inicio de alguna palabra en el texto
+                    const wordsInText = normalizedText.split(/\s+/);
+                    return wordsInText.some(w => w.startsWith(word));
+                } else {
+                    // Para palabras más largas, buscar como palabra completa
+                    return wordExists(normalizedText, word);
+                }
+            });
+            
+            // Si no todas las palabras están presentes, NO mostrar
+            if (!allWordsFound) return null;
+            
+            // Calcular score basado en cómo están ordenadas las palabras
+            let score = 1000;
+            
+            // Verificar si las palabras aparecen en el mismo orden (aunque no consecutivas)
+            let lastIndex = -1;
+            let wordsInOrder = true;
+            let firstWordAtStart = false;
+            
+            for (let i = 0; i < searchWords.length; i++) {
+                const wordIndex = normalizedText.indexOf(searchWords[i], lastIndex + 1);
+                if (wordIndex === -1) {
+                    wordsInOrder = false;
+                    break;
+                }
+                // Verificar si la primera palabra está al inicio
+                if (i === 0 && wordIndex === 0) {
+                    firstWordAtStart = true;
+                }
+                lastIndex = wordIndex;
+            }
+            
+            if (wordsInOrder) {
+                // Palabras en orden = mayor score
+                score = 6000;
+                // Bonus si la primera palabra está al inicio
+                if (firstWordAtStart) {
+                    score = 7000;
+                }
+            } else {
+                // Palabras en cualquier orden = menor score
+                score = 2000;
+                // Bonus si la primera palabra está al inicio
+                if (normalizedText.indexOf(searchWords[0]) === 0) {
+                    score = 3000;
+                }
+            }
+            
+            // Bonus por posición de palabras
+            searchWords.forEach(word => {
+                const wordIndex = normalizedText.indexOf(word);
+                if (wordIndex === 0) score += 500;
+                else if (wordIndex < 5) score += 200;
+            });
+            
+            data.matchScore = score;
+            return data;
+        },
+
+        sorter: results => results.sort((a,b)=> (b.matchScore||0)-(a.matchScore||0)),
+
+        templateResult: function(data, container){
+            // Si es un optgroup o no tiene ID, retornar texto sin modificar
+            if (!data.id) return data.text;
+            if (!data.text) return '';
+
+            let originalText = data.text;
+            
+            // Obtener término de búsqueda del contexto actual de Select2
+            let searchTerm = "";
+            
+            // Intentar obtener del contenedor actual
+            const select2Container = jQuery(container).closest('.select2-container');
+            if (select2Container.length) {
+                const searchField = select2Container.find('.select2-search__field');
+                if (searchField.length) {
+                    searchTerm = searchField.val() || "";
+                }
+            }
+            
+            // Si no se encontró, intentar obtener del último campo activo
+            if (!searchTerm) {
+                const activeField = jQuery('.select2-container--open .select2-search__field');
+                if (activeField.length) {
+                    searchTerm = activeField.val() || "";
+                }
+            }
+            
+            // Si aún no se encontró, intentar obtener del campo de búsqueda global
+            if (!searchTerm) {
+                const globalField = jQuery('.select2-search__field:focus, .select2-search__field:last');
+                if (globalField.length) {
+                    searchTerm = globalField.val() || "";
+                }
+            }
+            
+            if (!searchTerm || !searchTerm.trim()) {
+                return jQuery('<span>' + originalText + '</span>');
+            }
+
+            // Normalizar para búsqueda sin tildes
+            const normalizedSearch = normalize(searchTerm);
+            const normalizedText = normalize(originalText);
+            
+            // Dividir término en palabras
+            const searchWords = normalizedSearch.split(/\s+/).filter(Boolean);
+            
+            // Crear array de caracteres para mapeo preciso
+            const textChars = originalText.split('');
+            
+            // Encontrar y resaltar cada palabra
+            let result = originalText;
+            let offset = 0; // Offset acumulado por resaltados anteriores
+            
+            // Procesar palabras en orden inverso para mantener índices correctos
+            searchWords.slice().reverse().forEach(function(word) {
+                let searchPos = 0;
+                const matches = [];
+                
+                // Encontrar todas las ocurrencias de la palabra
+                while ((searchPos = normalizedText.indexOf(word, searchPos)) !== -1) {
+                    matches.push({ start: searchPos, end: searchPos + word.length });
+                    searchPos += word.length;
+                }
+                
+                // Procesar matches en orden inverso para mantener índices
+                matches.reverse().forEach(function(match) {
+                    // Mapear posición normalizada a posición original
+                    let originalStart = 0;
+                    let originalEnd = 0;
+                    let normalizedPos = 0;
+                    
+                    // Encontrar inicio
+                    for (let i = 0; i < textChars.length; i++) {
+                        const charNorm = normalize(textChars[i]);
+                        if (normalizedPos === match.start) {
+                            originalStart = i;
+                            break;
+                        }
+                        normalizedPos += charNorm.length;
+                    }
+                    
+                    // Encontrar fin
+                    normalizedPos = match.start;
+                    for (let i = originalStart; i < textChars.length; i++) {
+                        const charNorm = normalize(textChars[i]);
+                        normalizedPos += charNorm.length;
+                        if (normalizedPos >= match.end) {
+                            originalEnd = i + 1;
+                            break;
+                        }
+                    }
+                    
+                    if (originalStart < originalEnd) {
+                        const before = result.substring(0, originalStart + offset);
+                        const matchText = result.substring(originalStart + offset, originalEnd + offset);
+                        const after = result.substring(originalEnd + offset);
+                        
+                        const highlighted = '<span style="color:#F4C524;font-weight:bold;background:rgba(244,197,36,0.2);padding:1px 2px;border-radius:2px;">' + matchText + '</span>';
+                        result = before + highlighted + after;
+                        offset += highlighted.length - matchText.length;
+                    }
+                });
+            });
+            
+            return jQuery('<span>' + result + '</span>');
+        }
+    }).on('select2:open', function(e) {
+        // Aplicar z-index dinámico cuando se abre
+        setTimeout(function() {
+            const currentZIndex = getSelect2ZIndex();
+            const $container = jQuery(e.target).closest('.select2-container');
+            const $dropdown = jQuery('.select2-dropdown');
+            
+            // Aplicar z-index moderado para todos los dropdowns
+            const zIndex = 1000;
+            
+            if ($container.length) {
+                $container.css('z-index', zIndex);
+            }
+            if ($dropdown.length) {
+                $dropdown.css('z-index', zIndex);
+            }
+            
+            // Asegurar que todos los dropdowns abiertos tengan z-index moderado
+            jQuery('.select2-container--open').css('z-index', zIndex);
+            jQuery('.select2-dropdown').css('z-index', zIndex);
+            
+            // Agregar listener para búsqueda dinámica y mejorar UX (especialmente móvil)
+            const $searchField = $container.find('.select2-search__field');
+            if ($searchField.length) {
+                // Detectar si es móvil
+                const isMobile = window.innerWidth <= 768;
+                
+                // Hacer el campo más visible y claro
+                $searchField.attr('placeholder', isMobile ? '🔍 Escribe para buscar entre 5000+ barrios...' : '🔍 Escribe aquí para buscar...');
+                $searchField.attr('autocomplete', 'off');
+                $searchField.attr('inputmode', 'text'); // Mejor teclado en móvil
+                $searchField.attr('spellcheck', 'false');
+                
+                // Estilos base
+                const baseStyles = {
+                    'outline': 'none',
+                    'border': '2px solid #F4C524',
+                    'border-radius': '8px'
+                };
+                
+                // Estilos específicos para móvil
+                if (isMobile) {
+                    Object.assign(baseStyles, {
+                        'font-size': '18px',
+                        'padding': '16px 20px',
+                        'min-height': '56px',
+                        'border': '3px solid #F4C524',
+                        'border-radius': '12px',
+                        '-webkit-appearance': 'none',
+                        '-moz-appearance': 'none',
+                        'appearance': 'none'
+                    });
+                } else {
+                    Object.assign(baseStyles, {
+                        'font-size': '16px',
+                        'padding': '12px 16px'
+                    });
+                }
+                
+                $searchField.css(baseStyles);
+                
+                // Remover listeners anteriores para evitar duplicados
+                $searchField.off('input.select2-dynamic-search keyup.select2-dynamic-search focus.select2-dynamic-search');
+                
+                // Función para forzar actualización del dropdown
+                const forceUpdate = function() {
+                    const $select = jQuery(e.target);
+                    if ($select.length && $select.data('select2')) {
+                        const select2Instance = $select.data('select2');
+                        // Forzar actualización del dropdown
+                        if (select2Instance && select2Instance.dropdown) {
+                            // Obtener el término de búsqueda actual
+                            const searchTerm = $searchField.val() || '';
+                            // Forzar búsqueda y actualización
+                            select2Instance.trigger('query', {
+                                term: searchTerm
+                            });
+                        }
+                    }
+                };
+                
+                // Agregar listeners para búsqueda dinámica
+                $searchField.on('input.select2-dynamic-search', function() {
+                    forceUpdate();
+                });
+                
+                $searchField.on('keyup.select2-dynamic-search', function(e) {
+                    // Actualizar en cada tecla presionada
+                    setTimeout(forceUpdate, 10);
+                });
+                
+                // Enfocar automáticamente el campo cuando se abre (más tiempo en móvil)
+                setTimeout(function() {
+                    $searchField.focus();
+                    // En móvil, hacer scroll al campo si es necesario
+                    if (isMobile) {
+                        setTimeout(function() {
+                            $searchField[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 200);
+                    }
+                }, isMobile ? 200 : 100);
+            }
+        }, 10);
+    });
+}
+
+/******** CAMPO OTRO =============*/
+document.addEventListener('DOMContentLoaded', function(){
+
+    initSelect2('.gofast-checkout-wrapper');
+
+    const tipoSelect  = document.getElementById("tipo_negocio");
+    const wrapperOtro = document.getElementById("tipo_otro_wrapper");
+    const inputOtro   = document.getElementById("tipo_otro");
+
+    const tiposDefault = ["Restaurante","Tienda","Cafetería","Papelería","Farmacia","Otro"];
+
+    function toggleOtro() {
+        const valor = tipoSelect ? tipoSelect.value.trim() : "";
+
+        if (valor === "") {
+            wrapperOtro.style.display = "none";
+            inputOtro.required = false;
+            return;
+        }
+
+        if (valor === "Otro") {
+            wrapperOtro.style.display = "block";
+            inputOtro.required = true;
+            return;
+        }
+
+        if (!tiposDefault.includes(valor)) {
+            wrapperOtro.style.display = "block";
+            inputOtro.required = true;
+            return;
+        }
+
+        wrapperOtro.style.display = "none";
+        inputOtro.required = false;
+    }
+
+    jQuery('#tipo_negocio').on('select2:select', toggleOtro);
+
+    setTimeout(toggleOtro, 200);
+
+    // Observar cambios en el menú móvil para ajustar z-index
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.attributeName === 'class') {
+                const currentZIndex = getSelect2ZIndex();
+                // Aplicar z-index moderado
+                const zIndex = document.body.classList.contains('gofast-menu-open') ? 9998 : 1000;
+                jQuery('.select2-container--open').each(function() {
+                    const $select = jQuery(this).prev('select');
+                    const isBarrioField = $select.length && $select.attr('name') === 'barrio_id';
+                    jQuery(this).css('z-index', isBarrioField ? 1000 : zIndex);
+                });
+                jQuery('.select2-dropdown').each(function() {
+                    jQuery(this).css('z-index', zIndex);
+                });
+            }
+        });
+    });
+    
+    // Asegurar z-index correcto cuando se hace scroll
+    let scrollTimeout;
+    window.addEventListener('scroll', function() {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(function() {
+            const zIndex = document.body.classList.contains('gofast-menu-open') ? 9998 : 1000;
+            jQuery('.select2-container--open').each(function() {
+                const $select = jQuery(this).prev('select');
+                const isBarrioField = $select.length && $select.attr('name') === 'barrio_id';
+                jQuery(this).css('z-index', isBarrioField ? 1000 : zIndex);
+            });
+            jQuery('.select2-dropdown').css('z-index', zIndex);
+        }, 10);
+    }, { passive: true });
+
+    observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class']
+    });
+
+    // También cerrar Select2 cuando se abre el menú móvil
+    const menuToggle = document.querySelector('.gofast-hamburger');
+    if (menuToggle) {
+        menuToggle.addEventListener('click', function() {
+            // Si el menú se está abriendo, cerrar todos los Select2
+            setTimeout(function() {
+                if (document.body.classList.contains('gofast-menu-open')) {
+                    jQuery('.select2-container--open').select2('close');
+                }
+            }, 50);
+        });
+    }
+});
+
+})();
+</script>
+<?php });

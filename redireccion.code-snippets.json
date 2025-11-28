@@ -1,0 +1,97 @@
+/***************************************************
+ * GOFAST – PROCESAR ADD, EDIT Y DELETE ANTES DE HEADER
+ ***************************************************/
+add_action('template_redirect', function() {
+    global $wpdb;
+
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (empty($_SESSION['gofast_user_id'])) return;
+
+    $user_id = intval($_SESSION['gofast_user_id']);
+
+    /* ==========================================
+       1) ELIMINAR NEGOCIO
+    ========================================== */
+    if (isset($_GET['delete'])) {
+
+        $delete_id = intval($_GET['delete']);
+
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM negocios_gofast WHERE id=%d AND user_id=%d",
+            $delete_id, $user_id
+        ));
+
+        if ($exists) {
+            $wpdb->delete("negocios_gofast", ["id" => $delete_id]);
+        }
+
+        wp_safe_redirect("/mi-negocio");
+        exit;
+    }
+
+    /* ==========================================
+       2) GUARDAR (INSERT / UPDATE)
+    ========================================== */
+    if (isset($_POST['gofast_guardar_negocio'])) {
+
+        $editing_id = isset($_GET['edit']) ? intval($_GET['edit']) : 0;
+
+        $nombre     = sanitize_text_field($_POST['nombre_negocio'] ?? '');
+        $tipo       = sanitize_text_field($_POST['tipo_negocio'] ?? '');
+        $tipo_otro  = sanitize_text_field($_POST['tipo_otro'] ?? '');
+        $whatsapp   = sanitize_text_field($_POST['whatsapp'] ?? '');
+        $barrio_id  = intval($_POST['barrio_id'] ?? 0);
+        $direccion  = sanitize_text_field($_POST['direccion_full'] ?? '');
+
+        // Si el usuario seleccionó "Otro", usar el valor escrito
+        if ($tipo === "Otro" && !empty($tipo_otro)) {
+            $tipo = $tipo_otro;
+        }
+
+        // Validaciones mínimas
+        if (!$nombre || !$tipo || !$barrio_id || !$direccion) {
+            return; // vuelve al formulario
+        }
+
+        // Sector del barrio
+        $sector_id = intval($wpdb->get_var(
+            $wpdb->prepare("SELECT sector_id FROM barrios WHERE id=%d", $barrio_id)
+        ));
+
+        if ($editing_id) {
+            // UPDATE
+            $wpdb->update(
+                "negocios_gofast",
+                [
+                    "nombre"        => $nombre,
+                    "tipo"          => $tipo,
+                    "barrio_id"     => $barrio_id,
+                    "sector_id"     => $sector_id,
+                    "direccion_full"=> $direccion,
+                    "whatsapp"      => $whatsapp,
+                    "updated_at"    => current_time('mysql')
+                ],
+                ["id" => $editing_id, "user_id" => $user_id]
+            );
+        } else {
+            // INSERT
+            $wpdb->insert(
+                "negocios_gofast",
+                [
+                    "user_id"       => $user_id,
+                    "nombre"        => $nombre,
+                    "tipo"          => $tipo,
+                    "barrio_id"     => $barrio_id,
+                    "sector_id"     => $sector_id,
+                    "direccion_full"=> $direccion,
+                    "whatsapp"      => $whatsapp,
+                    "activo"        => 1,
+                    "created_at"    => current_time('mysql')
+                ]
+            );
+        }
+
+        wp_safe_redirect("/mi-negocio");
+        exit;
+    }
+});

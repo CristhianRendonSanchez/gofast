@@ -1,0 +1,253 @@
+================================================================================
+  GOFAST - CONFIGURACIÓN DE PÁGINAS Y SHORTCODES
+  Proyecto WordPress - Sistema de Mensajería Express
+================================================================================
+
+Este documento contiene la relación entre los SLUGS sugeridos para cada página
+y los SHORTCODES que deben configurarse en cada una.
+
+================================================================================
+  PÁGINAS PRINCIPALES (PÚBLICAS)
+================================================================================
+
+1. PÁGINA DE INICIO / HOME
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  (página principal del sitio)
+   SHORTCODE:      [gofast_home]
+   DESCRIPCIÓN:    Página principal con hero, servicios, accesos rápidos según rol
+   ACCESO:         Público (con contenido dinámico según rol del usuario)
+   ARCHIVO:        inicio.code-snippets.json
+
+
+2. COTIZAR ENVÍO
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  /cotizar
+   SHORTCODE:      [gofast_cotizar]
+   DESCRIPCIÓN:    Formulario para cotizar envíos (origen, destinos, Select2)
+   ACCESO:         Público
+   ARCHIVO:        gofast-cotizar-v1.code-snippets (2).json
+   NOTA:           Redirige a /solicitar-mensajero después de cotizar
+
+
+3. SOLICITAR MENSAJERO (Resultado de cotización)
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  /solicitar-mensajero
+   SHORTCODE:      [gofast_resultado]
+   DESCRIPCIÓN:    Muestra detalle de cotización, recargos y formulario final
+   ACCESO:         Público (recibe datos POST de /cotizar)
+   ARCHIVO:        solicitar-mensajero.code-snippets (2).json
+   NOTA:           Redirige a /servicio-registrado después de confirmar
+
+
+4. CONFIRMACIÓN DE SERVICIO
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  /servicio-registrado
+   SHORTCODE:      [gofast_confirmacion]
+   DESCRIPCIÓN:    Página de confirmación con botón WhatsApp y detalles del pedido
+   ACCESO:         Público (puede vincular usuario automáticamente por teléfono)
+   ARCHIVO:        gofast_confirmacion.code-snippets (2).json
+   PARÁMETRO:      ?id=XXX (ID del servicio)
+
+
+5. AUTENTICACIÓN (LOGIN / REGISTRO)
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  /auth
+   SHORTCODE:      [gofast_auth]
+   DESCRIPCIÓN:    Login y registro de usuarios (modo según ?registro=1)
+   ACCESO:         Público (redirige a home si ya está logueado)
+   ARCHIVO:        gofast_auth.code-snippets (1).json
+   PARÁMETROS:     ?registro=1 (para mostrar formulario de registro)
+   NOTA:           Maneja sesiones persistentes con cookies (30 días)
+
+
+================================================================================
+  PÁGINAS DE USUARIOS AUTENTICADOS
+================================================================================
+
+6. MIS PEDIDOS
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  /mis-pedidos
+   SHORTCODE:      [gofast_pedidos]
+   DESCRIPCIÓN:    Listado de pedidos según rol (cliente/mensajero/admin)
+   ACCESO:         Requiere sesión activa
+   ARCHIVO:        mis-pedidos.code-snippets.json / mis-pedidos.php
+   FUNCIONALIDAD:  
+     - Cliente: Ve solo sus pedidos
+     - Mensajero: Ve pendientes + asignados a él
+     - Admin: Ve todos los pedidos + puede asignar mensajeros y cambiar estados
+
+
+7. MI NEGOCIO
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  /mi-negocio
+   SHORTCODE:      [gofast_registro_negocio]
+   DESCRIPCIÓN:    Gestión de negocios del usuario (crear, editar, listar)
+   ACCESO:         Requiere sesión activa
+   ARCHIVO:        gofast_registro_negocio.code-snippets (1).json
+   PARÁMETROS:     
+     - ?add=1 (mostrar formulario nuevo)
+     - ?edit=XXX (editar negocio específico)
+     - ?delete=XXX (eliminar negocio)
+   NOTA:           Los negocios se usan para autocompletar origen en cotizaciones
+
+
+================================================================================
+  PÁGINAS ADMINISTRATIVAS (SOLO ADMIN)
+================================================================================
+
+8. DASHBOARD ADMINISTRATIVO
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  /dashboard-admin
+   SHORTCODE:      [gofast_dashboard_admin]
+   DESCRIPCIÓN:    Panel principal con estadísticas y enlaces de navegación
+   ACCESO:         Solo usuarios con rol 'admin'
+   ARCHIVO:        gofast_dashboard_admin.php / gofast_dashboard_admin.code-snippets.json
+   CONTENIDO:      
+     - Estadísticas: pedidos, usuarios, ingresos, pedidos del día
+     - Enlaces a: gestión de pedidos, usuarios, recargos, reportes
+
+
+9. GESTIÓN DE USUARIOS
+   ──────────────────────────────────────────────────────────────────────────
+   SLUG SUGERIDO:  /admin-usuarios
+   SHORTCODE:      [gofast_usuarios_admin]
+   DESCRIPCIÓN:    Crear, editar, desactivar usuarios (clientes, mensajeros, admins)
+   ACCESO:         Solo usuarios con rol 'admin'
+   ARCHIVO:        gofast_usuarios_admin.php / gofast_usuarios_admin.code-snippets.json
+   FUNCIONALIDAD:  
+     - Crear nuevos usuarios
+     - Editar usuarios existentes
+     - Cambiar contraseñas
+     - Cambiar roles
+     - Desactivar usuarios
+     - Filtros: rol, estado, búsqueda
+     - Paginación (20 por página)
+
+
+10. ADMINISTRACIÓN DE RECARGOS
+    ──────────────────────────────────────────────────────────────────────────
+    SLUG SUGERIDO:  /recargos
+    SHORTCODE:      [gofast_recargos_admin]
+    DESCRIPCIÓN:    Configurar recargos fijos y por valor para cotizaciones
+    ACCESO:         Solo usuarios con rol 'admin'
+    ARCHIVO:        gofast_recargos_admin.code-snippets.json
+    FUNCIONALIDAD:  
+      - Crear recargos fijos (valor fijo por envío)
+      - Crear recargos por valor (rangos de monto)
+      - Editar/eliminar recargos existentes
+      - Gestionar rangos de recargos variables
+      - Activar/desactivar recargos
+
+
+11. REPORTES Y ESTADÍSTICAS
+    ──────────────────────────────────────────────────────────────────────────
+    SLUG SUGERIDO:  /admin-reportes
+    SHORTCODE:      [gofast_reportes_admin]
+    DESCRIPCIÓN:    Reportes detallados de pedidos, ingresos, mensajeros
+    ACCESO:         Solo usuarios con rol 'admin'
+    ARCHIVO:        gofast_reportes_admin.php / gofast_reportes_admin.code-snippets.json
+    FUNCIONALIDAD:  
+      - Filtros: estado, fechas, mensajero, búsqueda
+      - Estadísticas: total pedidos, ingresos, promedio, estados
+      - Top mensajeros (más entregados)
+      - Pedidos por día (últimos 30 días)
+      - Exportar a CSV
+
+
+================================================================================
+  ARCHIVOS DE SOPORTE (NO SON SHORTCODES)
+================================================================================
+
+- gofast_auth_logic.code-snippets.json
+  → Lógica de autenticación (login, registro, logout, cookies)
+  → Hook: add_action('init', 'gofast_handle_auth_requests', 5)
+  → NO requiere shortcode, funciona automáticamente
+
+- gofast_menu.code-snippets (1).json
+  → Menú dinámico responsive según rol
+  → Hook: add_action('generate_before_header', 'gofast_menu_topbar')
+  → NO requiere shortcode, se muestra automáticamente en el header
+
+- gofast-select2-loader.code-snippets (1).json
+  → Carga Select2 CSS/JS desde CDN
+  → Hook: add_action('wp_enqueue_scripts', 'gofast_enqueue_select2')
+  → NO requiere shortcode, carga automáticamente
+
+- sesiones.code-snippets (1).json
+  → Inicia sesiones PHP globales
+  → Hook: add_action('init', 'gofast_start_session', 1)
+  → NO requiere shortcode, funciona automáticamente
+
+- redireccion.code-snippets.json
+  → Procesa guardado/edición/eliminación de negocios
+  → Hook: add_action('template_redirect', ...)
+  → NO requiere shortcode, funciona automáticamente
+
+- utils.code-snippets (1).json
+  → Utilidades JavaScript (formato de dinero)
+  → Hook: add_action('wp_footer', ...)
+  → NO requiere shortcode, funciona automáticamente
+
+
+================================================================================
+  RESUMEN DE CONFIGURACIÓN
+================================================================================
+
+PÁGINAS A CREAR EN WORDPRESS:
+
+1.  (Home)                    → [gofast_home]
+2.  /cotizar                  → [gofast_cotizar]
+3.  /solicitar-mensajero     → [gofast_resultado]
+4.  /servicio-registrado     → [gofast_confirmacion]
+5.  /auth                     → [gofast_auth]
+6.  /mis-pedidos              → [gofast_pedidos]
+7.  /mi-negocio               → [gofast_registro_negocio]
+8.  /dashboard-admin          → [gofast_dashboard_admin]
+9.  /admin-usuarios           → [gofast_usuarios_admin]
+10. /recargos                 → [gofast_recargos_admin]
+11. /admin-reportes           → [gofast_reportes_admin]
+
+
+================================================================================
+  NOTAS IMPORTANTES
+================================================================================
+
+1. AUTENTICACIÓN:
+   - El sistema usa sesiones PHP nativas
+   - Soporta cookies persistentes (30 días) con checkbox "Mantener sesión"
+   - Los usuarios se almacenan en tabla 'usuarios_gofast'
+   - Roles: 'cliente', 'mensajero', 'admin'
+
+2. BASE DE DATOS:
+   - usuarios_gofast: usuarios del sistema
+   - servicios_gofast: pedidos/servicios
+   - negocios_gofast: negocios registrados por usuarios
+   - barrios: barrios de la ciudad
+   - sectores: sectores para cálculo de tarifas
+   - tarifas: precios por sector origen/destino
+   - recargos: recargos fijos y por valor
+   - recargos_rangos: rangos de recargos variables
+
+3. FLUJO DE COTIZACIÓN:
+   /cotizar → (POST) → /solicitar-mensajero → (POST) → /servicio-registrado?id=XXX
+
+4. PERMISOS:
+   - Visitante: solo puede cotizar y ver confirmación
+   - Cliente: puede ver sus pedidos y gestionar negocios
+   - Mensajero: puede ver pedidos pendientes y asignarse
+   - Admin: acceso completo a todas las funciones
+
+5. MENÚ DINÁMICO:
+   - Se muestra automáticamente según el rol del usuario
+   - Responsive con hamburguesa en móvil
+   - No requiere configuración manual
+
+6. SELECT2:
+   - Se carga automáticamente desde CDN
+   - Se usa en formularios de barrios y direcciones
+   - Búsqueda inteligente sin tildes
+
+================================================================================
+  FIN DEL DOCUMENTO
+================================================================================
+
