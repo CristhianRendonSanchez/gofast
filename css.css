@@ -77,16 +77,96 @@
     display: inline-block;
   }
   
-  /********************************************
-   * GOFAST — HEADER MODERNO Y RESPONSIVE
-   ********************************************/
-  .gofast-menu {
-    background: #000;
-    border-bottom: 1px solid #222;
-    position: sticky;
-    top: 0;
-    z-index: 999;
-  }
+/********************************************
+ * GOFAST — BARRA SUPERIOR (SALUDO Y REDES)
+ ********************************************/
+ .gofast-topbar {
+   background: #111;
+   border-bottom: 1px solid #222;
+   padding: 8px 0;
+   font-size: 13px;
+ }
+
+ .gofast-topbar-inner {
+   max-width: 1200px;
+   margin: 0 auto;
+   padding: 0 20px;
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 16px;
+ }
+
+ .gofast-topbar-left {
+   display: flex;
+   align-items: center;
+ }
+
+ .gofast-welcome {
+   color: #fff;
+   font-size: 13px;
+ }
+
+ .gofast-welcome strong {
+   color: var(--gofast-yellow);
+   font-weight: 600;
+ }
+
+ .gofast-topbar-right {
+   display: flex;
+   align-items: center;
+   gap: 12px;
+   flex-wrap: wrap;
+ }
+
+ .gofast-social-link {
+   display: inline-flex;
+   align-items: center;
+   gap: 4px;
+   color: #ccc;
+   text-decoration: none;
+   font-size: 12px;
+   padding: 4px 8px;
+   border-radius: var(--radius-s);
+   transition: all 0.2s ease;
+   white-space: nowrap;
+ }
+
+ .gofast-social-link:hover {
+   color: var(--gofast-yellow);
+   background: rgba(244, 197, 36, 0.1);
+ }
+
+ .gofast-social-icon {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   width: 16px;
+   height: 16px;
+   line-height: 1;
+   flex-shrink: 0;
+ }
+
+ .gofast-social-icon svg {
+   width: 100%;
+   height: 100%;
+   display: block;
+ }
+
+ .gofast-social-text {
+   font-weight: 500;
+ }
+
+ /********************************************
+  * GOFAST — HEADER MODERNO Y RESPONSIVE
+  ********************************************/
+ .gofast-menu {
+   background: #000;
+   border-bottom: 1px solid #222;
+   position: sticky;
+   top: 0;
+   z-index: 999;
+ }
   
   .gofast-menu-inner {
     max-width: 1200px;
@@ -1809,6 +1889,38 @@
   }
   
   @media (max-width: 768px) {
+    .gofast-topbar {
+      padding: 6px 0;
+    }
+
+    .gofast-topbar-inner {
+      padding: 0 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .gofast-welcome {
+      font-size: 12px;
+    }
+
+    .gofast-topbar-right {
+      gap: 8px;
+    }
+
+    .gofast-social-link {
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+
+    .gofast-social-text {
+      display: none;
+    }
+
+    .gofast-social-icon {
+      width: 18px;
+      height: 18px;
+    }
+
     .gofast-row,
     .gofast-destinos-grid {
       flex-direction: column;
