@@ -46,10 +46,69 @@ add_shortcode("gofast_confirmacion", function() {
     }
 
     /* ==========================================================
-       3. Decodificar JSON de destinos
+       3. Decodificar JSON de destinos y preparar datos
     ========================================================== */
     $json = json_decode($pedido->destinos, true);
     $destinos = $json["destinos"] ?? [];
+    $origen_data = $json["origen"] ?? [];
+    
+    // Obtener nombre del origen
+    $nombre_origen = '';
+    if (!empty($origen_data['barrio_nombre'])) {
+        $nombre_origen = $origen_data['barrio_nombre'];
+    } elseif (!empty($origen_data['direccion'])) {
+        $nombre_origen = $origen_data['direccion'];
+    } elseif (!empty($pedido->direccion_origen)) {
+        $nombre_origen = $pedido->direccion_origen;
+    }
+    
+    // Preparar detalle de destinos (similar al mensajero)
+    $detalle_envios = [];
+    $total_calculado = 0;
+    
+    foreach ($destinos as $d) {
+        $nombre_destino = '';
+        if (!empty($d['barrio_nombre'])) {
+            $nombre_destino = $d['barrio_nombre'];
+        } elseif (!empty($d['direccion'])) {
+            $nombre_destino = $d['direccion'];
+        }
+        
+        if (empty($nombre_destino)) continue;
+        
+        // Obtener monto (si está en el JSON)
+        $monto_destino = !empty($d['monto']) ? intval($d['monto']) : 0;
+        
+        // Si no hay monto en el JSON, intentar calcularlo
+        if ($monto_destino == 0 && !empty($origen_data['sector_id']) && !empty($d['sector_id'])) {
+            $precio = $wpdb->get_var($wpdb->prepare(
+                "SELECT precio FROM tarifas WHERE origen_sector_id=%d AND destino_sector_id=%d",
+                intval($origen_data['sector_id']),
+                intval($d['sector_id'])
+            ));
+            $monto_destino = $precio ? intval($precio) : 0;
+        }
+        
+        $detalle_envios[] = [
+            'id' => !empty($d['barrio_id']) ? intval($d['barrio_id']) : 0,
+            'nombre' => $nombre_destino,
+            'precio' => $monto_destino,
+            'recargo' => 0, // Los recargos ya están incluidos en el total del servicio
+            'total' => $monto_destino,
+        ];
+        
+        $total_calculado += $monto_destino;
+    }
+    
+    // Si no hay destinos con monto, usar el total del servicio dividido entre destinos
+    if ($total_calculado == 0 && !empty($detalle_envios) && $pedido->total > 0) {
+        $monto_por_destino = intval($pedido->total / count($detalle_envios));
+        foreach ($detalle_envios as &$de) {
+            $de['precio'] = $monto_por_destino;
+            $de['total'] = $monto_por_destino;
+        }
+        $total_calculado = $pedido->total;
+    }
 
     /* ==========================================================
        4. Preparar mensaje para WhatsApp
@@ -100,39 +159,57 @@ add_shortcode("gofast_confirmacion", function() {
         </p>
     </div>
 
-    <!-- 🗺️ DESTINOS -->
-    <div style="margin-top:15px;">
-        <h3 style="margin-bottom:10px;font-size:18px;">🚛 Destinos</h3>
+    <!-- 📍 RESUMEN DEL SERVICIO (Estilo mensajero) -->
+    <div class="gofast-checkout-wrapper" style="margin-top:25px;">
+        <div class="gofast-box" style="max-width:800px;margin:0 auto;">
+            
+            <div style="background:#e3f2fd;border-left:4px solid #2196F3;padding:12px;margin-bottom:20px;border-radius:8px;">
+                <strong>🚚 Resumen del Servicio</strong><br>
+                <small>Detalle de tu pedido registrado.</small>
+            </div>
 
-        <?php
-        $mostro_destinos = false;
-        if (!empty($destinos)):
-            foreach ($destinos as $d):
-                // Mostrar destino si tiene dirección O barrio
-                $tiene_direccion = !empty($d["direccion"]);
-                $tiene_barrio = !empty($d["barrio_nombre"]);
-                
-                if ($tiene_direccion || $tiene_barrio) {
-                    $mostro_destinos = true; ?>
-                    <div class="gofast-route-item" style="background:#f8f8f8;padding:10px 12px;border-radius:8px;margin-bottom:8px;border-left:4px solid #F4C524;">
-                        <?php if ($tiene_direccion): ?>
-                            <strong><?= esc_html($d["direccion"]) ?></strong>
-                            <?php if ($tiene_barrio): ?>
-                                <br><small style="color:#666;">📍 <?= esc_html($d["barrio_nombre"]) ?></small>
-                            <?php endif; ?>
-                        <?php elseif ($tiene_barrio): ?>
-                            <strong>📍 <?= esc_html($d["barrio_nombre"]) ?></strong>
-                        <?php endif; ?>
-                        <?php if (!empty($d["monto"]) && intval($d["monto"]) > 0): ?>
-                            <br><b style="color:#4CAF50;">💰 $<?= number_format($d["monto"], 0, ',', '.') ?></b>
-                        <?php endif; ?>
-                    </div>
-        <?php   }
-            endforeach;
-        endif;
-        if (!$mostro_destinos): ?>
-            <p style="color:#666;">(No se registraron destinos)</p>
-        <?php endif; ?>
+            <?php if (!empty($nombre_origen)): ?>
+                <h3 style="margin-top:0;">📍 Origen: <?= esc_html($nombre_origen) ?></h3>
+            <?php endif; ?>
+
+            <div id="destinos-resumen">
+                <?php if (!empty($detalle_envios)): ?>
+                    <?php foreach ($detalle_envios as $idx => $d): ?>
+                        <div class="gofast-destino-resumen-item" 
+                             data-destino-id="<?= esc_attr($d['id']) ?>"
+                             data-precio="<?= esc_attr($d['precio']) ?>"
+                             data-recargo="<?= esc_attr($d['recargo']) ?>"
+                             data-total="<?= esc_attr($d['total']) ?>">
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f8f9fa;border-radius:8px;margin-bottom:10px;border-left:4px solid #F4C524;">
+                                <div style="flex:1;">
+                                    <strong>🎯 <?= esc_html($d['nombre']) ?></strong><br>
+                                    <?php if ($d['precio'] > 0): ?>
+                                        <small style="color:#666;">
+                                            Base: $<?= number_format($d['precio'], 0, ',', '.') ?>
+                                            <?php if ($d['recargo'] > 0): ?>
+                                                | Recargo: $<?= number_format($d['recargo'], 0, ',', '.') ?>
+                                            <?php endif; ?>
+                                        </small><br>
+                                    <?php endif; ?>
+                                    <?php if ($d['total'] > 0): ?>
+                                        <strong style="color:#4CAF50;font-size:18px;">
+                                            $<?= number_format($d['total'], 0, ',', '.') ?>
+                                        </strong>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p style="color:#666;">(No se registraron destinos)</p>
+                <?php endif; ?>
+            </div>
+
+            <div class="gofast-total-box" style="margin:20px 0;text-align:center;" id="total-box">
+                💰 <strong style="font-size:24px;" id="total-amount">Total: $<?= number_format($pedido->total > 0 ? $pedido->total : $total_calculado, 0, ',', '.') ?></strong>
+            </div>
+
+        </div>
     </div>
 
     <!-- 👤 RESUMEN DEL CLIENTE -->
@@ -147,11 +224,11 @@ add_shortcode("gofast_confirmacion", function() {
 
     <!-- 🔄 BOTONES INFERIORES -->
     <div class="gofast-btn-group" style="margin-top:25px;text-align:center;">
-        <a href="/" class="gofast-btn-action">🔄 Hacer otra cotización</a>
+        <a href="<?php echo esc_url( home_url('/cotizar') ); ?>" class="gofast-btn-action">🔄 Hacer otra cotización</a>
         <?php if (!empty($_SESSION["gofast_user_id"]) && empty($_SESSION["gofast_auto_linked"])): ?>
-            <a href="/mis-pedidos" class="gofast-btn-action gofast-secondary">📦 Ver mis pedidos</a>
+            <a href="<?php echo esc_url( home_url('/mis-pedidos') ); ?>" class="gofast-btn-action gofast-secondary">📦 Ver mis pedidos</a>
         <?php else: ?>
-            <a href="/auth?registro=1" class="gofast-btn-action gofast-secondary">👤 Crear cuenta para ver tus pedidos</a>
+            <a href="<?php echo esc_url( home_url('/auth/?registro=1') ); ?>" class="gofast-btn-action gofast-secondary">👤 Crear cuenta para ver tus pedidos</a>
         <?php endif; ?>
     </div>
 
