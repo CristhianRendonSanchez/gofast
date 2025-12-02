@@ -411,12 +411,27 @@ add_action('wp_footer', function () { ?>
 
     const text = normalize(data.text);
     
+    // PRIMERO: Verificar coincidencia exacta (ignorando mayúsculas y tildes)
+    if (text === term) {
+      data.matchScore = 10000;
+      return data;
+    }
+    
+    // SEGUNDO: Verificar si el texto comienza exactamente con el término
+    if (text.indexOf(term) === 0) {
+      data.matchScore = 9500;
+      return data;
+    }
+    
     // Palabras comunes a ignorar en la búsqueda
     const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
     
     const searchWords = term.split(/\s+/).filter(Boolean).filter(word => {
       return word.length > 2 && !stopWords.includes(word);
     });
+    
+    // Detectar si el término de búsqueda parece ser completo (múltiples palabras o palabra larga)
+    const isCompleteSearch = term.split(/\s+/).length >= 2 || term.length >= 10;
     
     // Si después de filtrar no quedan palabras, buscar el término completo
     if (searchWords.length === 0) {
@@ -438,6 +453,18 @@ add_action('wp_footer', function () { ?>
     if (significantMatches.length === 0) return null;
     
     const allSignificantMatch = searchWords.length === significantMatches.length;
+    
+    // Si la búsqueda parece completa y no hay coincidencia exacta, ser más estricto
+    if (isCompleteSearch && text !== term && text.indexOf(term) !== 0) {
+      // Solo mostrar si el término completo está presente (aunque no al inicio)
+      if (text.indexOf(term) === -1) {
+        // Verificar si al menos todas las palabras significativas están presentes
+        const allWordsPresent = searchWords.every(word => text.indexOf(word) !== -1);
+        if (!allWordsPresent) {
+          return null; // Filtrar si no están todas las palabras
+        }
+      }
+    }
 
     // Sistema de puntuación
     let score = 0;
@@ -445,17 +472,28 @@ add_action('wp_footer', function () { ?>
     const textWithoutStopWords = text.split(/\s+/).filter(w => !stopWords.includes(w)).join(' ');
     const termWithoutStopWords = searchWords.join(' ');
     
+    // Coincidencia exacta sin stop words
     if (textWithoutStopWords === termWithoutStopWords) {
       score = 10000;
-    } else if (textWithoutStopWords.indexOf(termWithoutStopWords) === 0) {
+    } 
+    // El término completo (sin stop words) está al inicio
+    else if (textWithoutStopWords.indexOf(termWithoutStopWords) === 0) {
       score = 9000;
-    } else if (textWithoutStopWords.indexOf(termWithoutStopWords) !== -1) {
+    } 
+    // El término completo (sin stop words) está en cualquier parte
+    else if (textWithoutStopWords.indexOf(termWithoutStopWords) !== -1) {
       score = 8000;
-    } else if (searchWords.some(word => text.indexOf(word) === 0)) {
+    } 
+    // Al menos una palabra significativa al inicio
+    else if (searchWords.some(word => text.indexOf(word) === 0)) {
       score = 7000;
-    } else if (text.indexOf(term) !== -1) {
+    } 
+    // El término completo está en cualquier parte
+    else if (text.indexOf(term) !== -1) {
       score = 6000;
-    } else {
+    } 
+    // Coincidencias parciales
+    else {
       score = allSignificantMatch ? 5000 : 3000;
       
       let lastIndex = -1;
@@ -514,6 +552,7 @@ add_action('wp_footer', function () { ?>
             return (b.matchScore || 0) - (a.matchScore || 0);
           });
         },
+        
 
         templateResult: function(data, container){
           // Manejar optgroups (no tienen id pero tienen children)
@@ -535,74 +574,126 @@ add_action('wp_footer', function () { ?>
           }
           
           if (!searchTerm || !searchTerm.trim()) {
-            return jQuery('<span>' + originalText + '</span>');
+            const $result = jQuery('<span>' + originalText + '</span>');
+            if (data.matchScore !== undefined) {
+              $result.attr('data-match-score', data.matchScore);
+            }
+            return $result;
           }
 
           // Normalizar para búsqueda sin tildes
           const normalizedSearch = normalize(searchTerm);
           const normalizedText = normalize(originalText);
           
-          // Dividir término en palabras
-          const searchWords = normalizedSearch.split(/\s+/).filter(Boolean);
+          // Dividir término en palabras significativas
+          const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
+          const searchWords = normalizedSearch.split(/\s+/).filter(Boolean).filter(word => {
+            return word.length > 2 && !stopWords.includes(word);
+          });
           
-          // Crear array de caracteres para mapeo preciso
-          const textChars = originalText.split('');
-          const normalizedChars = normalizedText.split('');
+          // Si no hay palabras significativas, buscar el término completo
+          const wordsToHighlight = searchWords.length > 0 ? searchWords : [normalizedSearch];
           
-          // Encontrar y resaltar cada palabra
-          let result = originalText;
-          let offset = 0;
+          // Encontrar coincidencias en el texto normalizado y mapear a texto original
+          const highlightRanges = [];
           
-          // Procesar palabras en orden inverso para mantener índices correctos
-          searchWords.slice().reverse().forEach(function(word) {
+          wordsToHighlight.forEach(function(word) {
             let searchPos = 0;
-            const matches = [];
-            
-            // Encontrar todas las ocurrencias de la palabra
             while ((searchPos = normalizedText.indexOf(word, searchPos)) !== -1) {
-              matches.push({ start: searchPos, end: searchPos + word.length });
-              searchPos += word.length;
-            }
-            
-            // Procesar matches en orden inverso para mantener índices
-            matches.reverse().forEach(function(match) {
-              // Mapear posición normalizada a posición original
-              let originalStart = 0;
-              let originalEnd = 0;
-              let normalizedPos = 0;
+              const endPos = searchPos + word.length;
+              
+              // Mapear posiciones normalizadas a originales
+              // Construir texto normalizado carácter por carácter para mapear correctamente
+              let origStart = -1;
+              let origEnd = -1;
+              let normPos = 0;
               
               // Encontrar inicio
-              for (let i = 0; i < textChars.length; i++) {
-                const charNorm = normalize(textChars[i]);
-                if (normalizedPos === match.start) {
-                  originalStart = i;
-                  break;
+              for (let i = 0; i < originalText.length && origStart === -1; i++) {
+                const charNorm = normalize(originalText[i]);
+                if (normPos === searchPos) {
+                  origStart = i;
                 }
-                normalizedPos += charNorm.length;
+                normPos += charNorm.length;
               }
               
               // Encontrar fin
-              normalizedPos = match.start;
-              for (let i = originalStart; i < textChars.length; i++) {
-                const charNorm = normalize(textChars[i]);
-                normalizedPos += charNorm.length;
-                if (normalizedPos >= match.end) {
-                  originalEnd = i + 1;
-                  break;
+              if (origStart >= 0) {
+                normPos = searchPos;
+                for (let i = origStart; i < originalText.length; i++) {
+                  const charNorm = normalize(originalText[i]);
+                  normPos += charNorm.length;
+                  if (normPos >= endPos) {
+                    origEnd = i + 1;
+                    break;
+                  }
+                }
+                
+                if (origStart >= 0 && origEnd > origStart) {
+                  highlightRanges.push({ start: origStart, end: origEnd });
                 }
               }
               
-              // Resaltar
-              const before = result.substring(0, originalStart);
-              const matchText = result.substring(originalStart, originalEnd);
-              const after = result.substring(originalEnd);
-              result = before + 
-                       '<span style="background-color:#F4C524;color:#000;font-weight:bold;padding:1px 2px;">' + 
-                       matchText + '</span>' + after;
-            });
+              searchPos = endPos;
+            }
           });
           
-          return jQuery('<span>' + result + '</span>');
+          // Fusionar rangos solapados
+          if (highlightRanges.length > 0) {
+            highlightRanges.sort((a, b) => a.start - b.start);
+            const mergedRanges = [highlightRanges[0]];
+            
+            for (let i = 1; i < highlightRanges.length; i++) {
+              const current = highlightRanges[i];
+              const last = mergedRanges[mergedRanges.length - 1];
+              
+              if (current.start <= last.end) {
+                last.end = Math.max(last.end, current.end);
+              } else {
+                mergedRanges.push(current);
+              }
+            }
+            
+            // Construir resultado con resaltados
+            const parts = [];
+            let lastIndex = 0;
+            
+            mergedRanges.forEach(function(range) {
+              // Agregar texto antes del rango
+              if (range.start > lastIndex) {
+                parts.push(originalText.substring(lastIndex, range.start));
+              }
+              
+              // Agregar texto resaltado
+              const matchText = originalText.substring(range.start, range.end);
+              parts.push('<span style="background-color:#F4C524;color:#000;font-weight:bold;padding:1px 2px;">' + 
+                         matchText + '</span>');
+              
+              lastIndex = range.end;
+            });
+            
+            // Agregar texto restante después del último rango
+            if (lastIndex < originalText.length) {
+              parts.push(originalText.substring(lastIndex));
+            }
+            
+            const result = parts.join('');
+            
+            // Crear elemento jQuery con el HTML renderizado correctamente
+            const $result = jQuery('<span>').html(result);
+            // Agregar atributo data con el score para poder filtrar después
+            if (data.matchScore !== undefined) {
+              $result.attr('data-match-score', data.matchScore);
+            }
+            return $result;
+          }
+          
+          // Si no hay coincidencias, retornar texto sin resaltar
+          const $result = jQuery('<span>').text(originalText);
+          if (data.matchScore !== undefined) {
+            $result.attr('data-match-score', data.matchScore);
+          }
+          return $result;
         }
         }).on('select2:open', function(e) {
           const $select = jQuery(this);
@@ -665,6 +756,91 @@ add_action('wp_footer', function () { ?>
                   const term = jQuery(this).val() || '';
                   select2Instance.dataAdapter.query({ term: term }, function(data) {
                     select2Instance.updateResults(data);
+                    
+                    // Después de actualizar resultados, filtrar si hay coincidencias exactas
+                    setTimeout(function() {
+                      const $results = $dropdown.find('.select2-results__options');
+                      const $items = $results.find('.select2-results__option[role="option"]:not(.select2-results__option--loading)');
+                      
+                      if ($items.length > 0) {
+                        // Verificar si hay coincidencias exactas (score 10000)
+                        let hasExactMatch = false;
+                        $items.each(function() {
+                          const $item = jQuery(this);
+                          const $span = $item.find('span[data-match-score]');
+                          if ($span.length) {
+                            const score = parseInt($span.attr('data-match-score') || '0', 10);
+                            if (score >= 10000) {
+                              hasExactMatch = true;
+                              return false; // break
+                            }
+                          }
+                        });
+                        
+                        if (hasExactMatch) {
+                          // Ocultar elementos con score < 9500
+                          $items.each(function() {
+                            const $item = jQuery(this);
+                            const $span = $item.find('span[data-match-score]');
+                            if ($span.length) {
+                              const score = parseInt($span.attr('data-match-score') || '0', 10);
+                              if (score < 9500) {
+                                $item.hide();
+                              } else {
+                                $item.show();
+                              }
+                            } else {
+                              $item.show(); // Mostrar si no tiene score
+                            }
+                          });
+                        } else {
+                          // Si no hay exactas, verificar si hay muy cercanas (>= 9000)
+                          let hasVeryClose = false;
+                          $items.each(function() {
+                            const $item = jQuery(this);
+                            const $span = $item.find('span[data-match-score]');
+                            if ($span.length) {
+                              const score = parseInt($span.attr('data-match-score') || '0', 10);
+                              if (score >= 9000) {
+                                hasVeryClose = true;
+                                return false; // break
+                              }
+                            }
+                          });
+                          
+                          if (hasVeryClose) {
+                            // Mostrar solo las muy cercanas (hasta 5)
+                            let count = 0;
+                            $items.each(function() {
+                              const $item = jQuery(this);
+                              const $span = $item.find('span[data-match-score]');
+                              if ($span.length) {
+                                const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                if (score >= 9000 && count < 5) {
+                                  $item.show();
+                                  count++;
+                                } else {
+                                  $item.hide();
+                                }
+                              } else {
+                                $item.hide(); // Ocultar si no tiene score
+                              }
+                            });
+                          } else {
+                            // Mostrar todos (hasta 10)
+                            let count = 0;
+                            $items.each(function() {
+                              if (count < 10) {
+                                jQuery(this).show();
+                                count++;
+                              } else {
+                                jQuery(this).hide();
+                              }
+                            });
+                          }
+                        }
+                      }
+                    }, 150);
                   });
                 }
               });

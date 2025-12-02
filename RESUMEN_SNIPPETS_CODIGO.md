@@ -13,6 +13,8 @@
 | `gofast_usuarios_admin.code-snippets.json` | `code/gofast_usuarios_admin.php` | ✅ |
 | `mis-pedidos.code-snippets.json` | `code/mis-pedidos.php` | ✅ |
 | `inicio.code-snippets.json` | `code/gofast_home.php` | ✅ |
+| `gofast-cotizar-v1.code-snippets (2).json` | `code/gofast_cotizar.php` | ✅ |
+| `solicitar-mensajero.code-snippets (2).json` | `code/gofast_solicitar_mensajero.php` | ✅ |
 
 ## ❌ Snippets SIN código PHP correspondiente
 
@@ -22,7 +24,6 @@
 | `gofast_auth.code-snippets (1).json` | Formulario de login/registro | Crear `code/gofast_auth.php` |
 | `gofast_recargos_admin.code-snippets.json` | Administración de recargos | Crear `code/gofast_recargos_admin.php` |
 | `gofast_registro_negocio.code-snippets (1).json` | Registro de negocios | Crear `code/gofast_registro_negocio.php` |
-| `gofast-cotizar-v1.code-snippets (2).json` | Cotizador principal | Crear `code/gofast_cotizar.php` |
 | `gofast-select2-loader.code-snippets (1).json` | Cargador de Select2 | Crear `code/gofast_select2_loader.php` |
 | `redireccion.code-snippets.json` | Redirecciones | Crear `code/redireccion.php` |
 | `sesiones.code-snippets (1).json` | Manejo de sesiones | Crear `code/sesiones.php` |
@@ -32,8 +33,8 @@
 ## 📊 Estadísticas
 
 - **Total de snippets**: 19
-- **Snippets con código**: 9 (47%)
-- **Snippets sin código**: 10 (53%)
+- **Snippets con código**: 11 (58%)
+- **Snippets sin código**: 8 (42%)
 
 ## 🔍 Notas
 

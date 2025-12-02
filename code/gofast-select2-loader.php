@@ -1,0 +1,22 @@
+<?php
+/***************************************************
+ * GOFAST – CARGAR SELECT2 CSS/JS DESDE CDN
+ ***************************************************/
+function gofast_enqueue_select2() {
+    // Select2 CSS
+    wp_enqueue_style(
+        'select2-css',
+        'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css'
+    );
+
+    // Select2 JS
+    wp_enqueue_script(
+        'select2-js',
+        'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
+        array('jquery'),
+        null,
+        true
+    );
+}
+add_action('wp_enqueue_scripts', 'gofast_enqueue_select2');
+

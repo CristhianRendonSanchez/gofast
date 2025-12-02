@@ -12,6 +12,7 @@ function gofast_usuarios_admin_shortcode() {
 
     $tabla = 'usuarios_gofast';
     $mensaje = '';
+    $debug_info = []; // Para debugging
 
     /* ==========================================================
        0. Validar usuario admin
@@ -38,88 +39,144 @@ function gofast_usuarios_admin_shortcode() {
     /* ==========================================================
        1. Procesar POST (crear, editar, eliminar)
     ========================================================== */
+    // Log SIEMPRE para ver qué se está recibiendo
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        error_log("GOFAST ADMIN - POST recibido. Keys: " . implode(', ', array_keys($_POST)));
+        error_log("GOFAST ADMIN - gofast_crear_usuario: " . ($_POST['gofast_crear_usuario'] ?? 'NO PRESENTE'));
+        error_log("GOFAST ADMIN - gofast_guardar_usuarios: " . ($_POST['gofast_guardar_usuarios'] ?? 'NO PRESENTE'));
+    }
+    
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         /* ----------------------------------------------
-           A) Crear nuevo usuario (verificar nonce específico)
+           A) Crear nuevo usuario (COPIA EXACTA DE AUTH)
         ---------------------------------------------- */
+        // Verificar que sea el botón de CREAR, no el de GUARDAR
+        // Simplificar: solo verificar que exista gofast_crear_usuario
         if (!empty($_POST['gofast_crear_usuario'])) {
             
-            if (
-                empty($_POST['gofast_usuarios_nonce']) ||
-                !wp_verify_nonce($_POST['gofast_usuarios_nonce'], 'gofast_usuarios_admin')
-            ) {
-                $mensaje = "🔒 Error de seguridad al crear usuario.";
+            // Log para confirmar que se detectó el botón correcto
+            error_log("GOFAST ADMIN - ✅ Botón CREAR USUARIO detectado correctamente");
+            error_log("GOFAST ADMIN - gofast_crear_usuario: " . ($_POST['gofast_crear_usuario'] ?? 'NO'));
+            error_log("GOFAST ADMIN - gofast_guardar_usuarios: " . ($_POST['gofast_guardar_usuarios'] ?? 'NO'));
+            
+            // Obtener datos del POST
+            $nombre    = trim($_POST['nuevo_nombre'] ?? '');
+            $telefono  = trim($_POST['nuevo_telefono'] ?? '');
+            $email     = trim($_POST['nuevo_email'] ?? '');
+            $password  = $_POST['nuevo_password'] ?? '';
+            $rol       = sanitize_text_field($_POST['nuevo_rol'] ?? 'cliente');
+            $activo    = !empty($_POST['nuevo_activo']) ? 1 : 0;
+            
+            // Log inicial para debugging
+            error_log("GOFAST ADMIN - Intentando crear usuario. POST recibido: " . print_r($_POST, true));
+            
+            // Validaciones (igual que auth)
+            if ($nombre === '' || $telefono === '' || $email === '' || $password === '') {
+                $mensaje = "⚠️ Todos los campos son obligatorios.";
+                error_log("GOFAST ADMIN - Validación falló: campos vacíos");
+            } elseif (!is_email($email)) {
+                $mensaje = "⚠️ El correo no es válido.";
+                error_log("GOFAST ADMIN - Validación falló: email inválido: " . $email);
+            } elseif (strlen($password) < 6) {
+                $mensaje = "⚠️ La contraseña debe tener al menos 6 caracteres.";
+                error_log("GOFAST ADMIN - Validación falló: contraseña muy corta");
+            } elseif (!in_array($rol, ['cliente', 'mensajero', 'admin'], true)) {
+                $mensaje = "⚠️ Rol no válido.";
+                error_log("GOFAST ADMIN - Validación falló: rol inválido: " . $rol);
             } else {
-                $nombre    = sanitize_text_field($_POST['nuevo_nombre'] ?? '');
-                $telefono  = sanitize_text_field($_POST['nuevo_telefono'] ?? '');
-                $email     = sanitize_email($_POST['nuevo_email'] ?? '');
-                $password  = $_POST['nuevo_password'] ?? '';
-                $rol       = sanitize_text_field($_POST['nuevo_rol'] ?? 'cliente');
-                $activo    = !empty($_POST['nuevo_activo']) ? 1 : 0;
-
-                if ($nombre === '' || $telefono === '' || $email === '' || $password === '') {
-                    $mensaje = "⚠️ Todos los campos son obligatorios.";
-                } elseif (!is_email($email)) {
-                    $mensaje = "⚠️ El correo no es válido.";
-                } elseif (!in_array($rol, ['cliente', 'mensajero', 'admin'], true)) {
-                    $mensaje = "⚠️ Rol no válido.";
+                // Normalizar y validar teléfono (igual que auth)
+                $tel_norm = preg_replace('/\D+/', '', $telefono);
+                if (strlen($tel_norm) < 10) {
+                    $mensaje = "⚠️ El teléfono debe tener al menos 10 dígitos.";
+                    error_log("GOFAST ADMIN - Validación falló: teléfono muy corto: " . $tel_norm);
                 } else {
-                    $tel_norm = preg_replace('/\D+/', '', $telefono);
-
-                    // Verificar duplicados
-                    $existe = $wpdb->get_row(
-                        $wpdb->prepare(
-                            "SELECT id FROM $tabla 
-                             WHERE email = %s 
-                                OR REPLACE(REPLACE(REPLACE(telefono, '+',''), ' ','') ,'-','') = %s",
-                            $email,
-                            $tel_norm
-                        )
-                    );
+                    // Verificar duplicados (igual que auth)
+                    $sql = "
+                        SELECT id
+                        FROM $tabla
+                        WHERE email = %s
+                           OR REPLACE(REPLACE(REPLACE(telefono, '+',''), ' ','') ,'-','') = %s
+                        LIMIT 1
+                    ";
+                    $existe = $wpdb->get_row($wpdb->prepare($sql, $email, $tel_norm));
 
                     if ($existe) {
-                        $mensaje = "⚠️ Ya existe un usuario con ese correo o teléfono.";
+                        $mensaje = "⚠️ Ya existe un usuario con ese correo o teléfono (ID: #{$existe->id}).";
+                        error_log("GOFAST ADMIN - Usuario duplicado detectado. ID existente: " . $existe->id);
                     } else {
+                        // Hash de contraseña (igual que auth)
                         $hash = password_hash($password, PASSWORD_DEFAULT);
-
-                        // Preparar datos para inserción
-                        $datos_insert = [
-                            'nombre'         => $nombre,
-                            'telefono'       => $telefono,
-                            'email'          => $email,
-                            'password_hash'  => $hash,
-                            'rol'            => $rol,
-                            'activo'         => $activo,
-                            'fecha_registro' => current_time('mysql')
-                        ];
                         
-                        // Verificar si el campo remember_token existe en la tabla
-                        $tabla_info = $wpdb->get_results("SHOW COLUMNS FROM $tabla LIKE 'remember_token'");
-                        if (!empty($tabla_info)) {
-                            $datos_insert['remember_token'] = null;
-                        }
-                        
-                        // Preparar formatos según los campos
-                        $formatos = ['%s','%s','%s','%s','%s','%d','%s'];
-                        if (!empty($tabla_info)) {
-                            $formatos[] = '%s'; // remember_token
-                        }
-
-                        $ok = $wpdb->insert($tabla, $datos_insert, $formatos);
-
-                        if ($ok !== false) {
-                            $mensaje = "✅ Usuario creado correctamente.";
-                            // Redirigir para evitar reenvío del formulario
-                            wp_redirect(add_query_arg(['usuario_creado' => '1'], get_permalink()));
-                            exit;
+                        if (!$hash) {
+                            $mensaje = "❌ Error al generar hash de contraseña.";
+                            error_log("GOFAST ADMIN - Error al generar hash de contraseña");
                         } else {
-                            $error_db = $wpdb->last_error;
-                            $mensaje = "❌ Error al crear usuario: " . esc_html($error_db);
-                            // Log para debug (solo en desarrollo)
-                            if (defined('WP_DEBUG') && WP_DEBUG) {
-                                error_log("GOFAST - Error al crear usuario: " . $error_db);
-                                error_log("GOFAST - Datos: " . print_r($datos_insert, true));
+                            // Preparar datos para inserción (igual que auth)
+                            $datos_insert = [
+                                'nombre'         => $nombre,
+                                'telefono'       => $telefono,
+                                'email'          => $email,
+                                'password_hash'  => $hash,
+                                'rol'            => $rol,
+                                'activo'         => $activo,
+                                'fecha_registro' => current_time('mysql')
+                            ];
+                            
+                            // Verificar si el campo remember_token existe (igual que auth)
+                            $tabla_info = $wpdb->get_results("SHOW COLUMNS FROM $tabla LIKE 'remember_token'");
+                            if (!empty($tabla_info)) {
+                                $datos_insert['remember_token'] = null;
+                            }
+                            
+                            // Preparar formatos (igual que auth)
+                            $formatos = ['%s','%s','%s','%s','%s','%d','%s'];
+                            if (!empty($tabla_info)) {
+                                $formatos[] = '%s'; // remember_token
+                            }
+
+                            // Inserción (igual que auth - EXACTAMENTE IGUAL)
+                            error_log("GOFAST ADMIN - Intentando insertar usuario. Datos: " . print_r($datos_insert, true));
+                            error_log("GOFAST ADMIN - Formatos: " . print_r($formatos, true));
+                            
+                            $ok = $wpdb->insert($tabla, $datos_insert, $formatos);
+                            
+                            error_log("GOFAST ADMIN - Resultado insert: " . var_export($ok, true));
+                            error_log("GOFAST ADMIN - Insert ID: " . $wpdb->insert_id);
+                            error_log("GOFAST ADMIN - Last Error: " . ($wpdb->last_error ?: 'NINGUNO'));
+                            error_log("GOFAST ADMIN - Last Query: " . $wpdb->last_query);
+
+                            if (!$ok) {
+                                $error_db = $wpdb->last_error;
+                                $mensaje = "❌ Error al crear usuario en la base de datos.";
+                                
+                                // Log detallado SIEMPRE
+                                error_log("GOFAST ADMIN - ERROR al crear usuario: " . ($error_db ?: 'SIN ERROR PERO FALSE'));
+                                error_log("GOFAST ADMIN - Datos intentados: " . print_r($datos_insert, true));
+                                error_log("GOFAST ADMIN - Formatos: " . print_r($formatos, true));
+                                error_log("GOFAST ADMIN - SQL: " . $wpdb->last_query);
+                                
+                                // Agregar más detalles al mensaje
+                                if ($error_db) {
+                                    $mensaje .= " Detalle: " . esc_html($error_db);
+                                } else {
+                                    $mensaje .= " (Ver logs para más detalles)";
+                                }
+                            } else {
+                                $user_id = (int) $wpdb->insert_id;
+                                
+                                if ($user_id > 0) {
+                                    $mensaje = "✅ Usuario creado correctamente (ID: #{$user_id}).";
+                                    
+                                    error_log("GOFAST ADMIN - ✅ Usuario creado exitosamente. ID: {$user_id}");
+                                    
+                                    // Redirigir para evitar reenvío del formulario
+                                    wp_redirect(add_query_arg(['usuario_creado' => '1'], get_permalink()));
+                                    exit;
+                                } else {
+                                    $mensaje = "❌ Error: Usuario no se creó (insert_id = 0). Ver logs.";
+                                    error_log("GOFAST ADMIN - ERROR: Insert retornó true pero insert_id es 0");
+                                }
                             }
                         }
                     }
@@ -130,7 +187,13 @@ function gofast_usuarios_admin_shortcode() {
         /* ----------------------------------------------
            B) Editar usuarios existentes (verificar nonce específico)
         ---------------------------------------------- */
-        if (!empty($_POST['gofast_guardar_usuarios'])) {
+        // Verificar que sea el botón de GUARDAR, no el de CREAR
+        if (!empty($_POST['gofast_guardar_usuarios']) && empty($_POST['gofast_crear_usuario'])) {
+            
+            // Log para confirmar que se detectó el botón correcto
+            error_log("GOFAST ADMIN - ✅ Botón GUARDAR CAMBIOS detectado correctamente");
+            error_log("GOFAST ADMIN - gofast_guardar_usuarios: " . ($_POST['gofast_guardar_usuarios'] ?? 'NO'));
+            error_log("GOFAST ADMIN - gofast_crear_usuario: " . ($_POST['gofast_crear_usuario'] ?? 'NO'));
 
             if (
                 empty($_POST['gofast_usuarios_nonce']) ||
@@ -201,6 +264,13 @@ function gofast_usuarios_admin_shortcode() {
     // Mostrar mensaje de éxito si viene de redirección
     if (isset($_GET['usuario_creado']) && $_GET['usuario_creado'] === '1') {
         $mensaje = "✅ Usuario creado correctamente.";
+    }
+    
+    // Si hay POST pero no hay mensaje, podría ser un problema silencioso
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($mensaje) && !empty($_POST['gofast_crear_usuario'])) {
+        $mensaje = "⚠️ No se pudo procesar la solicitud. Verifica los datos e intenta de nuevo.";
+        error_log("GOFAST ADMIN - ⚠️ POST recibido pero mensaje vacío. POST: " . print_r($_POST, true));
+        error_log("GOFAST ADMIN - ⚠️ Variables: nombre=" . ($_POST['nuevo_nombre'] ?? 'VACÍO') . ", email=" . ($_POST['nuevo_email'] ?? 'VACÍO'));
     }
 
     /* ==========================================================
@@ -283,16 +353,60 @@ function gofast_usuarios_admin_shortcode() {
         </a>
     </div>
 
+    <?php 
+    // Debug: verificar si hay POST pero no mensaje
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['gofast_crear_usuario']) && empty($mensaje)) {
+        error_log("GOFAST ADMIN - ⚠️ POST recibido pero mensaje vacío. Esto indica un problema.");
+    }
+    ?>
+    
     <?php if ($mensaje): ?>
-        <div class="gofast-box" style="margin-bottom:15px;">
-            <?= esc_html($mensaje); ?>
+        <div class="gofast-box" style="margin-bottom:15px;background:<?= strpos($mensaje, '✅') !== false ? '#d4edda' : (strpos($mensaje, '❌') !== false ? '#f8d7da' : '#fff3cd'); ?>;border-left:4px solid <?= strpos($mensaje, '✅') !== false ? '#28a745' : (strpos($mensaje, '❌') !== false ? '#dc3545' : '#ffc107'); ?>;padding:15px;">
+            <strong style="font-size:16px;"><?= esc_html($mensaje); ?></strong>
+        </div>
+    <?php elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['gofast_crear_usuario']) && empty($mensaje)): ?>
+        <!-- Si hay POST pero no hay mensaje, mostrar advertencia -->
+        <div class="gofast-box" style="margin-bottom:15px;background:#f8d7da;border-left:4px solid #dc3545;padding:15px;">
+            <strong style="font-size:16px;">⚠️ Se recibió el formulario pero no se procesó. Verifica los logs o contacta al administrador.</strong>
+            <br><small>POST recibido: <?= !empty($_POST['gofast_crear_usuario']) ? 'SÍ' : 'NO'; ?></small>
+        </div>
+    <?php endif; ?>
+    
+    <?php if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['gofast_crear_usuario'])): ?>
+        <!-- Debug temporal: mostrar que se recibió el POST -->
+        <div class="gofast-box" style="margin-bottom:15px;background:#e3f2fd;border-left:4px solid #2196F3;padding:15px;font-size:12px;">
+            <strong>🔍 Debug POST recibido:</strong><br>
+            Nombre: <?= esc_html($_POST['nuevo_nombre'] ?? 'VACÍO'); ?><br>
+            Email: <?= esc_html($_POST['nuevo_email'] ?? 'VACÍO'); ?><br>
+            Teléfono: <?= esc_html($_POST['nuevo_telefono'] ?? 'VACÍO'); ?><br>
+            Password: <?= !empty($_POST['nuevo_password']) ? 'SET (' . strlen($_POST['nuevo_password']) . ' chars)' : 'VACÍO'; ?><br>
+            Rol: <?= esc_html($_POST['nuevo_rol'] ?? 'VACÍO'); ?><br>
+            Activo: <?= !empty($_POST['nuevo_activo']) ? 'SÍ' : 'NO'; ?><br>
+            Nonce recibido: <?= !empty($_POST['gofast_usuarios_nonce']) ? 'SÍ (' . substr($_POST['gofast_usuarios_nonce'], 0, 8) . '...)' : 'NO'; ?><br>
+            Mensaje actual: <strong style="color:<?= $mensaje ? (strpos($mensaje, '✅') !== false ? '#28a745' : (strpos($mensaje, '❌') !== false ? '#dc3545' : '#ffc107')) : '#dc3545'; ?>"><?= $mensaje ? esc_html($mensaje) : 'NINGUNO - ESTO ES UN PROBLEMA'; ?></strong>
+        </div>
+    <?php endif; ?>
+    
+    <?php if (defined('WP_DEBUG') && WP_DEBUG && !empty($debug_info)): ?>
+        <div class="gofast-box" style="margin-bottom:15px;background:#f8f9fa;font-size:12px;font-family:monospace;padding:15px;max-height:300px;overflow-y:auto;">
+            <strong>🔍 Debug Info:</strong><br>
+            <?php foreach ($debug_info as $info): ?>
+                <?= esc_html($info); ?><br>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+    
+    <?php if (defined('WP_DEBUG') && WP_DEBUG && !empty($_POST)): ?>
+        <div class="gofast-box" style="margin-bottom:15px;background:#e8f4f8;font-size:11px;font-family:monospace;padding:10px;max-height:200px;overflow-y:auto;">
+            <strong>📋 POST Data recibido:</strong><br>
+            <pre><?= esc_html(print_r($_POST, true)); ?></pre>
         </div>
     <?php endif; ?>
 
     <!-- =====================================================
          A) CREAR NUEVO USUARIO (FORMULARIO SEPARADO)
     ====================================================== -->
-    <form method="post" style="margin-bottom:20px;">
+    <form method="post" action="" style="margin-bottom:20px;">
         <?php wp_nonce_field('gofast_usuarios_admin', 'gofast_usuarios_nonce'); ?>
         <div class="gofast-box">
             <h3 style="margin-top:0;">➕ Nuevo usuario</h3>
@@ -380,7 +494,7 @@ function gofast_usuarios_admin_shortcode() {
          C) LISTADO DE USUARIOS (FORMULARIO SEPARADO)
     ====================================================== -->
     <form method="post">
-        <?php wp_nonce_field('gofast_usuarios_admin', 'gofast_usuarios_nonce'); ?>
+        <input type="hidden" name="gofast_usuarios_nonce" value="<?= wp_create_nonce('gofast_usuarios_admin'); ?>">
         <div class="gofast-box">
             <h3 style="margin-top:0;">📋 Usuarios (<?= number_format($total_registros); ?>)</h3>
 
@@ -503,6 +617,19 @@ function gofast_usuarios_admin_shortcode() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
+    // Proteger contra errores de toggleOtro si no existe
+    if (typeof toggleOtro === 'function') {
+        try {
+            const tipoSelect = document.getElementById("tipo_negocio");
+            const wrapperOtro = document.getElementById("tipo_otro_wrapper");
+            if (tipoSelect && wrapperOtro) {
+                setTimeout(toggleOtro, 200);
+            }
+        } catch(e) {
+            console.log('toggleOtro error capturado:', e);
+        }
+    }
+    
     // Eliminar usuario
     document.querySelectorAll('.gofast-delete-usuario').forEach(function(btn){
         btn.addEventListener('click', function(){

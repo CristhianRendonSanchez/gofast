@@ -145,8 +145,10 @@ function gofast_mensajero_cotizar_shortcode() {
                 'destinos' => $destinos_completos,
             ], JSON_UNESCAPED_UNICODE);
 
-            // Crear servicio y asignarlo automáticamente al mensajero
-            $insertado = $wpdb->insert('servicios_gofast', [
+            // Verificar si existe el campo asignado_por_user_id
+            $column_exists = $wpdb->get_results("SHOW COLUMNS FROM servicios_gofast LIKE 'asignado_por_user_id'");
+            
+            $data_insert = [
                 'nombre_cliente' => $mensajero->nombre . ' (Mensajero)',
                 'telefono_cliente' => $mensajero->telefono,
                 'direccion_origen' => 'Servicio creado por mensajero',
@@ -157,7 +159,15 @@ function gofast_mensajero_cotizar_shortcode() {
                 'mensajero_id' => $mensajero->id,
                 'user_id' => $mensajero->id,
                 'fecha' => current_time('mysql'),
-            ]);
+            ];
+            
+            // Si existe el campo, guardar quién asignó (el mensajero se auto-asignó)
+            if (!empty($column_exists)) {
+                $data_insert['asignado_por_user_id'] = $mensajero->id;
+            }
+            
+            // Crear servicio y asignarlo automáticamente al mensajero
+            $insertado = $wpdb->insert('servicios_gofast', $data_insert);
 
             if ($insertado === false) {
                 return "<div class='gofast-box'><b>Error al crear el servicio:</b><br>" . esc_html($wpdb->last_error) . "</div>";
@@ -394,12 +404,27 @@ function gofast_mensajero_cotizar_shortcode() {
 
             const text = normalize(data.text);
             
+            // PRIMERO: Verificar coincidencia exacta (ignorando mayúsculas y tildes)
+            if (text === term) {
+                data.matchScore = 10000;
+                return data;
+            }
+            
+            // SEGUNDO: Verificar si el texto comienza exactamente con el término
+            if (text.indexOf(term) === 0) {
+                data.matchScore = 9500;
+                return data;
+            }
+            
             // Palabras comunes a ignorar en la búsqueda
             const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
             
             const searchWords = term.split(/\s+/).filter(Boolean).filter(word => {
                 return word.length > 2 && !stopWords.includes(word);
             });
+            
+            // Detectar si el término de búsqueda parece ser completo (múltiples palabras o palabra larga)
+            const isCompleteSearch = term.split(/\s+/).length >= 2 || term.length >= 10;
             
             // Si después de filtrar no quedan palabras, buscar el término completo
             if (searchWords.length === 0) {
@@ -421,6 +446,18 @@ function gofast_mensajero_cotizar_shortcode() {
             if (significantMatches.length === 0) return null;
             
             const allSignificantMatch = searchWords.length === significantMatches.length;
+            
+            // Si la búsqueda parece completa y no hay coincidencia exacta, ser más estricto
+            if (isCompleteSearch && text !== term && text.indexOf(term) !== 0) {
+                // Solo mostrar si el término completo está presente (aunque no al inicio)
+                if (text.indexOf(term) === -1) {
+                    // Verificar si al menos todas las palabras significativas están presentes
+                    const allWordsPresent = searchWords.every(word => text.indexOf(word) !== -1);
+                    if (!allWordsPresent) {
+                        return null; // Filtrar si no están todas las palabras
+                    }
+                }
+            }
 
             // Sistema de puntuación
             let score = 0;
@@ -428,17 +465,28 @@ function gofast_mensajero_cotizar_shortcode() {
             const textWithoutStopWords = text.split(/\s+/).filter(w => !stopWords.includes(w)).join(' ');
             const termWithoutStopWords = searchWords.join(' ');
             
+            // Coincidencia exacta sin stop words
             if (textWithoutStopWords === termWithoutStopWords) {
                 score = 10000;
-            } else if (textWithoutStopWords.indexOf(termWithoutStopWords) === 0) {
+            } 
+            // El término completo (sin stop words) está al inicio
+            else if (textWithoutStopWords.indexOf(termWithoutStopWords) === 0) {
                 score = 9000;
-            } else if (textWithoutStopWords.indexOf(termWithoutStopWords) !== -1) {
+            } 
+            // El término completo (sin stop words) está en cualquier parte
+            else if (textWithoutStopWords.indexOf(termWithoutStopWords) !== -1) {
                 score = 8000;
-            } else if (searchWords.some(word => text.indexOf(word) === 0)) {
+            } 
+            // Al menos una palabra significativa al inicio
+            else if (searchWords.some(word => text.indexOf(word) === 0)) {
                 score = 7000;
-            } else if (text.indexOf(term) !== -1) {
+            } 
+            // El término completo está en cualquier parte
+            else if (text.indexOf(term) !== -1) {
                 score = 6000;
-            } else {
+            } 
+            // Coincidencias parciales
+            else {
                 score = allSignificantMatch ? 5000 : 3000;
                 
                 let lastIndex = -1;
@@ -477,7 +525,255 @@ function gofast_mensajero_cotizar_shortcode() {
                         const scoreB = b.matchScore || 0;
                         return scoreB - scoreA;
                     });
+                },
+                templateResult: function(data, container){
+                    // Manejar optgroups (no tienen id pero tienen children)
+                    if (!data || !data.text) {
+                        if (data && data.children) return data.text; // Retornar label del optgroup
+                        return data ? data.text : '';
+                    }
+                    
+                    // Si no tiene id, es un optgroup label, retornar sin modificar
+                    if (!data.id) return data.text;
+
+                    let originalText = data.text;
+                    
+                    // Obtener el término de búsqueda del campo activo
+                    let searchTerm = "";
+                    const $activeField = jQuery('.select2-container--open .select2-search__field');
+                    if ($activeField.length) {
+                        searchTerm = $activeField.val() || "";
+                    }
+                    
+                    if (!searchTerm || !searchTerm.trim()) {
+                        const $result = jQuery('<span>' + originalText + '</span>');
+                        if (data.matchScore !== undefined) {
+                            $result.attr('data-match-score', data.matchScore);
+                        }
+                        return $result;
+                    }
+
+                    // Normalizar para búsqueda sin tildes
+                    const normalizedSearch = normalize(searchTerm);
+                    const normalizedText = normalize(originalText);
+                    
+                    // Dividir término en palabras significativas
+                    const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
+                    const searchWords = normalizedSearch.split(/\s+/).filter(Boolean).filter(word => {
+                        return word.length > 2 && !stopWords.includes(word);
+                    });
+                    
+                    // Si no hay palabras significativas, buscar el término completo
+                    const wordsToHighlight = searchWords.length > 0 ? searchWords : [normalizedSearch];
+                    
+                    // Encontrar coincidencias en el texto normalizado y mapear a texto original
+                    const highlightRanges = [];
+                    
+                    wordsToHighlight.forEach(function(word) {
+                        let searchPos = 0;
+                        while ((searchPos = normalizedText.indexOf(word, searchPos)) !== -1) {
+                            const endPos = searchPos + word.length;
+                            
+                            // Mapear posiciones normalizadas a originales
+                            let origStart = -1;
+                            let origEnd = -1;
+                            let normPos = 0;
+                            
+                            // Encontrar inicio
+                            for (let i = 0; i < originalText.length && origStart === -1; i++) {
+                                const charNorm = normalize(originalText[i]);
+                                if (normPos === searchPos) {
+                                    origStart = i;
+                                }
+                                normPos += charNorm.length;
+                            }
+                            
+                            // Encontrar fin
+                            if (origStart >= 0) {
+                                normPos = searchPos;
+                                for (let i = origStart; i < originalText.length; i++) {
+                                    const charNorm = normalize(originalText[i]);
+                                    normPos += charNorm.length;
+                                    if (normPos >= endPos) {
+                                        origEnd = i + 1;
+                                        break;
+                                    }
+                                }
+                                
+                                if (origStart >= 0 && origEnd > origStart) {
+                                    highlightRanges.push({ start: origStart, end: origEnd });
+                                }
+                            }
+                            
+                            searchPos = endPos;
+                        }
+                    });
+                    
+                    // Fusionar rangos solapados
+                    if (highlightRanges.length > 0) {
+                        highlightRanges.sort((a, b) => a.start - b.start);
+                        const mergedRanges = [highlightRanges[0]];
+                        
+                        for (let i = 1; i < highlightRanges.length; i++) {
+                            const current = highlightRanges[i];
+                            const last = mergedRanges[mergedRanges.length - 1];
+                            
+                            if (current.start <= last.end) {
+                                last.end = Math.max(last.end, current.end);
+                            } else {
+                                mergedRanges.push(current);
+                            }
+                        }
+                        
+                        // Construir resultado con resaltados
+                        const parts = [];
+                        let lastIndex = 0;
+                        
+                        mergedRanges.forEach(function(range) {
+                            // Agregar texto antes del rango
+                            if (range.start > lastIndex) {
+                                parts.push(originalText.substring(lastIndex, range.start));
+                            }
+                            
+                            // Agregar texto resaltado
+                            const matchText = originalText.substring(range.start, range.end);
+                            parts.push('<span style="background-color:#F4C524;color:#000;font-weight:bold;padding:1px 2px;">' + 
+                                       matchText + '</span>');
+                            
+                            lastIndex = range.end;
+                        });
+                        
+                        // Agregar texto restante después del último rango
+                        if (lastIndex < originalText.length) {
+                            parts.push(originalText.substring(lastIndex));
+                        }
+                        
+                        const result = parts.join('');
+                        
+                        // Crear elemento jQuery con el HTML renderizado correctamente
+                        const $result = jQuery('<span>').html(result);
+                        // Agregar atributo data con el score para poder filtrar después
+                        if (data.matchScore !== undefined) {
+                            $result.attr('data-match-score', data.matchScore);
+                        }
+                        return $result;
+                    }
+                    
+                    // Si no hay coincidencias, retornar texto sin resaltar
+                    const $result = jQuery('<span>').text(originalText);
+                    if (data.matchScore !== undefined) {
+                        $result.attr('data-match-score', data.matchScore);
+                    }
+                    return $result;
                 }
+            }).on('select2:open', function(e) {
+                const $select = jQuery(this);
+                const $container = $select.next('.select2-container');
+                
+                // Asegurar que el campo de búsqueda sea visible
+                setTimeout(function() {
+                    const $dropdown = jQuery('.select2-dropdown');
+                    const $searchContainer = $dropdown.find('.select2-search--dropdown');
+                    const $searchField = $searchContainer.find('.select2-search__field');
+                    
+                    if ($searchField.length) {
+                        // Forzar actualización dinámica al escribir
+                        $searchField.on('input.select2-dynamic', function() {
+                            const select2Instance = jQuery(e.target).data('select2');
+                            if (select2Instance) {
+                                const term = jQuery(this).val() || '';
+                                select2Instance.dataAdapter.query({ term: term }, function(data) {
+                                    select2Instance.updateResults(data);
+                                    
+                                    // Después de actualizar resultados, filtrar si hay coincidencias exactas
+                                    setTimeout(function() {
+                                        const $results = $dropdown.find('.select2-results__options');
+                                        const $items = $results.find('.select2-results__option[role="option"]:not(.select2-results__option--loading)');
+                                        
+                                        if ($items.length > 0) {
+                                            // Verificar si hay coincidencias exactas (score 10000)
+                                            let hasExactMatch = false;
+                                            $items.each(function() {
+                                                const $item = jQuery(this);
+                                                const $span = $item.find('span[data-match-score]');
+                                                if ($span.length) {
+                                                    const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                                    if (score >= 10000) {
+                                                        hasExactMatch = true;
+                                                        return false; // break
+                                                    }
+                                                }
+                                            });
+                                            
+                                            if (hasExactMatch) {
+                                                // Ocultar elementos con score < 9500
+                                                $items.each(function() {
+                                                    const $item = jQuery(this);
+                                                    const $span = $item.find('span[data-match-score]');
+                                                    if ($span.length) {
+                                                        const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                                        if (score < 9500) {
+                                                            $item.hide();
+                                                        } else {
+                                                            $item.show();
+                                                        }
+                                                    } else {
+                                                        $item.show(); // Mostrar si no tiene score
+                                                    }
+                                                });
+                                            } else {
+                                                // Si no hay exactas, verificar si hay muy cercanas (>= 9000)
+                                                let hasVeryClose = false;
+                                                $items.each(function() {
+                                                    const $item = jQuery(this);
+                                                    const $span = $item.find('span[data-match-score]');
+                                                    if ($span.length) {
+                                                        const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                                        if (score >= 9000) {
+                                                            hasVeryClose = true;
+                                                            return false; // break
+                                                        }
+                                                    }
+                                                });
+                                                
+                                                if (hasVeryClose) {
+                                                    // Mostrar solo las muy cercanas (hasta 5)
+                                                    let count = 0;
+                                                    $items.each(function() {
+                                                        const $item = jQuery(this);
+                                                        const $span = $item.find('span[data-match-score]');
+                                                        if ($span.length) {
+                                                            const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                                            if (score >= 9000 && count < 5) {
+                                                                $item.show();
+                                                                count++;
+                                                            } else {
+                                                                $item.hide();
+                                                            }
+                                                        } else {
+                                                            $item.hide(); // Ocultar si no tiene score
+                                                        }
+                                                    });
+                                                } else {
+                                                    // Mostrar todos (hasta 10)
+                                                    let count = 0;
+                                                    $items.each(function() {
+                                                        if (count < 10) {
+                                                            jQuery(this).show();
+                                                            count++;
+                                                        } else {
+                                                            jQuery(this).hide();
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }, 150);
+                                });
+                            }
+                        });
+                    }
+                }, 50);
             });
         });
     }
