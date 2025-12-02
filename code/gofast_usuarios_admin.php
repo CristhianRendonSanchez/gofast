@@ -83,20 +83,30 @@ function gofast_usuarios_admin_shortcode() {
                     } else {
                         $hash = password_hash($password, PASSWORD_DEFAULT);
 
-                        $ok = $wpdb->insert(
-                            $tabla,
-                            [
-                                'nombre'         => $nombre,
-                                'telefono'       => $telefono,
-                                'email'          => $email,
-                                'password_hash'  => $hash,
-                                'rol'            => $rol,
-                                'activo'         => $activo,
-                                'fecha_registro' => current_time('mysql'),
-                                'remember_token' => null
-                            ],
-                            ['%s','%s','%s','%s','%s','%d','%s','%s']
-                        );
+                        // Preparar datos para inserción
+                        $datos_insert = [
+                            'nombre'         => $nombre,
+                            'telefono'       => $telefono,
+                            'email'          => $email,
+                            'password_hash'  => $hash,
+                            'rol'            => $rol,
+                            'activo'         => $activo,
+                            'fecha_registro' => current_time('mysql')
+                        ];
+                        
+                        // Verificar si el campo remember_token existe en la tabla
+                        $tabla_info = $wpdb->get_results("SHOW COLUMNS FROM $tabla LIKE 'remember_token'");
+                        if (!empty($tabla_info)) {
+                            $datos_insert['remember_token'] = null;
+                        }
+                        
+                        // Preparar formatos según los campos
+                        $formatos = ['%s','%s','%s','%s','%s','%d','%s'];
+                        if (!empty($tabla_info)) {
+                            $formatos[] = '%s'; // remember_token
+                        }
+
+                        $ok = $wpdb->insert($tabla, $datos_insert, $formatos);
 
                         if ($ok !== false) {
                             $mensaje = "✅ Usuario creado correctamente.";
@@ -104,7 +114,13 @@ function gofast_usuarios_admin_shortcode() {
                             wp_redirect(add_query_arg(['usuario_creado' => '1'], get_permalink()));
                             exit;
                         } else {
-                            $mensaje = "❌ Error al crear usuario: " . esc_html($wpdb->last_error);
+                            $error_db = $wpdb->last_error;
+                            $mensaje = "❌ Error al crear usuario: " . esc_html($error_db);
+                            // Log para debug (solo en desarrollo)
+                            if (defined('WP_DEBUG') && WP_DEBUG) {
+                                error_log("GOFAST - Error al crear usuario: " . $error_db);
+                                error_log("GOFAST - Datos: " . print_r($datos_insert, true));
+                            }
                         }
                     }
                 }
