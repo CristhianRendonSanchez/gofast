@@ -51,6 +51,8 @@ function gofast_home_shortcode() {
     $url_recargos     = esc_url( home_url('/recargos') );
     $url_admin_usuarios = esc_url( home_url('/admin-usuarios') );
     $url_mensajero_cotizar = esc_url( home_url('/mensajero-cotizar') );
+    $url_transferencias = esc_url( home_url('/transferencias') );
+    $url_compras = esc_url( home_url('/compras') );
     $url_trabaja      = esc_url( home_url('/trabaja-con-nosotros') );
     $url_logout       = esc_url( home_url('/?gofast_logout=1') );
 
@@ -199,6 +201,24 @@ function gofast_home_shortcode() {
                             </span>
                         </a>
                     </li>
+                    <li>
+                        <a href="<?php echo $url_transferencias; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">💰</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Transferencias</strong>
+                                <small>Solicitar pagos</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?php echo $url_compras; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">🛒</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Compras</strong>
+                                <small>Gestionar compras</small>
+                            </span>
+                        </a>
+                    </li>
 
                 <?php elseif ($rol === 'admin'): ?>
 
@@ -217,6 +237,24 @@ function gofast_home_shortcode() {
                             <span class="gofast-home-panel-text">
                                 <strong>Todos los pedidos</strong>
                                 <small>Gestionar envíos</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?php echo $url_transferencias; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">💰</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Transferencias</strong>
+                                <small>Gestionar pagos</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?php echo $url_compras; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">🛒</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Compras</strong>
+                                <small>Gestionar compras</small>
                             </span>
                         </a>
                     </li>
@@ -270,7 +308,7 @@ function gofast_home_shortcode() {
             <div class="gofast-home-step">
                 <div class="gofast-home-step-number">3</div>
                 <div class="gofast-home-step-content">
-                    <h3>Recibe</h3>
+                    <h3>Entrega</h3>
                     <p>Un mensajero recoge y entrega tu pedido</p>
                 </div>
             </div>

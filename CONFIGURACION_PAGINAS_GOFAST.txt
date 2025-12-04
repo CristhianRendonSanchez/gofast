@@ -206,6 +206,8 @@ PÁGINAS A CREAR EN WORDPRESS:
 9.  /admin-usuarios           → [gofast_usuarios_admin]
 10. /recargos                 → [gofast_recargos_admin]
 11. /admin-reportes           → [gofast_reportes_admin]
+12. /transferencias           → [gofast_transferencias]
+13. /compras                  → [gofast_compras]
 
 
 ================================================================================
@@ -227,6 +229,8 @@ PÁGINAS A CREAR EN WORDPRESS:
    - tarifas: precios por sector origen/destino
    - recargos: recargos fijos y por valor
    - recargos_rangos: rangos de recargos variables
+   - transferencias_gofast: transferencias solicitadas por mensajeros
+   - compras_gofast: compras realizadas por mensajeros
 
 3. FLUJO DE COTIZACIÓN:
    /cotizar → (POST) → /solicitar-mensajero → (POST) → /servicio-registrado?id=XXX
@@ -246,6 +250,48 @@ PÁGINAS A CREAR EN WORDPRESS:
    - Se carga automáticamente desde CDN
    - Se usa en formularios de barrios y direcciones
    - Búsqueda inteligente sin tildes
+
+================================================================================
+  PÁGINAS DE MENSAJERO Y ADMIN (NUEVAS)
+================================================================================
+
+12. TRANSFERENCIAS
+    ──────────────────────────────────────────────────────────────────────────
+    SLUG SUGERIDO:  /transferencias
+    SHORTCODE:      [gofast_transferencias]
+    DESCRIPCIÓN:    Módulo de gestión de transferencias para mensajeros y admin
+    ACCESO:         Mensajero y Administrador
+    ARCHIVO:        gofast_transferencias.php
+    FUNCIONALIDAD:  
+      - Mensajero: 
+        * Crear solicitudes de transferencia (estado: pendiente)
+        * Ver sus transferencias con estados (pendiente, aprobada, rechazada)
+      - Admin:
+        * Crear transferencias para mensajeros (estado: aprobada automática)
+        * Ver todas las transferencias del sistema
+        * Aprobar transferencias pendientes
+        * Rechazar transferencias con observaciones
+        * Estadísticas de transferencias
+
+
+13. COMPRAS
+    ──────────────────────────────────────────────────────────────────────────
+    SLUG SUGERIDO:  /compras
+    SHORTCODE:      [gofast_compras]
+    DESCRIPCIÓN:    Módulo de gestión de compras para mensajeros y admin
+    ACCESO:         Mensajero y Administrador
+    ARCHIVO:        gofast_compras.php
+    FUNCIONALIDAD:  
+      - Mensajero: 
+        * Crear compras (se asigna automáticamente a sí mismo)
+        * Ver sus compras con estados (pendiente, en_proceso, completada, cancelada)
+        * Campos: valor y destino
+      - Admin:
+        * Crear compras asignando mensajero
+        * Ver todas las compras del sistema
+        * Cambiar estado de las compras (pendiente → en_proceso → completada/cancelada)
+        * Estadísticas de compras
+        * Filtros por fecha, valor y estado
 
 ================================================================================
   FIN DEL DOCUMENTO
