@@ -56,6 +56,8 @@ function gofast_home_shortcode() {
     $url_trabaja      = esc_url( home_url('/trabaja-con-nosotros') );
     $url_logout       = esc_url( home_url('/?gofast_logout=1') );
     $url_intermunicipal = esc_url( home_url('/cotizar-intermunicipal') );
+    $url_admin_cotizar = esc_url( home_url('/admin-cotizar') );
+    $url_admin_cotizar_intermunicipal = esc_url( home_url('/admin-cotizar-intermunicipal') );
 
     ob_start();
     ?>
@@ -269,15 +271,6 @@ function gofast_home_shortcode() {
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo $url_intermunicipal; ?>" class="gofast-home-panel-link">
-                            <span class="gofast-home-panel-icon">🌐</span>
-                            <span class="gofast-home-panel-text">
-                                <strong>Envíos intermunicipales</strong>
-                                <small>Gestionar envíos intermunicipales</small>
-                            </span>
-                        </a>
-                    </li>
-                    <li>
                         <a href="<?php echo $url_transferencias; ?>" class="gofast-home-panel-link">
                             <span class="gofast-home-panel-icon">💰</span>
                             <span class="gofast-home-panel-text">
@@ -310,6 +303,24 @@ function gofast_home_shortcode() {
                             <span class="gofast-home-panel-text">
                                 <strong>Recargos</strong>
                                 <small>Configurar tarifas</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?php echo $url_admin_cotizar; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">🚚</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Crear Servicio</strong>
+                                <small>Asignar a mensajero</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?php echo $url_admin_cotizar_intermunicipal; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">🌐</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Envio Intermunicipal</strong>
+                                <small>Asignar a mensajero</small>
                             </span>
                         </a>
                     </li>

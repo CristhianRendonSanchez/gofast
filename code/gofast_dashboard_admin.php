@@ -105,6 +105,18 @@ function gofast_dashboard_admin_shortcode() {
             <p style="margin:0;color:#666;font-size:14px;">Gestionar compras de mensajeros y asignar servicios</p>
         </a>
 
+        <a href="<?php echo esc_url( home_url('/admin-cotizar') ); ?>" class="gofast-box" style="display:block;text-decoration:none;padding:24px;transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
+            <div style="font-size:40px;margin-bottom:12px;">🚚</div>
+            <h3 style="margin:0 0 8px 0;color:#1a1a1a;">Crear Servicio</h3>
+            <p style="margin:0;color:#666;font-size:14px;">Crear servicio y asignarlo a un mensajero</p>
+        </a>
+
+        <a href="<?php echo esc_url( home_url('/admin-cotizar-intermunicipal') ); ?>" class="gofast-box" style="display:block;text-decoration:none;padding:24px;transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
+            <div style="font-size:40px;margin-bottom:12px;">🌐</div>
+            <h3 style="margin:0 0 8px 0;color:#1a1a1a;">Envío Intermunicipal</h3>
+            <p style="margin:0;color:#666;font-size:14px;">Crear envío intermunicipal y asignarlo a un mensajero</p>
+        </a>
+
     </div>
 
     <!-- Tarjetas de estadísticas - DESPUÉS -->
