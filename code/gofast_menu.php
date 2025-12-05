@@ -159,12 +159,6 @@ function gofast_menu_topbar() {
                     <a href="<?php echo esc_url( home_url('/transferencias') ); ?>" class="gofast-tab">
                         💰 Transferencias
                     </a>
-                    <a href="<?php echo esc_url( home_url('/compras') ); ?>" class="gofast-tab">
-                        🛒 Compras
-                    </a>
-                    <a href="<?php echo esc_url( home_url('/admin-usuarios') ); ?>" class="gofast-tab">
-                        👥 Usuarios
-                    </a>
                     <a href="<?php echo esc_url( home_url('/recargos') ); ?>" class="gofast-tab">
                         ⚙️ Recargos
                     </a>
