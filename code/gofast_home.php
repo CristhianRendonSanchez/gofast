@@ -53,16 +53,151 @@ function gofast_home_shortcode() {
     $url_mensajero_cotizar = esc_url( home_url('/mensajero-cotizar') );
     $url_transferencias = esc_url( home_url('/transferencias') );
     $url_compras = esc_url( home_url('/compras') );
+    $url_reportes = esc_url( home_url('/admin-reportes') );
     $url_trabaja      = esc_url( home_url('/trabaja-con-nosotros') );
     $url_logout       = esc_url( home_url('/?gofast_logout=1') );
     $url_intermunicipal = esc_url( home_url('/cotizar-intermunicipal') );
     $url_admin_cotizar = esc_url( home_url('/admin-cotizar') );
     $url_admin_cotizar_intermunicipal = esc_url( home_url('/admin-cotizar-intermunicipal') );
 
+    /* ==========================================================
+       Estadísticas para mensajero y admin
+    ========================================================== */
+    $fecha_hoy = current_time('Y-m-d');
+    $top_mensajeros = [];
+    $stats_admin = [];
+
+    // Top 5 mensajeros del día (basado en ingresos totales)
+    if ($rol === 'mensajero' || $rol === 'admin') {
+        $sql_top_mensajeros = $wpdb->prepare(
+            "SELECT 
+                u.id,
+                u.nombre,
+                COALESCE(SUM(CASE 
+                    WHEN s.tracking_estado != 'cancelado' THEN s.total 
+                    ELSE 0 
+                END), 0) + COALESCE(SUM(CASE 
+                    WHEN c.estado != 'cancelada' THEN c.valor 
+                    ELSE 0 
+                END), 0) as ingresos_totales
+            FROM usuarios_gofast u
+            LEFT JOIN servicios_gofast s ON s.mensajero_id = u.id AND DATE(s.fecha) = %s
+            LEFT JOIN compras_gofast c ON c.mensajero_id = u.id AND DATE(c.fecha_creacion) = %s
+            WHERE u.rol = 'mensajero' AND u.activo = 1
+            GROUP BY u.id, u.nombre
+            HAVING ingresos_totales > 0
+            ORDER BY ingresos_totales DESC
+            LIMIT 5",
+            $fecha_hoy,
+            $fecha_hoy
+        );
+        
+        $top_mensajeros = $wpdb->get_results($sql_top_mensajeros);
+    }
+
+    // Estadísticas para admin
+    if ($rol === 'admin') {
+        // Total destinos
+        $stats_admin['total_destinos'] = (int) ($wpdb->get_var(
+            "SELECT SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))) FROM servicios_gofast"
+        ) ?? 0);
+        
+        // Total compras (excluyendo canceladas)
+        $stats_admin['total_compras'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM compras_gofast WHERE estado != 'cancelada'");
+        
+        // Ingresos totales (servicios no cancelados + compras no canceladas)
+        $ingresos_servicios = (float) ($wpdb->get_var("SELECT SUM(total) FROM servicios_gofast WHERE tracking_estado != 'cancelado'") ?? 0);
+        $ingresos_compras = (float) ($wpdb->get_var("SELECT SUM(valor) FROM compras_gofast WHERE estado != 'cancelada'") ?? 0);
+        $stats_admin['ingresos_totales'] = $ingresos_servicios + $ingresos_compras;
+    }
+
     ob_start();
     ?>
 
 <div class="gofast-home">
+
+    <!-- SECCIÓN: TOP 5 MENSAJEROS DEL DÍA - AL INICIO -->
+    <?php if (($rol === 'mensajero' || $rol === 'admin') && !empty($top_mensajeros)): ?>
+    <section class="gofast-home-section" style="margin-bottom:32px;">
+        <div class="gofast-box">
+            <h2 style="margin-top:0;">🏆 Top 5 Mensajeros del Día</h2>
+            <p class="gofast-home-text" style="margin-bottom:16px;">
+                Ranking de mensajeros según ingresos totales de hoy
+            </p>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <?php 
+                $posicion = 1;
+                foreach ($top_mensajeros as $mensajero): 
+                    $medalla = '';
+                    if ($posicion == 1) $medalla = '🥇';
+                    elseif ($posicion == 2) $medalla = '🥈';
+                    elseif ($posicion == 3) $medalla = '🥉';
+                    else $medalla = $posicion . '°';
+                ?>
+                    <div style="display:flex;align-items:center;<?php echo $rol === 'admin' ? 'justify-content:space-between;' : ''; ?>gap:12px;padding:12px;background:#f8f9fa;border-radius:8px;border-left:4px solid #F4C524;">
+                        <div style="display:flex;align-items:center;gap:12px;flex:1;">
+                            <div style="font-size:24px;font-weight:700;min-width:40px;text-align:center;">
+                                <?php echo $medalla; ?>
+                            </div>
+                            <div style="flex:1;">
+                                <div style="font-size:16px;font-weight:600;color:#1a1a1a;">
+                                    <?php echo esc_html($mensajero->nombre); ?>
+                                </div>
+                                <?php if ($rol === 'mensajero'): ?>
+                                <div style="font-size:13px;color:#666;margin-top:2px;">
+                                    Posición <?php echo $posicion; ?> de 5
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if ($rol === 'admin'): ?>
+                        <div style="text-align:right;">
+                            <div style="font-size:18px;font-weight:700;color:#4CAF50;">
+                                $<?php echo number_format($mensajero->ingresos_totales, 0, ',', '.'); ?>
+                            </div>
+                            <div style="font-size:11px;color:#999;">
+                                Ingresos hoy
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                <?php 
+                    $posicion++;
+                endforeach; 
+                ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- SECCIÓN: ESTADÍSTICAS ADMIN - AL INICIO -->
+    <?php if ($rol === 'admin' && !empty($stats_admin)): ?>
+    <section class="gofast-home-section" style="margin-bottom:32px;">
+        <div class="gofast-dashboard-stats" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+            <div class="gofast-box" style="text-align:center;padding:20px;">
+                <div style="font-size:32px;margin-bottom:8px;">📍</div>
+                <div style="font-size:28px;font-weight:700;color:#F4C524;margin-bottom:4px;">
+                    <?php echo number_format($stats_admin['total_destinos']); ?>
+                </div>
+                <div style="font-size:13px;color:#666;">Total Destinos</div>
+            </div>
+            <div class="gofast-box" style="text-align:center;padding:20px;">
+                <div style="font-size:32px;margin-bottom:8px;">🛒</div>
+                <div style="font-size:28px;font-weight:700;color:#E91E63;margin-bottom:4px;">
+                    <?php echo number_format($stats_admin['total_compras']); ?>
+                </div>
+                <div style="font-size:13px;color:#666;">Total Compras</div>
+            </div>
+            <div class="gofast-box" style="text-align:center;padding:20px;">
+                <div style="font-size:32px;margin-bottom:8px;">💰</div>
+                <div style="font-size:28px;font-weight:700;color:#4CAF50;margin-bottom:4px;">
+                    $<?php echo number_format($stats_admin['ingresos_totales'], 0, ',', '.'); ?>
+                </div>
+                <div style="font-size:13px;color:#666;">Ingresos Totales</div>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
 
     <!-- HERO SUPERIOR: título + botón cotizar + panel según rol -->
     <section class="gofast-home-hero">
@@ -246,6 +381,15 @@ function gofast_home_shortcode() {
                             <span class="gofast-home-panel-text">
                                 <strong>Compras</strong>
                                 <small>Gestionar compras</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?php echo $url_reportes; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">📊</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Reportes</strong>
+                                <small>Ver estadísticas</small>
                             </span>
                         </a>
                     </li>

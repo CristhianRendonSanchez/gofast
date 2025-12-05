@@ -144,6 +144,9 @@ function gofast_menu_topbar() {
                     <a href="<?php echo esc_url( home_url('/compras') ); ?>" class="gofast-tab">
                         🛒 Compras
                     </a>
+                    <a href="<?php echo esc_url( home_url('/admin-reportes') ); ?>" class="gofast-tab">
+                        📊 Reportes
+                    </a>
                     <a href="<?php echo esc_url( home_url('/?gofast_logout=1') ); ?>" class="gofast-tab">
                         🚪 Salir
                     </a>

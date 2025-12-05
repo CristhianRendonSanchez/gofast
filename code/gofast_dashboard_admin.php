@@ -35,24 +35,79 @@ function gofast_dashboard_admin_shortcode() {
     /* ==========================================================
        1. Estadísticas rápidas
     ========================================================== */
-    $total_pedidos = (int) $wpdb->get_var("SELECT COUNT(*) FROM servicios_gofast");
-    $pedidos_pendientes = (int) $wpdb->get_var("SELECT COUNT(*) FROM servicios_gofast WHERE tracking_estado = 'pendiente'");
-    $pedidos_en_ruta = (int) $wpdb->get_var("SELECT COUNT(*) FROM servicios_gofast WHERE tracking_estado = 'en_ruta'");
-    $pedidos_entregados = (int) $wpdb->get_var("SELECT COUNT(*) FROM servicios_gofast WHERE tracking_estado = 'entregado'");
+    // Total de destinos (suma de todos los destinos en JSON)
+    $total_destinos = (int) ($wpdb->get_var(
+        "SELECT SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))) FROM servicios_gofast"
+    ) ?? 0);
     
+    // Total compras (excluyendo canceladas)
+    $total_compras = (int) $wpdb->get_var("SELECT COUNT(*) FROM compras_gofast WHERE estado != 'cancelada'");
+    
+    // Usuarios
     $total_usuarios = (int) $wpdb->get_var("SELECT COUNT(*) FROM usuarios_gofast WHERE activo = 1");
     $total_clientes = (int) $wpdb->get_var("SELECT COUNT(*) FROM usuarios_gofast WHERE rol = 'cliente' AND activo = 1");
     $total_mensajeros = (int) $wpdb->get_var("SELECT COUNT(*) FROM usuarios_gofast WHERE rol = 'mensajero' AND activo = 1");
     
-    $total_ingresos = (float) $wpdb->get_var("SELECT SUM(total) FROM servicios_gofast WHERE tracking_estado = 'entregado'");
-    $total_ingresos = $total_ingresos ?: 0;
+    // Ingresos totales (servicios no cancelados + compras no canceladas)
+    $ingresos_servicios = (float) ($wpdb->get_var("SELECT SUM(total) FROM servicios_gofast WHERE tracking_estado != 'cancelado'") ?? 0);
+    $ingresos_compras = (float) ($wpdb->get_var("SELECT SUM(valor) FROM compras_gofast WHERE estado != 'cancelada'") ?? 0);
+    $total_ingresos = $ingresos_servicios + $ingresos_compras;
     
-    $pedidos_hoy = (int) $wpdb->get_var(
+    // Destinos hoy
+    $destinos_hoy = (int) ($wpdb->get_var(
         $wpdb->prepare(
-            "SELECT COUNT(*) FROM servicios_gofast WHERE DATE(fecha) = %s",
+            "SELECT SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))) 
+             FROM servicios_gofast 
+             WHERE DATE(fecha) = %s",
             current_time('Y-m-d')
         )
-    );
+    ) ?? 0);
+    
+    // Ingresos de hoy (servicios + compras del día actual)
+    $ingresos_servicios_hoy = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT SUM(total) FROM servicios_gofast 
+             WHERE DATE(fecha) = %s AND tracking_estado != 'cancelado'",
+            current_time('Y-m-d')
+        )
+    ) ?? 0);
+    
+    $ingresos_compras_hoy = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT SUM(valor) FROM compras_gofast 
+             WHERE DATE(fecha) = %s AND estado != 'cancelada'",
+            current_time('Y-m-d')
+        )
+    ) ?? 0);
+    
+    $ingresos_hoy = $ingresos_servicios_hoy + $ingresos_compras_hoy;
+    $comision_hoy = $ingresos_hoy * 0.20;
+    
+    // Comisión del mes actual (del primer día al último día del mes)
+    $fecha_actual = current_time('Y-m-d');
+    $primer_dia_mes = date('Y-m-01', strtotime($fecha_actual));
+    $ultimo_dia_mes = date('Y-m-t', strtotime($fecha_actual));
+    
+    $ingresos_servicios_mes = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT SUM(total) FROM servicios_gofast 
+             WHERE fecha >= %s AND fecha <= %s AND tracking_estado != 'cancelado'",
+            $primer_dia_mes . ' 00:00:00',
+            $ultimo_dia_mes . ' 23:59:59'
+        )
+    ) ?? 0);
+    
+    $ingresos_compras_mes = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT SUM(valor) FROM compras_gofast 
+             WHERE fecha >= %s AND fecha <= %s AND estado != 'cancelada'",
+            $primer_dia_mes . ' 00:00:00',
+            $ultimo_dia_mes . ' 23:59:59'
+        )
+    ) ?? 0);
+    
+    $ingresos_mes = $ingresos_servicios_mes + $ingresos_compras_mes;
+    $comision_mes = $ingresos_mes * 0.20;
 
     /* ==========================================================
        2. HTML
@@ -122,61 +177,67 @@ function gofast_dashboard_admin_shortcode() {
     <!-- Tarjetas de estadísticas - DESPUÉS -->
     <div class="gofast-dashboard-stats" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin:32px 0;">
         
-        <!-- Pedidos -->
+        <!-- Total Destinos -->
         <div class="gofast-box" style="text-align:center;padding:20px;">
-            <div style="font-size:32px;margin-bottom:8px;">📦</div>
-            <div style="font-size:28px;font-weight:700;color:#F4C524;margin-bottom:4px;"><?= number_format($total_pedidos); ?></div>
-            <div style="font-size:13px;color:#666;">Total Pedidos</div>
+            <div style="font-size:32px;margin-bottom:8px;">📍</div>
+            <div style="font-size:28px;font-weight:700;color:#F4C524;margin-bottom:4px;"><?= number_format($total_destinos); ?></div>
+            <div style="font-size:13px;color:#666;">Total Destinos</div>
         </div>
 
+        <!-- Total Compras -->
         <div class="gofast-box" style="text-align:center;padding:20px;">
-            <div style="font-size:32px;margin-bottom:8px;">⏳</div>
-            <div style="font-size:28px;font-weight:700;color:#ff9800;margin-bottom:4px;"><?= number_format($pedidos_pendientes); ?></div>
-            <div style="font-size:13px;color:#666;">Pendientes</div>
+            <div style="font-size:32px;margin-bottom:8px;">🛒</div>
+            <div style="font-size:28px;font-weight:700;color:#E91E63;margin-bottom:4px;"><?= number_format($total_compras); ?></div>
+            <div style="font-size:13px;color:#666;">Total Compras</div>
         </div>
 
-        <div class="gofast-box" style="text-align:center;padding:20px;">
-            <div style="font-size:32px;margin-bottom:8px;">🚚</div>
-            <div style="font-size:28px;font-weight:700;color:#2196F3;margin-bottom:4px;"><?= number_format($pedidos_en_ruta); ?></div>
-            <div style="font-size:13px;color:#666;">En Ruta</div>
-        </div>
-
-        <div class="gofast-box" style="text-align:center;padding:20px;">
-            <div style="font-size:32px;margin-bottom:8px;">✅</div>
-            <div style="font-size:28px;font-weight:700;color:#4CAF50;margin-bottom:4px;"><?= number_format($pedidos_entregados); ?></div>
-            <div style="font-size:13px;color:#666;">Entregados</div>
-        </div>
-
-        <!-- Usuarios -->
+        <!-- Total Usuarios -->
         <div class="gofast-box" style="text-align:center;padding:20px;">
             <div style="font-size:32px;margin-bottom:8px;">👥</div>
             <div style="font-size:28px;font-weight:700;color:#9C27B0;margin-bottom:4px;"><?= number_format($total_usuarios); ?></div>
             <div style="font-size:13px;color:#666;">Total Usuarios</div>
         </div>
 
+        <!-- Total Clientes -->
         <div class="gofast-box" style="text-align:center;padding:20px;">
-            <div style="font-size:32px;margin-bottom:8px;">🛒</div>
-            <div style="font-size:28px;font-weight:700;color:#E91E63;margin-bottom:4px;"><?= number_format($total_clientes); ?></div>
-            <div style="font-size:13px;color:#666;">Clientes</div>
+            <div style="font-size:32px;margin-bottom:8px;">🛍️</div>
+            <div style="font-size:28px;font-weight:700;color:#2196F3;margin-bottom:4px;"><?= number_format($total_clientes); ?></div>
+            <div style="font-size:13px;color:#666;">Total Clientes</div>
         </div>
 
+        <!-- Total Mensajeros -->
         <div class="gofast-box" style="text-align:center;padding:20px;">
             <div style="font-size:32px;margin-bottom:8px;">🚚</div>
             <div style="font-size:28px;font-weight:700;color:#00BCD4;margin-bottom:4px;"><?= number_format($total_mensajeros); ?></div>
-            <div style="font-size:13px;color:#666;">Mensajeros</div>
+            <div style="font-size:13px;color:#666;">Total Mensajeros</div>
         </div>
 
-        <!-- Ingresos -->
+        <!-- Ingresos Totales -->
         <div class="gofast-box" style="text-align:center;padding:20px;">
             <div style="font-size:32px;margin-bottom:8px;">💰</div>
             <div style="font-size:28px;font-weight:700;color:#4CAF50;margin-bottom:4px;">$<?= number_format($total_ingresos, 0, ',', '.'); ?></div>
             <div style="font-size:13px;color:#666;">Ingresos Totales</div>
         </div>
 
+        <!-- Destinos Hoy -->
         <div class="gofast-box" style="text-align:center;padding:20px;">
             <div style="font-size:32px;margin-bottom:8px;">📅</div>
-            <div style="font-size:28px;font-weight:700;color:#FF5722;margin-bottom:4px;"><?= number_format($pedidos_hoy); ?></div>
-            <div style="font-size:13px;color:#666;">Pedidos Hoy</div>
+            <div style="font-size:28px;font-weight:700;color:#FF5722;margin-bottom:4px;"><?= number_format($destinos_hoy); ?></div>
+            <div style="font-size:13px;color:#666;">Destinos Hoy</div>
+        </div>
+
+        <!-- Comisión Hoy -->
+        <div class="gofast-box" style="text-align:center;padding:20px;">
+            <div style="font-size:32px;margin-bottom:8px;">💵</div>
+            <div style="font-size:28px;font-weight:700;color:#FF9800;margin-bottom:4px;">$<?= number_format($comision_hoy, 0, ',', '.'); ?></div>
+            <div style="font-size:13px;color:#666;">Comisión Hoy</div>
+        </div>
+
+        <!-- Comisión del Mes -->
+        <div class="gofast-box" style="text-align:center;padding:20px;">
+            <div style="font-size:32px;margin-bottom:8px;">📊</div>
+            <div style="font-size:28px;font-weight:700;color:#9C27B0;margin-bottom:4px;">$<?= number_format($comision_mes, 0, ',', '.'); ?></div>
+            <div style="font-size:13px;color:#666;">Comisión del Mes</div>
         </div>
 
     </div>

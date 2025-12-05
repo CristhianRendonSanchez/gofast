@@ -2710,37 +2710,53 @@
       min-width: 100% !important;
     }
 
-    .gofast-table th,
-    .gofast-table td {
+    /* Solo aplicar a tablas de usuarios admin, NO a reportes */
+    .gofast-usuarios-table th,
+    .gofast-usuarios-table td {
       padding: 6px 8px !important;
       font-size: 12px !important;
     }
 
-    .gofast-table th:nth-child(5),
-    .gofast-table td:nth-child(5),
-    .gofast-table th:nth-child(6),
-    .gofast-table td:nth-child(6) {
+    .gofast-usuarios-table th:nth-child(5),
+    .gofast-usuarios-table td:nth-child(5),
+    .gofast-usuarios-table th:nth-child(6),
+    .gofast-usuarios-table td:nth-child(6) {
       display: none !important;
     }
 
-    .gofast-table th:nth-child(7),
-    .gofast-table td:nth-child(7) {
+    .gofast-usuarios-table th:nth-child(7),
+    .gofast-usuarios-table td:nth-child(7) {
       display: table-cell !important;
+    }
+    
+    /* Asegurar que las tablas de reportes muestren TODAS las columnas */
+    .gofast-box .gofast-table-wrap .gofast-table th,
+    .gofast-box .gofast-table-wrap .gofast-table td {
+      display: table-cell !important;
+      visibility: visible !important;
     }
   }
 
   @media (max-width: 600px) {
-    .gofast-table th,
-    .gofast-table td {
+    /* Solo aplicar a tablas de usuarios admin, NO a reportes */
+    .gofast-usuarios-table th,
+    .gofast-usuarios-table td {
       padding: 4px 6px !important;
       font-size: 11px !important;
     }
 
-    .gofast-table th:nth-child(3),
-    .gofast-table td:nth-child(3),
-    .gofast-table th:nth-child(4),
-    .gofast-table td:nth-child(4) {
+    .gofast-usuarios-table th:nth-child(3),
+    .gofast-usuarios-table td:nth-child(3),
+    .gofast-usuarios-table th:nth-child(4),
+    .gofast-usuarios-table td:nth-child(4) {
       display: none !important;
+    }
+    
+    /* Asegurar que las tablas de reportes muestren TODAS las columnas */
+    .gofast-box .gofast-table-wrap .gofast-table th,
+    .gofast-box .gofast-table-wrap .gofast-table td {
+      display: table-cell !important;
+      visibility: visible !important;
     }
   }
 
@@ -2868,24 +2884,33 @@
    * GOFAST — RESPONSIVE PEDIDOS
    ********************************************/
   @media (max-width: 768px) {
-    .gofast-table th:nth-child(2),
-    .gofast-table td:nth-child(2),
-    .gofast-table th:nth-child(4),
-    .gofast-table td:nth-child(4),
-    .gofast-table th:nth-child(5),
-    .gofast-table td:nth-child(5),
-    .gofast-table th:nth-child(6),
-    .gofast-table td:nth-child(6) {
+    /* Solo ocultar columnas en tablas de pedidos, NO en reportes */
+    .gofast-pedidos-table th:nth-child(2),
+    .gofast-pedidos-table td:nth-child(2),
+    .gofast-pedidos-table th:nth-child(4),
+    .gofast-pedidos-table td:nth-child(4),
+    .gofast-pedidos-table th:nth-child(5),
+    .gofast-pedidos-table td:nth-child(5),
+    .gofast-pedidos-table th:nth-child(6),
+    .gofast-pedidos-table td:nth-child(6) {
       display: none !important;
     }
+    
+    /* Asegurar que las tablas de reportes muestren TODAS las columnas */
+    .gofast-box .gofast-table-wrap .gofast-table th,
+    .gofast-box .gofast-table-wrap .gofast-table td {
+      display: table-cell !important;
+      visibility: visible !important;
+    }
 
-    .gofast-table th,
-    .gofast-table td {
+    /* Solo aplicar padding a tablas de pedidos, NO a reportes */
+    .gofast-pedidos-table th,
+    .gofast-pedidos-table td {
       padding: 8px 6px !important;
       font-size: 12px !important;
     }
     
-    .gofast-table td .gofast-btn-mini {
+    .gofast-pedidos-table td .gofast-btn-mini {
       padding: 4px 8px !important;
       font-size: 10px !important;
       margin: 2px 0 !important;
@@ -2909,13 +2934,22 @@
   }
 
   @media (max-width: 480px) {
-    .gofast-table th:nth-child(7),
-    .gofast-table td:nth-child(7) {
+    /* Solo ocultar columna 7 en tablas de pedidos, NO en reportes */
+    .gofast-pedidos-table th:nth-child(7),
+    .gofast-pedidos-table td:nth-child(7) {
       display: none !important;
     }
+    
+    /* Asegurar que las tablas de reportes muestren TODAS las columnas */
+    .gofast-box .gofast-table-wrap .gofast-table th,
+    .gofast-box .gofast-table-wrap .gofast-table td {
+      display: table-cell !important;
+      visibility: visible !important;
+    }
 
-    .gofast-table th,
-    .gofast-table td {
+    /* Solo aplicar padding a tablas de pedidos, NO a reportes */
+    .gofast-pedidos-table th,
+    .gofast-pedidos-table td {
       padding: 6px 4px !important;
       font-size: 11px !important;
     }
