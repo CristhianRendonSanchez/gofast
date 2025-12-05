@@ -21,7 +21,9 @@ function gofast_cotizar_shortcode() {
     if (isset($_POST['gofast_cotizar'])) {
         $_SESSION['gofast_last_quote'] = [
             'origen'   => sanitize_text_field($_POST['origen']),
-            'destinos' => array_map('sanitize_text_field', $_POST['destino'] ?? [])
+            'destinos' => array_map('sanitize_text_field', $_POST['destino'] ?? []),
+            'negocio_id' => isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0,
+            'cliente_id' => isset($_POST['cliente_id']) ? intval($_POST['cliente_id']) : 0,
         ];
     }
 
@@ -32,9 +34,11 @@ function gofast_cotizar_shortcode() {
     }
 
     /*******************************************************
-     * 🔥 1. Negocios del usuario logueado
+     * 🔥 1. Negocios del usuario logueado Y todos los negocios si es mensajero/admin
      *******************************************************/
     $user_id = $_SESSION['gofast_user_id'] ?? 0;
+    $rol = strtolower($_SESSION['gofast_user_rol'] ?? '');
+    $es_mensajero_o_admin = ($rol === 'mensajero' || $rol === 'admin');
 
     $mis_negocios = [];
     if ($user_id) {
@@ -45,6 +49,19 @@ function gofast_cotizar_shortcode() {
              ORDER BY id DESC",
             $user_id
         ));
+    }
+    
+    // Si es mensajero o admin, obtener TODOS los negocios
+    $todos_negocios = [];
+    if ($es_mensajero_o_admin) {
+        $todos_negocios = $wpdb->get_results(
+            "SELECT n.id, n.nombre, n.direccion_full, n.barrio_id, n.whatsapp, n.user_id,
+                    u.nombre as cliente_nombre, u.telefono as cliente_telefono
+             FROM negocios_gofast n
+             INNER JOIN usuarios_gofast u ON n.user_id = u.id
+             WHERE n.activo = 1 AND u.activo = 1
+             ORDER BY n.nombre ASC"
+        );
     }
 
     // Barrios prioritarios
@@ -113,20 +130,43 @@ function gofast_cotizar_shortcode() {
                     <select name="origen" class="gofast-select" id="origen" required>
                         <option value="">Buscar dirección...</option>
                         <?php 
-                        // Agregar opciones de negocios al select para que se muestren cuando están seleccionados
-                        if (!empty($mis_negocios)): 
-                            foreach ($mis_negocios as $n):
-                                $barrio_nombre = $wpdb->get_var(
-                                    $wpdb->prepare("SELECT nombre FROM barrios WHERE id=%d", $n->barrio_id)
-                                );
-                                $isSelected = ((string)$old_data['origen'] === (string)$n->barrio_id);
+                        // Agregar opciones de negocios al select (todos los negocios si es mensajero/admin, solo del usuario si es cliente)
+                        $negocios_a_mostrar = $es_mensajero_o_admin && !empty($todos_negocios) ? $todos_negocios : $mis_negocios;
+                        
+                        if (!empty($negocios_a_mostrar)): 
+                            foreach ($negocios_a_mostrar as $n):
+                                // Para todos los negocios, usar estructura completa
+                                if ($es_mensajero_o_admin && isset($n->cliente_nombre)) {
+                                    $barrio_nombre = $wpdb->get_var($wpdb->prepare(
+                                        "SELECT nombre FROM barrios WHERE id = %d",
+                                        $n->barrio_id
+                                    ));
+                                    $isSelected = ((string)$old_data['origen'] === (string)$n->barrio_id);
                         ?>
                             <option value="<?= esc_attr($n->barrio_id) ?>" 
                                     data-is-negocio="true"
+                                    data-negocio-id="<?= esc_attr($n->id) ?>"
+                                    data-cliente-id="<?= esc_attr($n->user_id) ?>"
+                                    <?= $isSelected ? 'selected' : '' ?>>
+                                🏪 <?= esc_html($n->nombre) ?> — <?= esc_html($barrio_nombre ?: 'Sin barrio') ?> (Cliente: <?= esc_html($n->cliente_nombre) ?>)
+                            </option>
+                        <?php 
+                                } else {
+                                    // Para negocios del usuario (estructura simple)
+                                    $barrio_nombre = $wpdb->get_var(
+                                        $wpdb->prepare("SELECT nombre FROM barrios WHERE id=%d", $n->barrio_id)
+                                    );
+                                    $isSelected = ((string)$old_data['origen'] === (string)$n->barrio_id);
+                        ?>
+                            <option value="<?= esc_attr($n->barrio_id) ?>" 
+                                    data-is-negocio="true"
+                                    data-negocio-id="<?= esc_attr($n->id) ?>"
+                                    data-cliente-id="<?= esc_attr($n->user_id) ?>"
                                     <?= $isSelected ? 'selected' : '' ?>>
                                 🏪 <?= esc_html($n->nombre) ?> — <?= esc_html($barrio_nombre) ?>
                             </option>
                         <?php 
+                                }
                             endforeach;
                         endif; 
                         ?>
@@ -883,6 +923,50 @@ add_action('wp_footer', function () { ?>
     const loader    = document.getElementById('gofast-loading');
 
     if (!form) return;
+
+    // Manejar cambio del select de origen para agregar campos hidden de negocio
+    const origenSelect = document.getElementById('origen');
+    if (origenSelect) {
+      origenSelect.addEventListener('change', function() {
+        // Eliminar campos hidden anteriores
+        const existingNegocioId = document.getElementById('hidden-negocio-id');
+        const existingClienteId = document.getElementById('hidden-cliente-id');
+        if (existingNegocioId) existingNegocioId.remove();
+        if (existingClienteId) existingClienteId.remove();
+        
+        // Obtener la opción seleccionada
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption) {
+          const isNegocio = selectedOption.getAttribute('data-is-negocio') === 'true';
+          const negocioId = selectedOption.getAttribute('data-negocio-id');
+          const clienteId = selectedOption.getAttribute('data-cliente-id');
+          
+          if (isNegocio && negocioId) {
+            // Agregar campos hidden para negocio_id y cliente_id
+            const negocioInput = document.createElement('input');
+            negocioInput.type = 'hidden';
+            negocioInput.name = 'negocio_id';
+            negocioInput.id = 'hidden-negocio-id';
+            negocioInput.value = negocioId;
+            form.appendChild(negocioInput);
+            
+            if (clienteId) {
+              const clienteInput = document.createElement('input');
+              clienteInput.type = 'hidden';
+              clienteInput.name = 'cliente_id';
+              clienteInput.id = 'hidden-cliente-id';
+              clienteInput.value = clienteId;
+              form.appendChild(clienteInput);
+            }
+          }
+        }
+      });
+      
+      // Ejecutar al cargar la página si ya hay una opción seleccionada
+      if (origenSelect.value) {
+        origenSelect.dispatchEvent(new Event('change'));
+      }
+    }
 
     form.addEventListener('submit', function(e){
       const origen = document.getElementById('origen').value;

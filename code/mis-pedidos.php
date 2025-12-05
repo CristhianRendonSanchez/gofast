@@ -284,9 +284,10 @@ function gofast_pedidos_shortcode() {
     $filtro_asignado_por = isset($_GET['filtro_asignado_por']) ? (int) $_GET['filtro_asignado_por'] : 0;
 
     // Predefinir fecha al día actual si no hay filtros de fecha (para todos los usuarios)
+    // Usar current_time() de WordPress que respeta la zona horaria configurada
     if (empty($_GET['desde']) && empty($_GET['hasta'])) {
-        $desde = date('Y-m-d');
-        $hasta = date('Y-m-d');
+        $desde = current_time('Y-m-d');
+        $hasta = current_time('Y-m-d');
     }
 
     if ($desde && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) $desde = '';
@@ -688,6 +689,18 @@ function gofast_pedidos_shortcode() {
                         $destinos_text = !empty($destinos_barris)
                             ? implode(', ', array_unique($destinos_barris))
                             : '—';
+                        
+                        // Detectar si es servicio intermunicipal
+                        $es_intermunicipal = false;
+                        if (!empty($p->destinos)) {
+                            $json = json_decode($p->destinos, true);
+                            if (is_array($json) && !empty($json['tipo_servicio']) && $json['tipo_servicio'] === 'intermunicipal') {
+                                $es_intermunicipal = true;
+                            }
+                        }
+                        if (!$es_intermunicipal && strpos($p->direccion_origen, '(Intermunicipal)') !== false) {
+                            $es_intermunicipal = true;
+                        }
 
                         // Mensajero y quién lo asignó
                         $mensajero_nombre = '—';
@@ -890,6 +903,18 @@ function gofast_pedidos_shortcode() {
                     $destinos_text = !empty($destinos_barris)
                         ? implode(', ', array_unique($destinos_barris))
                         : '—';
+                    
+                    // Detectar si es servicio intermunicipal
+                    $es_intermunicipal = false;
+                    if (!empty($p->destinos)) {
+                        $json = json_decode($p->destinos, true);
+                        if (is_array($json) && !empty($json['tipo_servicio']) && $json['tipo_servicio'] === 'intermunicipal') {
+                            $es_intermunicipal = true;
+                        }
+                    }
+                    if (!$es_intermunicipal && strpos($p->direccion_origen, '(Intermunicipal)') !== false) {
+                        $es_intermunicipal = true;
+                    }
 
                     // Mensajero y quién lo asignó
                     $mensajero_nombre = '—';
@@ -978,7 +1003,12 @@ function gofast_pedidos_shortcode() {
                     <div class="gofast-pedido-card" style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid <?= $estado_color ?>;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                             <div>
-                                <div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: #<?= esc_html($p->id) ?></div>
+                                <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
+                                    ID: #<?= esc_html($p->id) ?>
+                                    <?php if ($es_intermunicipal): ?>
+                                        <span style="display:inline-block;background:#e0a800;color:#000;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;margin-left:4px;" title="Servicio Intermunicipal">🚚 INTER</span>
+                                    <?php endif; ?>
+                                </div>
                                 <div style="font-size: 11px; color: #999;"><?= esc_html(date_i18n('Y-m-d H:i', strtotime($p->fecha))) ?></div>
                             </div>
                             <span class="gofast-badge-estado <?= $estado_class ?>" style="font-size: 12px; padding: 4px 10px;">

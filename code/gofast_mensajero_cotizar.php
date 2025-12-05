@@ -17,27 +17,28 @@ function gofast_mensajero_cotizar_shortcode() {
         session_start();
     }
 
-    // Validar que sea mensajero
+    // Validar que sea mensajero o admin
     if (empty($_SESSION['gofast_user_id'])) {
-        return "<div class='gofast-box'>Debes iniciar sesión como mensajero para usar esta función.</div>";
+        return "<div class='gofast-box'>Debes iniciar sesión como mensajero o administrador para usar esta función.</div>";
     }
 
     $user_id = (int) $_SESSION['gofast_user_id'];
     $rol = strtolower($_SESSION['gofast_user_rol'] ?? '');
 
     // Verificar rol
-    if ($rol !== 'mensajero') {
+    if ($rol !== 'mensajero' && $rol !== 'admin') {
         $usuario = $wpdb->get_row($wpdb->prepare(
             "SELECT rol FROM usuarios_gofast WHERE id = %d AND activo = 1",
             $user_id
         ));
-        if (!$usuario || strtolower($usuario->rol) !== 'mensajero') {
-            return "<div class='gofast-box'>⚠️ Solo los mensajeros pueden usar esta función.</div>";
+        if (!$usuario || (strtolower($usuario->rol) !== 'mensajero' && strtolower($usuario->rol) !== 'admin')) {
+            return "<div class='gofast-box'>⚠️ Solo los mensajeros y administradores pueden usar esta función.</div>";
         }
-        $_SESSION['gofast_user_rol'] = 'mensajero';
+        $_SESSION['gofast_user_rol'] = strtolower($usuario->rol);
+        $rol = $_SESSION['gofast_user_rol'];
     }
 
-    // Obtener datos del mensajero
+    // Obtener datos del mensajero/admin
     $mensajero = $wpdb->get_row($wpdb->prepare(
         "SELECT id, nombre, telefono, email FROM usuarios_gofast WHERE id = %d AND activo = 1",
         $user_id
@@ -46,6 +47,16 @@ function gofast_mensajero_cotizar_shortcode() {
     if (!$mensajero) {
         return "<div class='gofast-box'>Error: Usuario no encontrado.</div>";
     }
+    
+    // Obtener TODOS los negocios registrados para mensajero/admin
+    $todos_negocios = $wpdb->get_results(
+        "SELECT n.id, n.nombre, n.direccion_full, n.barrio_id, n.whatsapp, n.user_id,
+                u.nombre as cliente_nombre, u.telefono as cliente_telefono
+         FROM negocios_gofast n
+         INNER JOIN usuarios_gofast u ON n.user_id = u.id
+         WHERE n.activo = 1 AND u.activo = 1
+         ORDER BY n.nombre ASC"
+    );
 
     /*******************************************************
      * PROCESAR ACEPTAR/RECHAZAR
@@ -63,11 +74,56 @@ function gofast_mensajero_cotizar_shortcode() {
             }
 
             $origen = intval($_POST['origen']);
+            // Obtener negocio_id de la sesión o detectar por barrio_id
+            $negocio_id = isset($_SESSION['gofast_mensajero_cotizacion']['negocio_id']) ? intval($_SESSION['gofast_mensajero_cotizacion']['negocio_id']) : 0;
+            $negocio_user_id = isset($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']) ? intval($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']) : null;
+            
+            // Si no hay negocio_id en sesión, intentar detectarlo por barrio_id
+            if ($negocio_id == 0 && $origen > 0 && !empty($todos_negocios)) {
+                foreach ($todos_negocios as $neg) {
+                    if (intval($neg->barrio_id) === $origen) {
+                        $negocio_id = intval($neg->id);
+                        $negocio_user_id = intval($neg->user_id);
+                        break;
+                    }
+                }
+            }
+            
             $destinos_finales = array_map('intval', explode(',', $_POST['destinos_finales']));
             $destinos_finales = array_filter($destinos_finales);
 
             if (empty($destinos_finales)) {
                 return "<div class='gofast-box'>Debes tener al menos un destino.</div>";
+            }
+            
+            // Obtener datos del negocio si se seleccionó uno
+            $negocio_seleccionado = null;
+            $cliente_propietario = null;
+            if ($negocio_id > 0) {
+                if ($negocio_user_id) {
+                    // Buscar por negocio_id y user_id del cliente propietario
+                    $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+                        "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                         FROM negocios_gofast n
+                         INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                         WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1",
+                        $negocio_id,
+                        $negocio_user_id
+                    ));
+                } else {
+                    // Buscar solo por negocio_id
+                    $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+                        "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                         FROM negocios_gofast n
+                         INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                         WHERE n.id = %d AND n.activo = 1 AND u.activo = 1",
+                        $negocio_id
+                    ));
+                }
+                
+                if ($negocio_seleccionado) {
+                    $cliente_propietario = $negocio_seleccionado->user_id;
+                }
             }
 
             // Calcular tarifas y recargos
@@ -133,11 +189,17 @@ function gofast_mensajero_cotizar_shortcode() {
             }
 
             // JSON final
+            $direccion_origen = 'Servicio creado por ' . ($rol === 'admin' ? 'administrador' : 'mensajero');
+            if ($negocio_seleccionado) {
+                $direccion_origen = $negocio_seleccionado->direccion_full ?: $negocio_seleccionado->nombre;
+            }
+            
             $origen_completo = [
                 'barrio_id' => $origen,
                 'barrio_nombre' => $nombre_origen,
                 'sector_id' => $sector_origen,
-                'direccion' => 'Servicio creado por mensajero',
+                'direccion' => $direccion_origen,
+                'negocio_id' => $negocio_seleccionado ? $negocio_seleccionado->id : null,
             ];
 
             $json_final = json_encode([
@@ -148,16 +210,30 @@ function gofast_mensajero_cotizar_shortcode() {
             // Verificar si existe el campo asignado_por_user_id
             $column_exists = $wpdb->get_results("SHOW COLUMNS FROM servicios_gofast LIKE 'asignado_por_user_id'");
             
+            // Determinar nombre y teléfono del cliente
+            $nombre_cliente = $mensajero->nombre . ' (' . ($rol === 'admin' ? 'Admin' : 'Mensajero') . ')';
+            $telefono_cliente = $mensajero->telefono;
+            $direccion_origen_servicio = 'Servicio creado por ' . ($rol === 'admin' ? 'administrador' : 'mensajero');
+            $user_id_servicio = $mensajero->id; // Por defecto el mensajero/admin
+            
+            if ($negocio_seleccionado) {
+                // Usar datos del NEGOCIO (no del cliente)
+                $nombre_cliente = $negocio_seleccionado->nombre; // Nombre del negocio
+                $telefono_cliente = $negocio_seleccionado->whatsapp ?: $negocio_seleccionado->cliente_telefono; // WhatsApp del negocio primero
+                $direccion_origen_servicio = $negocio_seleccionado->nombre . ' — ' . ($negocio_seleccionado->direccion_full ?: $nombre_origen);
+                $user_id_servicio = $cliente_propietario; // Asociar al cliente propietario del negocio
+            }
+            
             $data_insert = [
-                'nombre_cliente' => $mensajero->nombre . ' (Mensajero)',
-                'telefono_cliente' => $mensajero->telefono,
-                'direccion_origen' => 'Servicio creado por mensajero',
+                'nombre_cliente' => $nombre_cliente,
+                'telefono_cliente' => $telefono_cliente,
+                'direccion_origen' => $direccion_origen_servicio,
                 'destinos' => $json_final,
                 'total' => $total,
                 'estado' => 'asignado',
                 'tracking_estado' => 'asignado',
                 'mensajero_id' => $mensajero->id,
-                'user_id' => $mensajero->id,
+                'user_id' => $user_id_servicio, // Cliente propietario del negocio o mensajero/admin
                 'fecha' => current_time('mysql'),
             ];
             
@@ -196,12 +272,14 @@ function gofast_mensajero_cotizar_shortcode() {
         // Guardar en sesión
         if (isset($_POST['gofast_mensajero_cotizar'])) {
             $origen = intval($_POST['origen'] ?? 0);
+            $negocio_id = isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0;
             $destinos = array_map('intval', (array) ($_POST['destino'] ?? []));
             
             if ($origen > 0 && !empty($destinos)) {
                 $_SESSION['gofast_mensajero_cotizacion'] = [
                     'origen' => $origen,
                     'destinos' => $destinos,
+                    'negocio_id' => $negocio_id,
                 ];
             }
         }
@@ -248,8 +326,8 @@ function gofast_mensajero_cotizar_shortcode() {
         <?php endif; ?>
         
         <div class="gofast-box" style="background:#e3f2fd;border-left:4px solid #2196F3;padding:12px;margin-bottom:16px;">
-            <strong>🚚 Modo Mensajero</strong><br>
-            <small>Crea servicios rápidamente. Al aceptar, el servicio se asignará automáticamente a ti.</small>
+            <strong>🚚 Modo <?= $rol === 'admin' ? 'Administrador' : 'Mensajero' ?></strong><br>
+            <small>Crea servicios rápidamente. Al aceptar, el servicio se asignará automáticamente a ti. Si seleccionas un negocio, el servicio quedará en el historial del cliente propietario.</small>
         </div>
 
         <form method="post" action="" id="gofast-mensajero-form">
@@ -258,6 +336,31 @@ function gofast_mensajero_cotizar_shortcode() {
                     <label><strong>Origen</strong></label>
                     <select name="origen" class="gofast-select" id="origen" required>
                         <option value="">Buscar barrio...</option>
+                        <?php 
+                        // Agregar negocios al selector de origen (igual que en cotizador normal)
+                        if (!empty($todos_negocios)): 
+                            foreach ($todos_negocios as $neg): 
+                                $barrio_nombre = $wpdb->get_var($wpdb->prepare(
+                                    "SELECT nombre FROM barrios WHERE id = %d",
+                                    $neg->barrio_id
+                                ));
+                                $isSelected = ((string)$old_data['origen'] === (string)$neg->barrio_id);
+                        ?>
+                            <option value="<?= esc_attr($neg->barrio_id) ?>" 
+                                    data-is-negocio="true"
+                                    data-negocio-id="<?= esc_attr($neg->id) ?>"
+                                    data-negocio-nombre="<?= esc_attr($neg->nombre) ?>"
+                                    data-negocio-direccion="<?= esc_attr($neg->direccion_full) ?>"
+                                    data-cliente-id="<?= esc_attr($neg->user_id) ?>"
+                                    data-cliente-nombre="<?= esc_attr($neg->cliente_nombre) ?>"
+                                    data-cliente-telefono="<?= esc_attr($neg->cliente_telefono) ?>"
+                                    <?= $isSelected ? 'selected' : '' ?>>
+                                🏪 <?= esc_html($neg->nombre) ?> — <?= esc_html($barrio_nombre ?: 'Sin barrio') ?> (Cliente: <?= esc_html($neg->cliente_nombre) ?>)
+                            </option>
+                        <?php 
+                            endforeach;
+                        endif; 
+                        ?>
                         <?php foreach ($barrios as $b): ?>
                             <option value="<?= esc_attr($b->id) ?>"
                                 <?= ((string)$old_data['origen'] === (string)$b->id ? 'selected' : '') ?>>
@@ -265,6 +368,11 @@ function gofast_mensajero_cotizar_shortcode() {
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <?php if (!empty($todos_negocios)): ?>
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                            Si seleccionas un negocio, el servicio quedará asociado al cliente propietario y aparecerá en su historial.
+                        </small>
+                    <?php endif; ?>
                 </div>
 
                 <div style="flex:1;">
@@ -787,6 +895,12 @@ function gofast_mensajero_cotizar_shortcode() {
  * FUNCIÓN: MOSTRAR RESUMEN EDITABLE
  *******************************************************/
 function gofast_mensajero_mostrar_resumen($origen, $destinos) {
+    global $wpdb;
+    
+    // Obtener negocio_id de la sesión si existe
+    $cotizacion = $_SESSION['gofast_mensajero_cotizacion'] ?? null;
+    $negocio_id = isset($cotizacion['negocio_id']) ? intval($cotizacion['negocio_id']) : 0;
+    $negocio_user_id = isset($cotizacion['negocio_user_id']) ? intval($cotizacion['negocio_user_id']) : null;
     global $wpdb;
 
     if (session_status() === PHP_SESSION_NONE) {

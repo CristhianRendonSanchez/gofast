@@ -55,6 +55,7 @@ function gofast_home_shortcode() {
     $url_compras = esc_url( home_url('/compras') );
     $url_trabaja      = esc_url( home_url('/trabaja-con-nosotros') );
     $url_logout       = esc_url( home_url('/?gofast_logout=1') );
+    $url_intermunicipal = esc_url( home_url('/cotizar-intermunicipal') );
 
     ob_start();
     ?>
@@ -133,6 +134,15 @@ function gofast_home_shortcode() {
                         </a>
                     </li>
                     <li>
+                        <a href="<?php echo $url_intermunicipal; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">🚚</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Envíos intermunicipales</strong>
+                                <small>Desde Tuluá a otros municipios</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="<?php echo $url_registro; ?>" class="gofast-home-panel-link">
                             <span class="gofast-home-panel-icon">🏪</span>
                             <span class="gofast-home-panel-text">
@@ -163,6 +173,15 @@ function gofast_home_shortcode() {
                         </a>
                     </li>
                     <li>
+                        <a href="<?php echo $url_intermunicipal; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">🚚</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Envíos intermunicipales</strong>
+                                <small>Desde Tuluá a otros municipios</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="<?php echo $url_mis_pedidos; ?>" class="gofast-home-panel-link">
                             <span class="gofast-home-panel-icon">📦</span>
                             <span class="gofast-home-panel-text">
@@ -189,6 +208,15 @@ function gofast_home_shortcode() {
                             <span class="gofast-home-panel-text">
                                 <strong>Crear servicio</strong>
                                 <small>Registrar nuevo envío</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?php echo $url_intermunicipal; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">🌐</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Envíos intermunicipales</strong>
+                                <small>Desde Tuluá a otros municipios</small>
                             </span>
                         </a>
                     </li>
@@ -237,6 +265,15 @@ function gofast_home_shortcode() {
                             <span class="gofast-home-panel-text">
                                 <strong>Todos los pedidos</strong>
                                 <small>Gestionar envíos</small>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?php echo $url_intermunicipal; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">🌐</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Envíos intermunicipales</strong>
+                                <small>Gestionar envíos intermunicipales</small>
                             </span>
                         </a>
                     </li>
@@ -326,6 +363,14 @@ function gofast_home_shortcode() {
                 <div class="gofast-home-service-icon">📦</div>
                 <h3>Mensajería urbana</h3>
                 <p>Envíos punto a punto dentro de la ciudad: documentos, paquetes pequeños y recaudos rápidos.</p>
+            </div>
+            <div class="gofast-box gofast-home-service-card">
+                <div class="gofast-home-service-icon">🚚</div>
+                <h3>Envíos intermunicipales</h3>
+                <p>Envíos desde Tuluá a otros municipios cercanos. Pago anticipado requerido. Solo zona urbana.</p>
+                <a href="<?php echo $url_intermunicipal; ?>" class="gofast-btn-mini" style="margin-top: 12px; display: inline-block;">
+                    Cotizar ahora →
+                </a>
             </div>
             <div class="gofast-box gofast-home-service-card">
                 <div class="gofast-home-service-icon">🏪</div>

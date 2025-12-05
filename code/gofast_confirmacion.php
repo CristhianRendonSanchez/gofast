@@ -113,14 +113,44 @@ add_shortcode("gofast_confirmacion", function() {
     /* ==========================================================
        4. Preparar mensaje para WhatsApp
     ========================================================== */
-    $telefono_empresa = "573004452422";
-    $mensaje = urlencode(
-        "🚀 Hola, acabo de solicitar un servicio en GoFast.\n\n" .
-        "📦 Servicio: #$id\n" .
-        "📍 Origen: {$pedido->direccion_origen}\n" .
-        "💰 Total: $" . number_format($pedido->total, 0, ',', '.') . "\n\n" .
-        "Por favor confirmar la recogida. Gracias."
-    );
+    // Detectar si es servicio intermunicipal
+    $es_intermunicipal = false;
+    if (!empty($json['tipo_servicio']) && $json['tipo_servicio'] === 'intermunicipal') {
+        $es_intermunicipal = true;
+    }
+    
+    $telefono_empresa = "573194642513"; // +57 319 4642513
+    
+    // Mensaje personalizado para servicios intermunicipales
+    if ($es_intermunicipal) {
+        $destino_nombre = '';
+        if (!empty($destinos[0]['barrio_nombre'])) {
+            $destino_nombre = $destinos[0]['barrio_nombre'];
+        } elseif (!empty($destinos[0]['direccion'])) {
+            $destino_nombre = $destinos[0]['direccion'];
+        }
+        
+        $mensaje = urlencode(
+            "🚚 Hola, acabo de solicitar un servicio INTERMUNICIPAL en GoFast.\n\n" .
+            "📦 Servicio: #$id\n" .
+            "📍 Origen: {$pedido->direccion_origen}\n" .
+            "🎯 Destino: " . ($destino_nombre ?: 'No especificado') . "\n" .
+            "💰 Total: $" . number_format($pedido->total, 0, ',', '.') . "\n\n" .
+            "⚠️ IMPORTANTE:\n" .
+            "• El pedido debe estar pago con anticipación.\n" .
+            "• El valor del envío debe ser cancelado antes de despachar.\n" .
+            "• Solo zona urbana.\n\n" .
+            "Por favor confirmar la recogida. Gracias."
+        );
+    } else {
+        $mensaje = urlencode(
+            "🚀 Hola, acabo de solicitar un servicio en GoFast.\n\n" .
+            "📦 Servicio: #$id\n" .
+            "📍 Origen: {$pedido->direccion_origen}\n" .
+            "💰 Total: $" . number_format($pedido->total, 0, ',', '.') . "\n\n" .
+            "Por favor confirmar la recogida. Gracias."
+        );
+    }
 
     /* ==========================================================
        5. INTERFAZ VISUAL
@@ -224,7 +254,17 @@ add_shortcode("gofast_confirmacion", function() {
 
     <!-- 🔄 BOTONES INFERIORES -->
     <div class="gofast-btn-group" style="margin-top:25px;text-align:center;">
-        <a href="<?php echo esc_url( home_url('/cotizar') ); ?>" class="gofast-btn-action">🔄 Hacer otra cotización</a>
+        <?php 
+        // Determinar si es intermunicipal para redirigir al cotizador correcto
+        $es_intermunicipal = false;
+        if (!empty($json['tipo_servicio']) && $json['tipo_servicio'] === 'intermunicipal') {
+            $es_intermunicipal = true;
+        }
+        $url_cotizar = $es_intermunicipal 
+            ? esc_url( home_url('/cotizar-intermunicipal') )
+            : esc_url( home_url('/cotizar') );
+        ?>
+        <a href="<?php echo $url_cotizar; ?>" class="gofast-btn-action">🔄 Hacer otra cotización</a>
         <?php if (!empty($_SESSION["gofast_user_id"]) && empty($_SESSION["gofast_auto_linked"])): ?>
             <a href="<?php echo esc_url( home_url('/mis-pedidos') ); ?>" class="gofast-btn-action gofast-secondary">📦 Ver mis pedidos</a>
         <?php else: ?>
@@ -235,6 +275,60 @@ add_shortcode("gofast_confirmacion", function() {
 </div>
 
 <script>
+(function() {
+    // Proteger contra errores de toggleOtro si se ejecuta desde otro archivo
+    const tipoSelectExists = document.getElementById("tipo_negocio");
+    const wrapperOtroExists = document.getElementById("tipo_otro_wrapper");
+    
+    // Si los elementos no existen, crear una función segura desde el inicio
+    if (!tipoSelectExists || !wrapperOtroExists) {
+        if (typeof window.toggleOtro === 'undefined') {
+            window.toggleOtro = function() {
+                // Función vacía segura - no hacer nada
+                return;
+            };
+        } else if (typeof window.toggleOtro === 'function') {
+            // Si existe y los elementos no están presentes, proteger la función
+            const originalToggleOtro = window.toggleOtro;
+            window.toggleOtro = function() {
+                try {
+                    const tipoSelect = document.getElementById("tipo_negocio");
+                    const wrapperOtro = document.getElementById("tipo_otro_wrapper");
+                    if (tipoSelect && wrapperOtro && tipoSelect.parentNode && wrapperOtro.parentNode) {
+                        return originalToggleOtro();
+                    }
+                } catch(e) {
+                    // Silenciar error completamente
+                    return;
+                }
+            };
+        }
+    }
+    
+    // También prevenir que setTimeout ejecute toggleOtro si no están los elementos
+    (function() {
+        const originalSetTimeout = window.setTimeout;
+        window.setTimeout = function(func, delay) {
+            if (typeof func === 'function') {
+                try {
+                    const funcStr = func.toString();
+                    if (funcStr.includes('toggleOtro')) {
+                        const tipoSelect = document.getElementById("tipo_negocio");
+                        const wrapperOtro = document.getElementById("tipo_otro_wrapper");
+                        if (!tipoSelect || !wrapperOtro) {
+                            // Retornar un timeout vacío en lugar de null para evitar errores
+                            return originalSetTimeout(function() {}, 0);
+                        }
+                    }
+                } catch(e) {
+                    // Si hay algún error al verificar, continuar normalmente
+                }
+            }
+            return originalSetTimeout.apply(this, arguments);
+        };
+    })();
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("btnWhatsApp");
     const phone = "<?= $telefono_empresa ?>";
@@ -245,7 +339,9 @@ document.addEventListener("DOMContentLoaded", () => {
         ? `https://wa.me/${phone}?text=${msg}`
         : `https://web.whatsapp.com/send?phone=${phone}&text=${msg}`;
 
-    btn.href = url;
+    if (btn) {
+        btn.href = url;
+    }
 
     setTimeout(() => {
         if (!document.hidden) {

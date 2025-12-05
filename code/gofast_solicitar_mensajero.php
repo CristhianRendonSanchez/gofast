@@ -16,6 +16,35 @@ function gofast_resultado_cotizacion() {
 
     $origen   = intval($_POST['origen']);
     $destinos = array_map('intval', (array) $_POST['destino']);
+    
+    // Detectar si el origen es un negocio (buscar en todos los negocios si es mensajero/admin)
+    $negocio_id_cotizador = 0;
+    $negocio_user_id_cotizador = null;
+    
+    if (!empty($_SESSION['gofast_user_id'])) {
+        $user_id_temp = intval($_SESSION['gofast_user_id']);
+        $usuario_temp = $wpdb->get_row($wpdb->prepare(
+            "SELECT rol FROM usuarios_gofast WHERE id = %d AND activo = 1",
+            $user_id_temp
+        ));
+        
+        if ($usuario_temp && (strtolower($usuario_temp->rol) === 'mensajero' || strtolower($usuario_temp->rol) === 'admin')) {
+            // Si es mensajero/admin, buscar en todos los negocios
+            $todos_negocios_temp = $wpdb->get_results(
+                "SELECT n.id, n.barrio_id, n.user_id
+                 FROM negocios_gofast n
+                 WHERE n.activo = 1"
+            );
+            
+            foreach ($todos_negocios_temp as $neg) {
+                if (intval($neg->barrio_id) === $origen) {
+                    $negocio_id_cotizador = intval($neg->id);
+                    $negocio_user_id_cotizador = intval($neg->user_id);
+                    break;
+                }
+            }
+        }
+    }
 
     /* ==========================================================
        ✅ 0) DETECTAR USUARIO GOFAST LOGUEADO
@@ -238,11 +267,65 @@ function gofast_resultado_cotizacion() {
 
 		$nombre = sanitize_text_field($_POST['nombre']);
 		$tel    = sanitize_text_field($_POST['telefono']);
+		
+		// Obtener negocio_id del POST (desde cotizador) o detectar por barrio_id
+		$negocio_id = $negocio_id_cotizador;
+		$negocio_user_id = $negocio_user_id_cotizador;
+		$negocio_seleccionado = null;
+		$cliente_propietario = null;
+		
+		// Si hay negocio detectado (ya sea desde POST o desde $negocio_usado), obtener datos
+		if ($negocio_id > 0) {
+			// Si es mensajero/admin y hay negocio_user_id, buscar por ese user_id
+			if ($negocio_user_id && $usuario && (strtolower($usuario->rol) === 'mensajero' || strtolower($usuario->rol) === 'admin')) {
+				$negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+					"SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+					 FROM negocios_gofast n
+					 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+					 WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1",
+					$negocio_id,
+					$negocio_user_id
+				));
+			} elseif ($negocio_usado && intval($negocio_usado->id) === $negocio_id) {
+				// Si ya tenemos el negocio_usado y coincide, usarlo
+				$negocio_seleccionado = $negocio_usado;
+			} else {
+				// Buscar negocio del usuario logueado
+				if ($usuario) {
+					$negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+						"SELECT id, nombre, direccion_full, whatsapp, user_id
+						 FROM negocios_gofast
+						 WHERE id = %d AND user_id = %d AND activo = 1",
+						$negocio_id,
+						$usuario->id
+					));
+				}
+			}
+			
+			if ($negocio_seleccionado) {
+				$cliente_propietario = $negocio_seleccionado->user_id;
+				// Usar datos del NEGOCIO (no del cliente)
+				$nombre = $negocio_seleccionado->nombre; // Nombre del negocio
+				$tel = $negocio_seleccionado->whatsapp ?: ($negocio_seleccionado->cliente_telefono ?? ($usuario ? $usuario->telefono : '')); // WhatsApp del negocio primero
+			}
+		} elseif ($negocio_usado) {
+			// Si no hay negocio_id del POST pero hay negocio_usado detectado, usarlo
+			$negocio_seleccionado = $negocio_usado;
+			$cliente_propietario = $negocio_usado->user_id;
+			// Usar datos del NEGOCIO (no del cliente)
+			$nombre = $negocio_usado->nombre; // Nombre del negocio
+			$tel = $negocio_usado->whatsapp ?: ($usuario ? $usuario->telefono : ''); // WhatsApp del negocio primero
+		}
 
 		// Dirección origen
 		$dir_origen = !empty($_POST['dir_origen_custom'])
 			? sanitize_text_field($_POST['dir_origen_custom'])
 			: sanitize_text_field($_POST['dir_origen']);
+		
+		// Si hay negocio seleccionado, usar su dirección
+		if ($negocio_seleccionado && $negocio_seleccionado->direccion_full) {
+			$dir_origen = $negocio_seleccionado->direccion_full;
+		}
 
 		// Direcciones destino opcionales
 		$dirs_dest   = isset($_POST['dir_destino'])   ? (array) $_POST['dir_destino']   : [];
@@ -259,6 +342,8 @@ function gofast_resultado_cotizacion() {
 			"barrio_nombre" => $nombre_origen,
 			"sector_id"     => $sector_origen,
 			"direccion"     => $dir_origen,
+			"negocio_id"    => $negocio_seleccionado ? $negocio_seleccionado->id : null,
+			"negocio_user_id" => $negocio_seleccionado ? $negocio_seleccionado->user_id : null,
 		];
 
 		// JSON de destinos
@@ -285,6 +370,12 @@ function gofast_resultado_cotizacion() {
 			JSON_UNESCAPED_UNICODE
 		);
 
+		// Determinar user_id: si hay negocio seleccionado, usar el cliente propietario
+		$user_id_servicio = $usuario ? $usuario->id : null;
+		if ($negocio_seleccionado && $cliente_propietario) {
+			$user_id_servicio = $cliente_propietario; // Asociar al cliente propietario del negocio
+		}
+		
 		// Guardar servicio
 		$insertado = $wpdb->insert("servicios_gofast", [
 			"nombre_cliente"   => $nombre,
@@ -295,7 +386,7 @@ function gofast_resultado_cotizacion() {
 			"estado"           => "pendiente",
 			"tracking_estado"  => "pendiente",
 			"mensajero_id"     => null,
-			"user_id"          => $usuario ? $usuario->id : null,
+			"user_id"          => $user_id_servicio,
 		]);
 
 		// ⚠️ Si falla el INSERT, mostramos el error en pantalla
@@ -407,14 +498,20 @@ function gofast_resultado_cotizacion() {
             <h3>Datos del servicio</h3>
 
             <form method="post" id="form-solicitar-servicio">
-				<input type="hidden" name="origen" id="input-origen" value="<?= esc_attr($origen) ?>">
-				<div id="destinos-hidden-inputs">
-					<?php foreach ($destinos as $idx => $d): ?>
-						<input type="hidden" name="destino[]" class="destino-input" value="<?= esc_attr($d) ?>" data-index="<?= esc_attr($idx) ?>">
-					<?php endforeach; ?>
-				</div>
-
-				<input type="hidden" name="confirmar" value="1">
+			<input type="hidden" name="origen" id="input-origen" value="<?= esc_attr($origen) ?>">
+			<div id="destinos-hidden-inputs">
+				<?php foreach ($destinos as $idx => $d): ?>
+					<input type="hidden" name="destino[]" class="destino-input" value="<?= esc_attr($d) ?>" data-index="<?= esc_attr($idx) ?>">
+				<?php endforeach; ?>
+			</div>
+			<?php if ($negocio_id_cotizador > 0): ?>
+				<input type="hidden" name="negocio_id" value="<?= esc_attr($negocio_id_cotizador) ?>">
+				<input type="hidden" name="cliente_id" value="<?= esc_attr($negocio_user_id_cotizador) ?>">
+			<?php elseif ($negocio_usado): ?>
+				<input type="hidden" name="negocio_id" value="<?= esc_attr($negocio_usado->id) ?>">
+				<input type="hidden" name="cliente_id" value="<?= esc_attr($negocio_usado->user_id) ?>">
+			<?php endif; ?>
+			<input type="hidden" name="confirmar" value="1">
 
                 <div class="gofast-2col">
                     <div>
