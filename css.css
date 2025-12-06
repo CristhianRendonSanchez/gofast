@@ -2881,6 +2881,112 @@
   }
 
   /********************************************
+   * GOFAST — ADMIN NEGOCIOS
+   ********************************************/
+  .gofast-negocios-admin-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .gofast-negocios-admin-table {
+    min-width: 1200px;
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+  }
+  
+  .gofast-negocios-admin-table th,
+  .gofast-negocios-admin-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--gofast-gray-300);
+    text-align: left;
+    font-size: 14px;
+  }
+  
+  .gofast-negocios-admin-table th {
+    background: var(--gofast-gray-100);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  
+  .gofast-negocios-admin-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+  
+  .gofast-negocio-admin-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* Vista Desktop: Mostrar tabla, ocultar cards */
+  .gofast-negocios-admin-desktop {
+    display: block;
+  }
+  
+  /* Vista Móvil: Cards (oculta en desktop) */
+  .gofast-negocios-admin-mobile {
+    display: none;
+  }
+  
+  @media (max-width: 768px) {
+    .gofast-negocios-admin-desktop {
+      display: none !important;
+    }
+    
+    .gofast-negocios-admin-mobile {
+      display: block !important;
+    }
+  }
+  
+  /********************************************
+   * GOFAST — ADMIN CONFIGURACIÓN (TABS)
+   ********************************************/
+  .gofast-config-tab {
+    padding: 12px 20px;
+    border: none;
+    background: #f8f9fa;
+    color: #666;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: all 0.2s ease;
+  }
+  
+  .gofast-config-tab:hover {
+    background: #e9ecef;
+  }
+  
+  .gofast-config-tab-active {
+    background: #fff;
+    color: #000;
+    border-bottom: 3px solid var(--gofast-yellow);
+  }
+  
+  .gofast-config-tab-content {
+    padding-top: 20px;
+  }
+  
+  .gofast-config-tab-content h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+  }
+  
+  .gofast-config-tab-content h4 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 16px;
+    color: #000;
+  }
+  
+  /********************************************
    * GOFAST — RESPONSIVE PEDIDOS
    ********************************************/
   @media (max-width: 768px) {

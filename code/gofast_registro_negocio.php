@@ -121,7 +121,12 @@ function gofast_registro_negocio_shortcode() {
             <input type="text" name="direccion_full" value="<?= $dir_val ?>" required>
 
             <label>WhatsApp del negocio</label>
-            <input type="number" name="whatsapp" value="<?= $whatsapp_val ?>" placeholder="Ej: 3001234567">
+            <input type="text" 
+                   name="whatsapp" 
+                   value="<?= esc_attr(gofast_clean_whatsapp($whatsapp_val)) ?>" 
+                   placeholder="Ej: 3001234567"
+                   pattern="[0-9]*"
+                   inputmode="numeric">
 
             <div class="gofast-btn-group" style="margin-top:20px;">
                 <button name="gofast_guardar_negocio" class="gofast-btn-request">💾 Guardar</button>

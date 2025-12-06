@@ -40,7 +40,7 @@ add_action('template_redirect', function() {
         $nombre     = sanitize_text_field($_POST['nombre_negocio'] ?? '');
         $tipo       = sanitize_text_field($_POST['tipo_negocio'] ?? '');
         $tipo_otro  = sanitize_text_field($_POST['tipo_otro'] ?? '');
-        $whatsapp   = sanitize_text_field($_POST['whatsapp'] ?? '');
+        $whatsapp   = gofast_clean_whatsapp($_POST['whatsapp'] ?? '');
         $barrio_id  = intval($_POST['barrio_id'] ?? 0);
         $direccion  = sanitize_text_field($_POST['direccion_full'] ?? '');
 

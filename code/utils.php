@@ -81,6 +81,26 @@ if (!function_exists('gofast_current_time')) {
     }
 }
 
+/**
+ * Limpiar y validar número de WhatsApp
+ * @param mixed $whatsapp Valor del WhatsApp (puede ser string o int)
+ * @return string WhatsApp limpio o cadena vacía si es inválido
+ */
+if (!function_exists('gofast_clean_whatsapp')) {
+    function gofast_clean_whatsapp($whatsapp) {
+        // Convertir a string y limpiar
+        $whatsapp = (string) $whatsapp;
+        // Remover todo excepto números
+        $whatsapp = preg_replace('/[^0-9]/', '', $whatsapp);
+        // Valores problemáticos comunes (límites de INT)
+        $valores_invalidos = ['2147483647', '0', '2147483648', '-2147483648'];
+        if (empty($whatsapp) || in_array($whatsapp, $valores_invalidos)) {
+            return '';
+        }
+        return $whatsapp;
+    }
+}
+
 add_action('wp_footer', function() {
 ?>
 <script>
