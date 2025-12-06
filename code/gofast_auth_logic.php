@@ -195,7 +195,7 @@ function gofast_handle_auth_requests() {
             'password_hash'  => $hash,
             'rol'            => 'cliente',
             'activo'         => 1,
-            'fecha_registro' => current_time('mysql')
+            'fecha_registro' => gofast_current_time('mysql')
         ];
         
         // Verificar si el campo remember_token existe en la tabla

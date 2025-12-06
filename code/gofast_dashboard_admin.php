@@ -59,7 +59,7 @@ function gofast_dashboard_admin_shortcode() {
             "SELECT SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))) 
              FROM servicios_gofast 
              WHERE DATE(fecha) = %s",
-            current_time('Y-m-d')
+            gofast_current_time('Y-m-d')
         )
     ) ?? 0);
     
@@ -68,7 +68,7 @@ function gofast_dashboard_admin_shortcode() {
         $wpdb->prepare(
             "SELECT SUM(total) FROM servicios_gofast 
              WHERE DATE(fecha) = %s AND tracking_estado != 'cancelado'",
-            current_time('Y-m-d')
+            gofast_current_time('Y-m-d')
         )
     ) ?? 0);
     
@@ -76,17 +76,19 @@ function gofast_dashboard_admin_shortcode() {
         $wpdb->prepare(
             "SELECT SUM(valor) FROM compras_gofast 
              WHERE DATE(fecha) = %s AND estado != 'cancelada'",
-            current_time('Y-m-d')
+            gofast_current_time('Y-m-d')
         )
     ) ?? 0);
     
     $ingresos_hoy = $ingresos_servicios_hoy + $ingresos_compras_hoy;
     $comision_hoy = $ingresos_hoy * 0.20;
     
-    // Comisión del mes actual (del primer día al último día del mes)
-    $fecha_actual = current_time('Y-m-d');
-    $primer_dia_mes = date('Y-m-01', strtotime($fecha_actual));
-    $ultimo_dia_mes = date('Y-m-t', strtotime($fecha_actual));
+    // Comisión del mes actual (del primer día al último día del mes) - zona horaria Colombia
+    $fecha_actual = gofast_current_time('Y-m-d');
+    $timezone = new DateTimeZone('America/Bogota');
+    $datetime = new DateTime($fecha_actual, $timezone);
+    $primer_dia_mes = $datetime->format('Y-m-01');
+    $ultimo_dia_mes = $datetime->format('Y-m-t');
     
     $ingresos_servicios_mes = (float) ($wpdb->get_var(
         $wpdb->prepare(

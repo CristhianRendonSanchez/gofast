@@ -166,9 +166,9 @@ function gofast_transferencias_shortcode() {
             // Admin: mostrar pendientes por defecto
             $estado_filtro = 'pendiente';
         } else {
-            // Mensajero: mostrar día actual por defecto
-            $fecha_desde = date('Y-m-d');
-            $fecha_hasta = date('Y-m-d');
+            // Mensajero: mostrar día actual por defecto (zona horaria Colombia)
+            $fecha_desde = gofast_date_today();
+            $fecha_hasta = gofast_date_today();
         }
     }
 
@@ -490,7 +490,7 @@ function gofast_transferencias_shortcode() {
                         <?php foreach ($transferencias as $t): ?>
                             <tr>
                                 <td>#<?= esc_html($t->id) ?></td>
-                                <td><?= date('d/m/Y H:i', strtotime($t->fecha_creacion)) ?></td>
+                                <td><?= gofast_date_format($t->fecha_creacion, 'd/m/Y H:i') ?></td>
                                 <?php if ($rol === 'admin'): ?>
                                     <td>
                                         <?= esc_html($t->mensajero_nombre) ?><br>
@@ -584,7 +584,7 @@ function gofast_transferencias_shortcode() {
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                             <div>
                                 <div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: #<?= esc_html($t->id) ?></div>
-                                <div style="font-size: 11px; color: #999;"><?= date('d/m/Y H:i', strtotime($t->fecha_creacion)) ?></div>
+                                <div style="font-size: 11px; color: #999;"><?= gofast_date_format($t->fecha_creacion, 'd/m/Y H:i') ?></div>
                             </div>
                             <span class="gofast-badge-estado <?= $estado_class ?>" style="font-size: 12px; padding: 4px 10px;">
                                 <?= $estado_text ?>

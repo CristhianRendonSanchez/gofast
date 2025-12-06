@@ -254,7 +254,7 @@ function gofast_admin_cotizar_shortcode() {
                 'tracking_estado' => 'asignado',
                 'mensajero_id' => $mensajero_id, // Mensajero seleccionado por el admin
                 'user_id' => $user_id_servicio, // Cliente propietario del negocio o admin
-                'fecha' => current_time('mysql'),
+                'fecha' => gofast_current_time('mysql'),
             ];
             
             // Si existe el campo, guardar quién asignó (el admin)

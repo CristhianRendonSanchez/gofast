@@ -284,10 +284,10 @@ function gofast_pedidos_shortcode() {
     $filtro_asignado_por = isset($_GET['filtro_asignado_por']) ? (int) $_GET['filtro_asignado_por'] : 0;
 
     // Predefinir fecha al día actual si no hay filtros de fecha (para todos los usuarios)
-    // Usar current_time() de WordPress que respeta la zona horaria configurada
+    // Usar zona horaria de Colombia
     if (empty($_GET['desde']) && empty($_GET['hasta'])) {
-        $desde = current_time('Y-m-d');
-        $hasta = current_time('Y-m-d');
+        $desde = gofast_current_time('Y-m-d');
+        $hasta = gofast_current_time('Y-m-d');
     }
 
     if ($desde && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) $desde = '';
@@ -763,7 +763,7 @@ function gofast_pedidos_shortcode() {
                         ?>
                         <tr>
                             <td>#<?php echo (int) $p->id; ?></td>
-                            <td><?php echo esc_html( date_i18n('Y-m-d H:i', strtotime($p->fecha)) ); ?></td>
+                            <td><?php echo esc_html( gofast_date_format($p->fecha, 'Y-m-d H:i') ); ?></td>
                             <td><?php echo esc_html($p->nombre_cliente ?: '—'); ?></td>
                             <td><?php echo esc_html($p->telefono_cliente ?: '—'); ?></td>
 
@@ -853,7 +853,7 @@ function gofast_pedidos_shortcode() {
                                             data-servicio-id="<?php echo (int) $p->id; ?>"
                                             data-destinos='<?php echo esc_attr($p->destinos); ?>'
                                             data-cliente="<?php echo esc_attr($p->nombre_cliente); ?>"
-                                            data-fecha="<?php echo esc_attr(date_i18n('Y-m-d H:i', strtotime($p->fecha))); ?>"
+                                            data-fecha="<?php echo esc_attr(gofast_date_format($p->fecha, 'Y-m-d H:i')); ?>"
                                             data-origen="<?php echo esc_attr($origen_barrio); ?>"
                                             data-total="<?php echo number_format($p->total, 0, ',', '.'); ?>">
                                         ✏️ Editar
@@ -1009,7 +1009,7 @@ function gofast_pedidos_shortcode() {
                                         <span style="display:inline-block;background:#e0a800;color:#000;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;margin-left:4px;" title="Servicio Intermunicipal">🚚 INTER</span>
                                     <?php endif; ?>
                                 </div>
-                                <div style="font-size: 11px; color: #999;"><?= esc_html(date_i18n('Y-m-d H:i', strtotime($p->fecha))) ?></div>
+                                <div style="font-size: 11px; color: #999;"><?= esc_html(gofast_date_format($p->fecha, 'Y-m-d H:i')) ?></div>
                             </div>
                             <span class="gofast-badge-estado <?= $estado_class ?>" style="font-size: 12px; padding: 4px 10px;">
                                 <?= $estado_text ?>
@@ -1131,7 +1131,7 @@ function gofast_pedidos_shortcode() {
                                         data-servicio-id="<?= (int) $p->id ?>"
                                         data-destinos='<?= esc_attr($p->destinos) ?>'
                                         data-cliente="<?= esc_attr($p->nombre_cliente) ?>"
-                                        data-fecha="<?= esc_attr(date_i18n('Y-m-d H:i', strtotime($p->fecha))) ?>"
+                                        data-fecha="<?= esc_attr(gofast_date_format($p->fecha, 'Y-m-d H:i')) ?>"
                                         data-origen="<?= esc_attr($origen_barrio) ?>"
                                         data-total="<?= number_format($p->total, 0, ',', '.') ?>"
                                         style="flex: 1; padding: 10px; background: var(--gofast-yellow); color: #000; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">

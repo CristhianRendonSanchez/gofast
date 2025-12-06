@@ -234,7 +234,7 @@ function gofast_mensajero_cotizar_shortcode() {
                 'tracking_estado' => 'asignado',
                 'mensajero_id' => $mensajero->id,
                 'user_id' => $user_id_servicio, // Cliente propietario del negocio o mensajero/admin
-                'fecha' => current_time('mysql'),
+                'fecha' => gofast_current_time('mysql'),
             ];
             
             // Si existe el campo, guardar quién asignó (el mensajero se auto-asignó)

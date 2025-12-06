@@ -63,28 +63,32 @@ function gofast_home_shortcode() {
     /* ==========================================================
        Estadísticas para mensajero y admin
     ========================================================== */
-    $fecha_hoy = current_time('Y-m-d');
+    $fecha_hoy = gofast_current_time('Y-m-d');
     $top_mensajeros = [];
     $stats_admin = [];
 
     // Top 5 mensajeros del día (basado en ingresos totales)
+    // Usar subconsultas para evitar duplicación por JOIN entre servicios y compras
     if ($rol === 'mensajero' || $rol === 'admin') {
         $sql_top_mensajeros = $wpdb->prepare(
             "SELECT 
                 u.id,
                 u.nombre,
-                COALESCE(SUM(CASE 
-                    WHEN s.tracking_estado != 'cancelado' THEN s.total 
-                    ELSE 0 
-                END), 0) + COALESCE(SUM(CASE 
-                    WHEN c.estado != 'cancelada' THEN c.valor 
-                    ELSE 0 
-                END), 0) as ingresos_totales
+                COALESCE((
+                    SELECT SUM(s.total)
+                    FROM servicios_gofast s
+                    WHERE s.mensajero_id = u.id 
+                    AND DATE(s.fecha) = %s
+                    AND s.tracking_estado != 'cancelado'
+                ), 0) + COALESCE((
+                    SELECT SUM(c.valor)
+                    FROM compras_gofast c
+                    WHERE c.mensajero_id = u.id 
+                    AND DATE(c.fecha_creacion) = %s
+                    AND c.estado != 'cancelada'
+                ), 0) as ingresos_totales
             FROM usuarios_gofast u
-            LEFT JOIN servicios_gofast s ON s.mensajero_id = u.id AND DATE(s.fecha) = %s
-            LEFT JOIN compras_gofast c ON c.mensajero_id = u.id AND DATE(c.fecha_creacion) = %s
             WHERE u.rol = 'mensajero' AND u.activo = 1
-            GROUP BY u.id, u.nombre
             HAVING ingresos_totales > 0
             ORDER BY ingresos_totales DESC
             LIMIT 5",

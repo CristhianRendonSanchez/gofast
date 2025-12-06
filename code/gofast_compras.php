@@ -315,9 +315,9 @@ function gofast_compras_shortcode() {
             // Admin: mostrar pendientes por defecto
             $estado_filtro = 'pendiente';
         } else {
-            // Mensajero: mostrar día actual por defecto
-            $fecha_desde = date('Y-m-d');
-            $fecha_hasta = date('Y-m-d');
+            // Mensajero: mostrar día actual por defecto (zona horaria Colombia)
+            $fecha_desde = gofast_date_today();
+            $fecha_hasta = gofast_date_today();
         }
     }
 
@@ -723,7 +723,7 @@ function gofast_compras_shortcode() {
                         <?php foreach ($compras as $c): ?>
                             <tr>
                                 <td>#<?= esc_html($c->id) ?></td>
-                                <td><?= date('d/m/Y H:i', strtotime($c->fecha_creacion)) ?></td>
+                                <td><?= gofast_date_format($c->fecha_creacion, 'd/m/Y H:i') ?></td>
                                 <?php if ($rol === 'admin'): ?>
                                     <td>
                                         <?= esc_html($c->mensajero_nombre) ?><br>
@@ -800,7 +800,7 @@ function gofast_compras_shortcode() {
                                                 data-compra-barrio-id="<?= esc_attr($c->barrio_id) ?>"
                                                 data-compra-barrio-nombre="<?= esc_attr($c->barrio_nombre ?? 'N/A') ?>"
                                                 data-compra-mensajero="<?= esc_attr($c->mensajero_nombre) ?>"
-                                                data-compra-fecha="<?= esc_attr(date('d/m/Y H:i', strtotime($c->fecha_creacion))) ?>"
+                                                data-compra-fecha="<?= esc_attr(gofast_date_format($c->fecha_creacion, 'd/m/Y H:i')) ?>"
                                                 data-compra-estado="<?= esc_attr($c->estado) ?>">
                                             ✏️ Editar
                                         </button>
@@ -855,7 +855,7 @@ function gofast_compras_shortcode() {
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                             <div>
                                 <div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: #<?= esc_html($c->id) ?></div>
-                                <div style="font-size: 11px; color: #999;"><?= date('d/m/Y H:i', strtotime($c->fecha_creacion)) ?></div>
+                                <div style="font-size: 11px; color: #999;"><?= gofast_date_format($c->fecha_creacion, 'd/m/Y H:i') ?></div>
                             </div>
                             <span class="gofast-badge-estado <?= $estado_class ?>" style="font-size: 12px; padding: 4px 10px;">
                                 <?= $estado_text ?>
@@ -935,7 +935,7 @@ function gofast_compras_shortcode() {
                                         data-compra-barrio-id="<?= esc_attr($c->barrio_id) ?>"
                                         data-compra-barrio-nombre="<?= esc_attr($c->barrio_nombre ?? 'N/A') ?>"
                                         data-compra-mensajero="<?= esc_attr($c->mensajero_nombre) ?>"
-                                        data-compra-fecha="<?= esc_attr(date('d/m/Y H:i', strtotime($c->fecha_creacion))) ?>"
+                                        data-compra-fecha="<?= esc_attr(gofast_date_format($c->fecha_creacion, 'd/m/Y H:i')) ?>"
                                         data-compra-estado="<?= esc_attr($c->estado) ?>"
                                         style="flex: 1; padding: 10px; background: var(--gofast-yellow); color: #000; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">
                                     ✏️ Editar

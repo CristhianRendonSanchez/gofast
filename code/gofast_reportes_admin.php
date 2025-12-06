@@ -51,8 +51,8 @@ function gofast_reportes_admin_shortcode() {
 
     // Si no hay fechas, usar día actual por defecto (fecha Colombia)
     if (!$desde && !$hasta) {
-        $desde = current_time('Y-m-d');
-        $hasta = current_time('Y-m-d');
+        $desde = gofast_current_time('Y-m-d');
+        $hasta = gofast_current_time('Y-m-d');
     }
 
     $where = "1=1";
@@ -304,7 +304,7 @@ function gofast_reportes_admin_shortcode() {
     /* ==========================================================
        6. Pedidos del Día Actual
     ========================================================== */
-    $fecha_hoy = current_time('Y-m-d');
+    $fecha_hoy = gofast_current_time('Y-m-d');
     $where_pedidos_hoy = "1=1";
     $params_pedidos_hoy = [];
     
@@ -397,9 +397,12 @@ function gofast_reportes_admin_shortcode() {
         );
     }
 
-    // Pedidos por día (últimos 30 días) - respeta filtros aplicados
-    $fecha_desde_30dias = date('Y-m-d', strtotime('-30 days'));
-    $fecha_hasta_hoy = current_time('Y-m-d');
+    // Pedidos por día (últimos 30 días) - respeta filtros aplicados (zona horaria Colombia)
+    $timezone = new DateTimeZone('America/Bogota');
+    $datetime = new DateTime('now', $timezone);
+    $datetime->modify('-30 days');
+    $fecha_desde_30dias = $datetime->format('Y-m-d');
+    $fecha_hasta_hoy = gofast_current_time('Y-m-d');
     
     // Construir WHERE para pedidos por día respetando filtros
     $where_pedidos_dia = "1=1";
@@ -531,7 +534,7 @@ function gofast_reportes_admin_shortcode() {
     ========================================================== */
     if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="reporte_pedidos_' . date('Y-m-d') . '.csv"');
+        header('Content-Disposition: attachment; filename="reporte_pedidos_' . gofast_date_today() . '.csv"');
         
         $output = fopen('php://output', 'w');
         
@@ -722,7 +725,7 @@ function gofast_reportes_admin_shortcode() {
     <?php if (!empty($pedidos_hoy) || $total_pedidos_hoy > 0): ?>
         <div class="gofast-box" style="margin-bottom:20px;">
             <h3 style="margin-top:0;">
-                📅 Pedidos del Día Actual (<?= date_i18n('d/m/Y', strtotime($fecha_hoy)); ?>)
+                📅 Pedidos del Día Actual (<?= gofast_date_format($fecha_hoy, 'd/m/Y'); ?>)
                 <?php if ($total_pedidos_hoy > $limite_pedidos_hoy): ?>
                     <span style="font-size:14px;color:#ff9800;font-weight:normal;">
                         (Mostrando <?= number_format($limite_pedidos_hoy); ?> de <?= number_format($total_pedidos_hoy); ?>)
@@ -777,7 +780,7 @@ function gofast_reportes_admin_shortcode() {
                         ?>
                             <tr>
                                 <td>#<?= (int) $pedido->id; ?></td>
-                                <td><?= esc_html( date_i18n('H:i', strtotime($pedido->fecha)) ); ?></td>
+                                <td><?= esc_html( gofast_date_format($pedido->fecha, 'H:i') ); ?></td>
                                 <td><?= esc_html($pedido->direccion_origen); ?></td>
                                 <td><?= esc_html($destino_texto ?: 'N/A'); ?></td>
                                 <?php if ($es_admin): ?>
@@ -792,7 +795,7 @@ function gofast_reportes_admin_shortcode() {
         </div>
     <?php else: ?>
         <div class="gofast-box" style="margin-bottom:20px;">
-            <h3 style="margin-top:0;">📅 Pedidos del Día Actual (<?= date_i18n('d/m/Y', strtotime($fecha_hoy)); ?>)</h3>
+            <h3 style="margin-top:0;">📅 Pedidos del Día Actual (<?= gofast_date_format($fecha_hoy, 'd/m/Y'); ?>)</h3>
             <p>No hay pedidos registrados para el día de hoy.</p>
         </div>
     <?php endif; ?>
@@ -854,7 +857,7 @@ function gofast_reportes_admin_shortcode() {
                     <tbody>
                         <?php foreach ($pedidos_por_dia as $dia): ?>
                             <tr>
-                                <td><?= esc_html( date_i18n('d/m/Y', strtotime($dia['dia'])) ); ?></td>
+                                <td><?= esc_html( gofast_date_format($dia['dia'], 'd/m/Y') ); ?></td>
                                 <td><?= number_format($dia['cantidad_destinos']); ?></td>
                                 <td><?= number_format($dia['cantidad_compras']); ?></td>
                                 <td>$<?= number_format($dia['ingresos'], 0, ',', '.'); ?></td>

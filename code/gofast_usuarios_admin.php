@@ -120,7 +120,7 @@ function gofast_usuarios_admin_shortcode() {
                                 'password_hash'  => $hash,
                                 'rol'            => $rol,
                                 'activo'         => $activo,
-                                'fecha_registro' => current_time('mysql')
+                                'fecha_registro' => gofast_current_time('mysql')
                             ];
                             
                             // Verificar si el campo remember_token existe (igual que auth)
@@ -558,7 +558,7 @@ function gofast_usuarios_admin_shortcode() {
                                         <span class="gofast-switch-label">Activo</span>
                                     </label>
                                 </td>
-                                <td><?= esc_html( date_i18n('Y-m-d', strtotime($u->fecha_registro)) ); ?></td>
+                                <td><?= esc_html( gofast_date_format($u->fecha_registro, 'Y-m-d') ); ?></td>
                                 <td>
                                     <div style="display:flex;flex-direction:column;gap:4px;">
                                         <input type="password"

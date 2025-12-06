@@ -70,7 +70,7 @@ add_action('template_redirect', function() {
                     "sector_id"     => $sector_id,
                     "direccion_full"=> $direccion,
                     "whatsapp"      => $whatsapp,
-                    "updated_at"    => current_time('mysql')
+                    "updated_at"    => gofast_current_time('mysql')
                 ],
                 ["id" => $editing_id, "user_id" => $user_id]
             );
@@ -87,7 +87,7 @@ add_action('template_redirect', function() {
                     "direccion_full"=> $direccion,
                     "whatsapp"      => $whatsapp,
                     "activo"        => 1,
-                    "created_at"    => current_time('mysql')
+                    "created_at"    => gofast_current_time('mysql')
                 ]
             );
         }
