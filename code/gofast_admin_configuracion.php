@@ -248,40 +248,51 @@ function gofast_admin_configuracion_shortcode() {
     // 1. AGREGAR SECTOR
     if (isset($_POST['gofast_agregar_sector']) && wp_verify_nonce($_POST['gofast_sector_nonce'], 'gofast_agregar_sector')) {
         $nombre = sanitize_text_field($_POST['nombre'] ?? '');
+        $sector_id = isset($_POST['sector_id']) ? (int) $_POST['sector_id'] : 0;
 
         if (empty($nombre)) {
             $mensaje = 'El nombre del sector es obligatorio.';
             $mensaje_tipo = 'error';
+        } elseif ($sector_id <= 0) {
+            $mensaje = 'El ID del sector debe ser mayor a cero.';
+            $mensaje_tipo = 'error';
         } else {
-            // Verificar si ya existe
-            $existe = $wpdb->get_var($wpdb->prepare(
-                "SELECT id FROM sectores WHERE nombre = %s",
-                $nombre
+            // Verificar si ya existe un sector con ese ID
+            $existe_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM sectores WHERE id = %d",
+                $sector_id
             ));
 
-            if ($existe) {
-                $mensaje = 'Ya existe un sector con ese nombre.';
+            if ($existe_id) {
+                $mensaje = 'Ya existe un sector con ese ID.';
                 $mensaje_tipo = 'error';
             } else {
-                // Obtener el último ID
-                $ultimo_id = (int) $wpdb->get_var("SELECT MAX(id) FROM sectores");
-                $nuevo_id = $ultimo_id + 1;
+                // Verificar si ya existe un sector con ese nombre
+                $existe_nombre = $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM sectores WHERE nombre = %s",
+                    $nombre
+                ));
 
-                $insertado = $wpdb->insert(
-                    'sectores',
-                    [
-                        'id' => $nuevo_id,
-                        'nombre' => $nombre
-                    ],
-                    ['%d', '%s']
-                );
-
-                if ($insertado) {
-                    $mensaje = 'Sector agregado correctamente.';
-                    $mensaje_tipo = 'success';
-                } else {
-                    $mensaje = 'Error al agregar el sector.';
+                if ($existe_nombre) {
+                    $mensaje = 'Ya existe un sector con ese nombre.';
                     $mensaje_tipo = 'error';
+                } else {
+                    $insertado = $wpdb->insert(
+                        'sectores',
+                        [
+                            'id' => $sector_id,
+                            'nombre' => $nombre
+                        ],
+                        ['%d', '%s']
+                    );
+
+                    if ($insertado) {
+                        $mensaje = 'Sector agregado correctamente.';
+                        $mensaje_tipo = 'success';
+                    } else {
+                        $mensaje = 'Error al agregar el sector.';
+                        $mensaje_tipo = 'error';
+                    }
                 }
             }
         }
@@ -445,7 +456,7 @@ function gofast_admin_configuracion_shortcode() {
     // Obtener sectores para los formularios
     $sectores = $wpdb->get_results("SELECT id, nombre FROM sectores ORDER BY id ASC");
 
-    // Obtener tarifas con información de sectores
+    // Obtener tarifas con información de sectores (limitado para optimización)
     $tarifas = $wpdb->get_results(
         "SELECT t.*, 
                 so.nombre as origen_nombre,
@@ -453,15 +464,26 @@ function gofast_admin_configuracion_shortcode() {
          FROM tarifas t
          LEFT JOIN sectores so ON t.origen_sector_id = so.id
          LEFT JOIN sectores sd ON t.destino_sector_id = sd.id
-         ORDER BY t.origen_sector_id, t.destino_sector_id"
+         ORDER BY t.origen_sector_id, t.destino_sector_id
+         LIMIT 1000"
     );
+    
+    // Obtener sectores que ya tienen tarifas configuradas (como origen o destino)
+    // Solo para mostrar en el formulario de agregar tarifa
+    $sectores_con_tarifa_ids = $wpdb->get_col(
+        "SELECT DISTINCT origen_sector_id FROM tarifas
+         UNION
+         SELECT DISTINCT destino_sector_id FROM tarifas"
+    );
+    $sectores_con_tarifa = array_map('intval', $sectores_con_tarifa_ids);
 
-    // Obtener barrios con información de sectores
+    // Obtener barrios con información de sectores (limitado para optimización)
     $barrios = $wpdb->get_results(
         "SELECT b.*, s.nombre as sector_nombre
          FROM barrios b
          LEFT JOIN sectores s ON b.sector_id = s.id
-         ORDER BY b.nombre ASC"
+         ORDER BY b.nombre ASC
+         LIMIT 1000"
     );
 
     // Obtener destinos intermunicipales
@@ -529,21 +551,31 @@ function gofast_admin_configuracion_shortcode() {
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
                         <div>
                             <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Sector Origen:</label>
-                            <select name="origen_sector_id" class="gofast-select" required style="width: 100%; font-size: 14px;">
+                            <select name="origen_sector_id" id="agregar-tarifa-origen" class="gofast-select-search" required style="width: 100%; font-size: 14px;">
                                 <option value="">— Seleccionar —</option>
                                 <?php foreach ($sectores as $s): ?>
-                                    <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
+                                    <?php if (!in_array($s->id, $sectores_con_tarifa)): ?>
+                                        <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
+                                    <?php endif; ?>
                                 <?php endforeach; ?>
                             </select>
+                            <small style="display: block; color: #666; font-size: 11px; margin-top: 4px;">
+                                Solo sectores sin tarifa configurada
+                            </small>
                         </div>
                         <div>
                             <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Sector Destino:</label>
-                            <select name="destino_sector_id" class="gofast-select" required style="width: 100%; font-size: 14px;">
+                            <select name="destino_sector_id" id="agregar-tarifa-destino" class="gofast-select-search" required style="width: 100%; font-size: 14px;">
                                 <option value="">— Seleccionar —</option>
                                 <?php foreach ($sectores as $s): ?>
-                                    <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
+                                    <?php if (!in_array($s->id, $sectores_con_tarifa)): ?>
+                                        <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
+                                    <?php endif; ?>
                                 <?php endforeach; ?>
                             </select>
+                            <small style="display: block; color: #666; font-size: 11px; margin-top: 4px;">
+                                Solo sectores sin tarifa configurada
+                            </small>
                         </div>
                         <div>
                             <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Precio:</label>
@@ -561,31 +593,38 @@ function gofast_admin_configuracion_shortcode() {
 
             <!-- Filtros de búsqueda -->
             <div class="gofast-box" style="background: #f8f9fa; margin-bottom: 20px;">
-                <h4 style="margin-top: 0; margin-bottom: 12px;">🔍 Buscar Tarifas</h4>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0;">🔍 Buscar Tarifas</h4>
+                    <button type="button" 
+                            id="limpiar-filtros-tarifas" 
+                            class="gofast-btn-mini" 
+                            style="background: #6c757d; color: #fff; padding: 6px 12px; font-size: 12px;">
+                        🗑️ Limpiar Filtros
+                    </button>
+                </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
                     <div>
-                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Buscar por sector origen:</label>
-                        <select id="filtro-tarifa-origen" class="gofast-select" style="width: 100%; font-size: 14px;">
-                            <option value="">Todos los sectores origen</option>
-                            <?php foreach ($sectores as $s): ?>
-                                <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">ID Sector Origen:</label>
+                        <input type="number" 
+                               id="filtro-tarifa-origen" 
+                               placeholder="Ej: 12"
+                               min="1"
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                     </div>
                     <div>
-                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Buscar por sector destino:</label>
-                        <select id="filtro-tarifa-destino" class="gofast-select" style="width: 100%; font-size: 14px;">
-                            <option value="">Todos los sectores destino</option>
-                            <?php foreach ($sectores as $s): ?>
-                                <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">ID Sector Destino:</label>
+                        <input type="number" 
+                               id="filtro-tarifa-destino" 
+                               placeholder="Ej: 15"
+                               min="1"
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                     </div>
                     <div>
-                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Buscar por texto:</label>
-                        <input type="text" 
-                               id="filtro-tarifa-texto" 
-                               placeholder="Buscar en origen, destino o precio..."
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Buscar por precio (exacto):</label>
+                        <input type="number" 
+                               id="filtro-tarifa-precio" 
+                               placeholder="Ej: 3500"
+                               min="1"
                                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                     </div>
                 </div>
@@ -668,13 +707,13 @@ function gofast_admin_configuracion_shortcode() {
                                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                         </div>
                         <div>
-                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Sector:</label>
-                            <select name="sector_id" class="gofast-select" required style="width: 100%; font-size: 14px;">
-                                <option value="">— Seleccionar —</option>
-                                <?php foreach ($sectores as $s): ?>
-                                    <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">ID del Sector:</label>
+                            <input type="number" 
+                                   name="sector_id" 
+                                   required 
+                                   min="1"
+                                   placeholder="Ej: 12"
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                         </div>
                     </div>
                     <button type="submit" name="gofast_agregar_barrio" class="gofast-btn-mini">✅ Agregar Barrio</button>
@@ -683,11 +722,19 @@ function gofast_admin_configuracion_shortcode() {
 
             <!-- Filtros de búsqueda -->
             <div class="gofast-box" style="background: #f8f9fa; margin-bottom: 20px;">
-                <h4 style="margin-top: 0; margin-bottom: 12px;">🔍 Buscar Barrios</h4>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0;">🔍 Buscar Barrios</h4>
+                    <button type="button" 
+                            id="limpiar-filtros-barrios" 
+                            class="gofast-btn-mini" 
+                            style="background: #6c757d; color: #fff; padding: 6px 12px; font-size: 12px;">
+                        🗑️ Limpiar Filtros
+                    </button>
+                </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
                     <div>
                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Buscar por sector:</label>
-                        <select id="filtro-barrio-sector" class="gofast-select" style="width: 100%; font-size: 14px;">
+                        <select id="filtro-barrio-sector" class="gofast-select-search" style="width: 100%; font-size: 14px;">
                             <option value="">Todos los sectores</option>
                             <?php foreach ($sectores as $s): ?>
                                 <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
@@ -695,7 +742,7 @@ function gofast_admin_configuracion_shortcode() {
                         </select>
                     </div>
                     <div>
-                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Buscar por nombre:</label>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Buscar por nombre (búsqueda parcial):</label>
                         <input type="text" 
                                id="filtro-barrio-texto" 
                                placeholder="Buscar por nombre de barrio..."
@@ -724,7 +771,7 @@ function gofast_admin_configuracion_shortcode() {
                             <?php foreach ($barrios as $b): ?>
                                 <tr data-sector-id="<?= esc_attr($b->sector_id) ?>"
                                     data-sector-nombre="<?= esc_attr(strtolower($b->sector_nombre ?? '')) ?>"
-                                    data-barrio-nombre="<?= esc_attr(strtolower($b->nombre)) ?>">
+                                    data-barrio-nombre="<?= esc_attr($b->nombre) ?>">
                                     <td>#<?= esc_html($b->id) ?></td>
                                     <td><strong><?= esc_html($b->nombre) ?></strong></td>
                                     <td><?= esc_html($b->sector_nombre ?? 'N/A') ?></td>
@@ -767,6 +814,15 @@ function gofast_admin_configuracion_shortcode() {
                 <form method="post">
                     <?php wp_nonce_field('gofast_agregar_sector', 'gofast_sector_nonce'); ?>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">ID del Sector:</label>
+                            <input type="number" 
+                                   name="sector_id" 
+                                   required 
+                                   min="1"
+                                   placeholder="Ej: 12"
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
                         <div>
                             <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Nombre del Sector:</label>
                             <input type="text" 
@@ -1151,27 +1207,66 @@ function mostrarTab(tab) {
     
     // Reinicializar Select2 en el nuevo tab
     setTimeout(function() {
-        if (window.jQuery && jQuery.fn.select2) {
-            jQuery('#tab-' + tab + ' .gofast-select').each(function() {
-                if (!jQuery(this).data('select2')) {
-                    jQuery(this).select2({
-                        placeholder: '🔍 Escribe para buscar...',
-                        width: '100%',
-                        dropdownParent: jQuery('body'),
-                        allowClear: true,
-                        minimumResultsForSearch: 0
-                    });
-                }
-            });
-        }
+        initSelect2Config();
     }, 100);
 }
 
 jQuery(document).ready(function($) {
+    // Normalizador para búsqueda (quita tildes)
+    const normalize = s => (s || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+    
+    // Matcher personalizado para Select2 (búsqueda exacta y parcial)
+    function matcherGofast(params, data) {
+        if (!data || !data.id) return null;
+        if (!data.text) return null;
+        
+        // Si no hay término de búsqueda, mostrar todas las opciones
+        if (!params.term || !params.term.trim()) {
+            return data;
+        }
+        
+        const term = normalize(params.term);
+        const text = normalize(data.text);
+        
+        // Búsqueda exacta primero
+        if (text === term) {
+            data.matchScore = 1000;
+            return data;
+        }
+        
+        // Búsqueda que empieza con el término
+        if (text.indexOf(term) === 0) {
+            data.matchScore = 500;
+            return data;
+        }
+        
+        // Búsqueda parcial (contiene el término)
+        if (text.indexOf(term) !== -1) {
+            data.matchScore = 100;
+            return data;
+        }
+        
+        return null;
+    }
+    
+    // Sorter para ordenar por relevancia
+    function sorterGofast(results) {
+        return results.sort(function(a, b) {
+            const scoreA = a.matchScore || 0;
+            const scoreB = b.matchScore || 0;
+            return scoreB - scoreA;
+        });
+    }
+    
     // Inicializar Select2 en todos los dropdowns
     function initSelect2Config() {
         if (window.jQuery && jQuery.fn.select2) {
-            $('.gofast-select').each(function() {
+            // Inicializar campos con clase gofast-select-search (con matcher personalizado)
+            $('.gofast-select-search').each(function() {
                 if ($(this).data('select2')) {
                     return; // Ya está inicializado
                 }
@@ -1181,7 +1276,32 @@ jQuery(document).ready(function($) {
                     width: '100%',
                     dropdownParent: $('body'),
                     allowClear: true,
-                    minimumResultsForSearch: 0, // Siempre mostrar campo de búsqueda
+                    minimumResultsForSearch: 0,
+                    matcher: matcherGofast,
+                    sorter: sorterGofast,
+                    language: {
+                        noResults: function() {
+                            return 'No se encontraron resultados';
+                        },
+                        searching: function() {
+                            return 'Buscando...';
+                        }
+                    }
+                });
+            });
+            
+            // Inicializar campos con clase gofast-select (sin matcher personalizado)
+            $('.gofast-select').not('.gofast-select-search').each(function() {
+                if ($(this).data('select2')) {
+                    return; // Ya está inicializado
+                }
+                
+                $(this).select2({
+                    placeholder: '🔍 Escribe para buscar...',
+                    width: '100%',
+                    dropdownParent: $('body'),
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
                     language: {
                         noResults: function() {
                             return 'No se encontraron resultados';
@@ -1239,33 +1359,37 @@ jQuery(document).ready(function($) {
         }
     }
     
-    // Filtros para tarifas
-    $('#filtro-tarifa-origen, #filtro-tarifa-destino, #filtro-tarifa-texto').on('change input', function() {
+    // Función para filtrar tarifas
+    function filtrarTarifas() {
         const origenId = $('#filtro-tarifa-origen').val();
         const destinoId = $('#filtro-tarifa-destino').val();
-        const texto = $('#filtro-tarifa-texto').val().toLowerCase();
+        const precio = $('#filtro-tarifa-precio').val();
         
-        const filtros = {};
-        if (origenId) filtros['origen-id'] = origenId;
-        if (destinoId) filtros['destino-id'] = destinoId;
-        if (texto) {
-            // Buscar en todas las columnas de texto
-            $('#tabla-tarifas tbody tr').each(function() {
-                const $fila = $(this);
-                const origenNombre = $fila.attr('data-origen-nombre') || '';
-                const destinoNombre = $fila.attr('data-destino-nombre') || '';
-                const precio = $fila.attr('data-precio') || '';
-                const textoFila = origenNombre + ' ' + destinoNombre + ' ' + precio;
-                
-                if (textoFila.indexOf(texto) === -1) {
-                    $fila.hide();
-                } else {
-                    $fila.show();
-                }
-            });
-        } else {
-            filtrarTabla('tabla-tarifas', filtros);
-        }
+        $('#tabla-tarifas tbody tr').each(function() {
+            const $fila = $(this);
+            let mostrar = true;
+            
+            // Filtro por origen (exacto)
+            if (origenId && $fila.attr('data-origen-id') !== origenId) {
+                mostrar = false;
+            }
+            
+            // Filtro por destino (exacto)
+            if (destinoId && $fila.attr('data-destino-id') !== destinoId) {
+                mostrar = false;
+            }
+            
+            // Filtro por precio (exacto)
+            if (precio && $fila.attr('data-precio') !== precio) {
+                mostrar = false;
+            }
+            
+            if (mostrar) {
+                $fila.show();
+            } else {
+                $fila.hide();
+            }
+        });
         
         // Actualizar mensaje de sin resultados
         const visible = $('#tabla-tarifas tbody tr:visible').length;
@@ -1274,25 +1398,62 @@ jQuery(document).ready(function($) {
         } else {
             $('#mensaje-sin-resultados-tarifas').hide();
         }
+    }
+    
+    // Limpiar filtros de tarifas
+    $('#limpiar-filtros-tarifas').on('click', function() {
+        $('#filtro-tarifa-origen').val('');
+        $('#filtro-tarifa-destino').val('');
+        $('#filtro-tarifa-precio').val('');
+        $('#tabla-tarifas tbody tr').show();
+        $('#mensaje-sin-resultados-tarifas').hide();
     });
     
-    // Filtros para barrios
-    $('#filtro-barrio-sector, #filtro-barrio-texto').on('change input', function() {
+    // Filtros para tarifas (búsqueda exacta)
+    $('#filtro-tarifa-origen, #filtro-tarifa-destino, #filtro-tarifa-precio').on('input', filtrarTarifas);
+    
+    // Limpiar filtros de barrios
+    $('#limpiar-filtros-barrios').on('click', function() {
+        $('#filtro-barrio-sector').val('').trigger('change');
+        $('#filtro-barrio-texto').val('');
+        $('#tabla-barrios tbody tr').show();
+        $('#mensaje-sin-resultados-barrios').hide();
+    });
+    
+    // Función para normalizar texto (quitar tildes y convertir a minúsculas)
+    function normalizarTexto(texto) {
+        if (!texto) return '';
+        return texto
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+    }
+    
+    // Filtros para barrios (búsqueda con ILIKE en nombre, normalizando tildes)
+    function filtrarBarrios() {
         const sectorId = $('#filtro-barrio-sector').val();
-        const texto = $('#filtro-barrio-texto').val().toLowerCase();
+        const texto = $('#filtro-barrio-texto').val().trim();
+        
+        // Normalizar el texto de búsqueda
+        const textoNormalizado = normalizarTexto(texto);
         
         $('#tabla-barrios tbody tr').each(function() {
             const $fila = $(this);
             let mostrar = true;
             
+            // Filtro por sector (exacto)
             if (sectorId && $fila.attr('data-sector-id') !== sectorId) {
                 mostrar = false;
             }
             
-            if (texto) {
+            // Filtro por nombre (ILIKE - búsqueda parcial case-insensitive, sin tildes)
+            if (textoNormalizado) {
                 const barrioNombre = $fila.attr('data-barrio-nombre') || '';
-                const sectorNombre = $fila.attr('data-sector-nombre') || '';
-                if (barrioNombre.indexOf(texto) === -1 && sectorNombre.indexOf(texto) === -1) {
+                const barrioNombreNormalizado = normalizarTexto(barrioNombre);
+                
+                // Búsqueda parcial (como ILIKE '%texto%')
+                if (barrioNombreNormalizado.indexOf(textoNormalizado) === -1) {
                     mostrar = false;
                 }
             }
@@ -1310,7 +1471,10 @@ jQuery(document).ready(function($) {
         } else {
             $('#mensaje-sin-resultados-barrios').hide();
         }
-    });
+    }
+    
+    $('#filtro-barrio-sector').on('change', filtrarBarrios);
+    $('#filtro-barrio-texto').on('input', filtrarBarrios);
     
     // Filtros para sectores
     $('#filtro-sector-texto').on('input', function() {
@@ -1382,15 +1546,18 @@ jQuery(document).ready(function($) {
         // Inicializar Select2 en los dropdowns del modal
         setTimeout(function() {
             $('#editar-tarifa-origen, #editar-tarifa-destino').each(function() {
-                if (!$(this).data('select2')) {
-                    $(this).select2({
-                        placeholder: '🔍 Escribe para buscar...',
-                        width: '100%',
-                        dropdownParent: $('#modal-editar-tarifa'),
-                        allowClear: true,
-                        minimumResultsForSearch: 0
-                    });
+                if ($(this).data('select2')) {
+                    $(this).select2('destroy');
                 }
+                $(this).select2({
+                    placeholder: '🔍 Escribe para buscar...',
+                    width: '100%',
+                    dropdownParent: $('#modal-editar-tarifa'),
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    matcher: matcherGofast,
+                    sorter: sorterGofast
+                });
             });
             
             // Establecer valores después de inicializar
@@ -1408,15 +1575,18 @@ jQuery(document).ready(function($) {
         
         // Inicializar Select2 en el dropdown del modal
         setTimeout(function() {
-            if (!$('#editar-barrio-sector').data('select2')) {
-                $('#editar-barrio-sector').select2({
-                    placeholder: '🔍 Escribe para buscar...',
-                    width: '100%',
-                    dropdownParent: $('#modal-editar-barrio'),
-                    allowClear: true,
-                    minimumResultsForSearch: 0
-                });
+            if ($('#editar-barrio-sector').data('select2')) {
+                $('#editar-barrio-sector').select2('destroy');
             }
+            $('#editar-barrio-sector').select2({
+                placeholder: '🔍 Escribe para buscar...',
+                width: '100%',
+                dropdownParent: $('#modal-editar-barrio'),
+                allowClear: true,
+                minimumResultsForSearch: 0,
+                matcher: matcherGofast,
+                sorter: sorterGofast
+            });
             
             // Establecer valor después de inicializar
             $('#editar-barrio-sector').val(btn.attr('data-barrio-sector-id')).trigger('change');
