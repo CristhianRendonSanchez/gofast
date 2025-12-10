@@ -59,6 +59,7 @@ function gofast_home_shortcode() {
     $url_intermunicipal = esc_url( home_url('/cotizar-intermunicipal') );
     $url_admin_cotizar = esc_url( home_url('/admin-cotizar') );
     $url_admin_cotizar_intermunicipal = esc_url( home_url('/admin-cotizar-intermunicipal') );
+    $url_mensajero_cotizar_intermunicipal = esc_url( home_url('/mensajero-cotizar-intermunicipal') );
 
     /* ==========================================================
        Estadísticas para mensajero y admin
@@ -353,7 +354,7 @@ function gofast_home_shortcode() {
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo $url_intermunicipal; ?>" class="gofast-home-panel-link">
+                        <a href="<?php echo $url_mensajero_cotizar_intermunicipal; ?>" class="gofast-home-panel-link">
                             <span class="gofast-home-panel-icon">🌐</span>
                             <span class="gofast-home-panel-text">
                                 <strong>Envíos intermunicipales</strong>
