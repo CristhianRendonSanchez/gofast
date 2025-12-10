@@ -72,6 +72,7 @@ function gofast_admin_solicitar_intermunicipal_shortcode() {
     $usuario_telefono = isset($cotizacion['usuario_telefono']) ? $cotizacion['usuario_telefono'] : '';
     $destino = isset($cotizacion['destino']) ? $cotizacion['destino'] : '';
     $valor_envio = isset($cotizacion['valor']) ? intval($cotizacion['valor']) : 0;
+    $direccion_recogida = isset($cotizacion['direccion_recogida']) ? $cotizacion['direccion_recogida'] : '';
     
     // Verificar que el mensajero existe y está activo
     $mensajero_seleccionado = $wpdb->get_row($wpdb->prepare(
@@ -212,6 +213,7 @@ function gofast_admin_solicitar_intermunicipal_shortcode() {
                     'sector_id' => 0,
                     'direccion' => $direccion_destino,
                     'monto' => $valor_envio,
+                    'direccion_recogida' => $direccion_recogida,
                 ]],
                 'tipo_servicio' => 'intermunicipal', // Indicador especial
             ], JSON_UNESCAPED_UNICODE);
@@ -256,6 +258,7 @@ function gofast_admin_solicitar_intermunicipal_shortcode() {
                 'tracking_estado' => $tracking_estado_servicio,
                 'mensajero_id' => $mensajero_id_servicio,
                 'user_id' => $user_id_servicio,
+                'fecha' => gofast_date_mysql()
             ];
             
             // Si existe el campo, guardar quién asignó (el admin)
@@ -659,6 +662,7 @@ add_action('template_redirect', function() {
                 'tracking_estado' => $tracking_estado_servicio,
                 'mensajero_id' => $mensajero_id_servicio,
                 'user_id' => $user_id_servicio,
+                'fecha' => gofast_date_mysql()
             ];
             
             // Si existe el campo, guardar quién asignó (el admin)

@@ -93,9 +93,10 @@ function gofast_compras_shortcode() {
                         'barrio_id' => $barrio_id,
                         'estado' => 'pendiente',
                         'creado_por' => $user_id,
-                        'observaciones' => null
+                        'observaciones' => null,
+                        'fecha_creacion' => gofast_date_mysql()
                     ],
-                    ['%d', '%f', '%d', '%s', '%d', '%s']
+                    ['%d', '%f', '%d', '%s', '%d', '%s', '%s']
                 );
 
                     if ($insertado) {
@@ -148,9 +149,12 @@ function gofast_compras_shortcode() {
             } else {
                 $actualizado = $wpdb->update(
                     'compras_gofast',
-                    ['estado' => $nuevo_estado],
+                    [
+                        'estado' => $nuevo_estado,
+                        'fecha_actualizacion' => gofast_date_mysql()
+                    ],
                     ['id' => $compra_id],
-                    ['%s'],
+                    ['%s', '%s'],
                     ['%d']
                 );
 
@@ -195,10 +199,11 @@ function gofast_compras_shortcode() {
                     'compras_gofast',
                     [
                         'valor' => $nuevo_valor,
-                        'barrio_id' => $nuevo_barrio_id
+                        'barrio_id' => $nuevo_barrio_id,
+                        'fecha_actualizacion' => gofast_date_mysql()
                     ],
                     ['id' => $compra_id],
-                    ['%f', '%d'],
+                    ['%f', '%d', '%s'],
                     ['%d']
                 );
 
@@ -230,9 +235,12 @@ function gofast_compras_shortcode() {
         } else {
             $actualizado = $wpdb->update(
                 'compras_gofast',
-                ['valor' => $nuevo_valor],
+                [
+                    'valor' => $nuevo_valor,
+                    'fecha_actualizacion' => gofast_date_mysql()
+                ],
                 ['id' => $compra_id],
-                ['%f'],
+                ['%f', '%s'],
                 ['%d']
             );
 
@@ -259,9 +267,12 @@ function gofast_compras_shortcode() {
         } else {
             $actualizado = $wpdb->update(
                 'compras_gofast',
-                ['estado' => 'cancelada'],
+                [
+                    'estado' => 'cancelada',
+                    'fecha_actualizacion' => gofast_date_mysql()
+                ],
                 ['id' => $compra_id],
-                ['%s'],
+                ['%s', '%s'],
                 ['%d']
             );
 

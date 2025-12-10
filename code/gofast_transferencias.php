@@ -85,9 +85,10 @@ function gofast_transferencias_shortcode() {
                         'valor' => $valor,
                         'estado' => $estado,
                         'creado_por' => $user_id,
-                        'observaciones' => null
+                        'observaciones' => null,
+                        'fecha_creacion' => gofast_date_mysql()
                     ],
-                    ['%d', '%f', '%s', '%d', '%s']
+                    ['%d', '%f', '%s', '%d', '%s', '%s']
                 );
 
                 if ($insertado) {
@@ -109,9 +110,12 @@ function gofast_transferencias_shortcode() {
 
         $actualizado = $wpdb->update(
             'transferencias_gofast',
-            ['estado' => 'aprobada'],
+            [
+                'estado' => 'aprobada',
+                'fecha_actualizacion' => gofast_date_mysql()
+            ],
             ['id' => $transferencia_id],
-            ['%s'],
+            ['%s', '%s'],
             ['%d']
         );
 
@@ -133,10 +137,11 @@ function gofast_transferencias_shortcode() {
             'transferencias_gofast',
             [
                 'estado' => 'rechazada',
-                'observaciones' => $observaciones
+                'observaciones' => $observaciones,
+                'fecha_actualizacion' => gofast_date_mysql()
             ],
             ['id' => $transferencia_id],
-            ['%s', '%s'],
+            ['%s', '%s', '%s'],
             ['%d']
         );
 
@@ -145,6 +150,25 @@ function gofast_transferencias_shortcode() {
             $mensaje_tipo = 'success';
         } else {
             $mensaje = 'Error al rechazar la transferencia.';
+            $mensaje_tipo = 'error';
+        }
+    }
+
+    // 4. ELIMINAR TRANSFERENCIA (Solo Admin)
+    if (isset($_POST['gofast_eliminar_transferencia']) && wp_verify_nonce($_POST['gofast_eliminar_nonce'], 'gofast_eliminar_transferencia') && $rol === 'admin') {
+        $transferencia_id = (int) $_POST['transferencia_id'];
+
+        $eliminado = $wpdb->delete(
+            'transferencias_gofast',
+            ['id' => $transferencia_id],
+            ['%d']
+        );
+
+        if ($eliminado) {
+            $mensaje = 'Transferencia eliminada correctamente.';
+            $mensaje_tipo = 'success';
+        } else {
+            $mensaje = 'Error al eliminar la transferencia.';
             $mensaje_tipo = 'error';
         }
     }
@@ -527,26 +551,32 @@ function gofast_transferencias_shortcode() {
                                         </small>
                                     <?php endif; ?>
                                 </td>
-                                <?php if ($rol === 'admin' && $t->estado === 'pendiente'): ?>
+                                <?php if ($rol === 'admin'): ?>
                                     <td>
-                                        <form method="post" style="display: inline-block; margin-right: 5px;">
-                                            <?php wp_nonce_field('gofast_aprobar_transferencia', 'gofast_aprobar_nonce'); ?>
-                                            <input type="hidden" name="transferencia_id" value="<?= esc_attr($t->id) ?>">
-                                            <button type="submit" name="gofast_aprobar_transferencia" 
+                                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                            <form method="post" style="display: inline-block;">
+                                                <?php wp_nonce_field('gofast_aprobar_transferencia', 'gofast_aprobar_nonce'); ?>
+                                                <input type="hidden" name="transferencia_id" value="<?= esc_attr($t->id) ?>">
+                                                <button type="submit" name="gofast_aprobar_transferencia" 
+                                                        class="gofast-btn-mini" 
+                                                        style="background: #28a745; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                                    ✅ Aprobar
+                                                </button>
+                                            </form>
+                                            <button type="button" 
+                                                    onclick="mostrarModalRechazar(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>)"
                                                     class="gofast-btn-mini" 
-                                                    style="background: #28a745; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                                                ✅ Aprobar
+                                                    style="background: #dc3545; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                                ❌ Rechazar
                                             </button>
-                                        </form>
-                                        <button type="button" 
-                                                onclick="mostrarModalRechazar(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>)"
-                                                class="gofast-btn-mini" 
-                                                style="background: #dc3545; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                                            ❌ Rechazar
-                                        </button>
+                                            <button type="button" 
+                                                    onclick="mostrarModalEliminar(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>)"
+                                                    class="gofast-btn-mini" 
+                                                    style="background: #6c757d; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                                🗑️ Eliminar
+                                            </button>
+                                        </div>
                                     </td>
-                                <?php elseif ($rol === 'admin'): ?>
-                                    <td>—</td>
                                 <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
@@ -624,9 +654,9 @@ function gofast_transferencias_shortcode() {
                             </div>
                         <?php endif; ?>
 
-                        <?php if ($rol === 'admin' && $t->estado === 'pendiente'): ?>
-                            <div style="display: flex; gap: 8px; margin-top: 12px;">
-                                <form method="post" style="flex: 1;">
+                        <?php if ($rol === 'admin'): ?>
+                            <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+                                <form method="post" style="flex: 1; min-width: 100px;">
                                     <?php wp_nonce_field('gofast_aprobar_transferencia', 'gofast_aprobar_nonce'); ?>
                                     <input type="hidden" name="transferencia_id" value="<?= esc_attr($t->id) ?>">
                                     <button type="submit" name="gofast_aprobar_transferencia" 
@@ -636,8 +666,13 @@ function gofast_transferencias_shortcode() {
                                 </form>
                                 <button type="button" 
                                         onclick="mostrarModalRechazar(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>)"
-                                        style="flex: 1; background: #dc3545; color: #fff; border: 0; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                                        style="flex: 1; min-width: 100px; background: #dc3545; color: #fff; border: 0; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
                                     ❌ Rechazar
+                                </button>
+                                <button type="button" 
+                                        onclick="mostrarModalEliminar(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>)"
+                                        style="flex: 1; min-width: 100px; background: #6c757d; color: #fff; border: 0; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                                    🗑️ Eliminar
                                 </button>
                             </div>
                         <?php endif; ?>
@@ -695,6 +730,50 @@ function gofast_transferencias_shortcode() {
         </div>
     </div>
 
+    <!-- Modal para eliminar transferencia (Solo Admin) -->
+    <div id="modal-eliminar-transferencia" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10001; overflow-y: auto; padding: 20px;">
+        <div style="max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 20px;">🗑️ Eliminar Transferencia</h2>
+            
+            <!-- Información de la transferencia -->
+            <div id="transferencia-info-eliminar" style="background: #f8f9fa; border-left: 4px solid #6c757d; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;">
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: start;">
+                    <strong style="color: #666;">Mensajero:</strong>
+                    <span id="modal-mensajero-nombre-eliminar" style="font-weight: 600; color: #000;"></span>
+                    
+                    <strong style="color: #666;">Valor:</strong>
+                    <span id="modal-transferencia-valor-eliminar" style="font-weight: 600; color: #000;"></span>
+                </div>
+            </div>
+            
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+                <strong style="color: #856404;">⚠️ Advertencia:</strong>
+                <p style="margin: 8px 0 0 0; color: #856404; font-size: 13px;">
+                    Esta acción no se puede deshacer. La transferencia será eliminada permanentemente de la base de datos.
+                </p>
+            </div>
+            
+            <form method="post" id="form-eliminar-transferencia" action="">
+                <?php wp_nonce_field('gofast_eliminar_transferencia', 'gofast_eliminar_nonce'); ?>
+                <input type="hidden" name="transferencia_id" id="modal-transferencia-id-eliminar">
+                
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
+                    <button type="button" 
+                            onclick="cerrarModalEliminar()" 
+                            class="gofast-btn-mini gofast-btn-outline">
+                        Cancelar
+                    </button>
+                    <button type="submit" 
+                            name="gofast_eliminar_transferencia" 
+                            class="gofast-btn-mini" 
+                            style="background: #6c757d; color: #fff;">
+                        🗑️ Eliminar Permanentemente
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
     function mostrarModalRechazar(id, mensajero, valor) {
         document.getElementById('modal-transferencia-id').value = id;
@@ -708,10 +787,29 @@ function gofast_transferencias_shortcode() {
         document.getElementById('form-rechazar-transferencia').reset();
     }
     
-    // Cerrar al hacer clic fuera del modal
+    function mostrarModalEliminar(id, mensajero, valor) {
+        document.getElementById('modal-transferencia-id-eliminar').value = id;
+        document.getElementById('modal-mensajero-nombre-eliminar').textContent = mensajero;
+        document.getElementById('modal-transferencia-valor-eliminar').textContent = '$' + new Intl.NumberFormat('es-CO').format(valor);
+        document.getElementById('modal-eliminar-transferencia').style.display = 'block';
+    }
+    
+    function cerrarModalEliminar() {
+        document.getElementById('modal-eliminar-transferencia').style.display = 'none';
+        document.getElementById('form-eliminar-transferencia').reset();
+    }
+    
+    // Cerrar al hacer clic fuera del modal de rechazar
     document.getElementById('modal-rechazar-transferencia').addEventListener('click', function(e) {
         if (e.target === this) {
             cerrarModalRechazar();
+        }
+    });
+    
+    // Cerrar al hacer clic fuera del modal de eliminar
+    document.getElementById('modal-eliminar-transferencia').addEventListener('click', function(e) {
+        if (e.target === this) {
+            cerrarModalEliminar();
         }
     });
     </script>

@@ -374,34 +374,61 @@ function gofast_admin_cotizar_shortcode() {
                     <select name="origen" class="gofast-select" id="origen" required>
                         <option value="">Buscar barrio...</option>
                         <?php 
-                        // Agregar negocios al selector de origen
+                        // Combinar negocios y barrios en un solo array y ordenar alfabéticamente
+                        $opciones_origen = [];
+                        
+                        // Agregar negocios
                         if (!empty($todos_negocios)): 
                             foreach ($todos_negocios as $neg): 
                                 $barrio_nombre = $wpdb->get_var($wpdb->prepare(
                                     "SELECT nombre FROM barrios WHERE id = %d",
                                     $neg->barrio_id
                                 ));
-                                $isSelected = ((string)$old_data['origen'] === (string)$neg->barrio_id);
-                        ?>
-                            <option value="<?= esc_attr($neg->barrio_id) ?>" 
-                                    data-is-negocio="true"
-                                    data-negocio-id="<?= esc_attr($neg->id) ?>"
-                                    data-negocio-nombre="<?= esc_attr($neg->nombre) ?>"
-                                    data-negocio-direccion="<?= esc_attr($neg->direccion_full) ?>"
-                                    data-cliente-id="<?= esc_attr($neg->user_id) ?>"
-                                    data-cliente-nombre="<?= esc_attr($neg->cliente_nombre) ?>"
-                                    data-cliente-telefono="<?= esc_attr($neg->cliente_telefono) ?>"
-                                    <?= $isSelected ? 'selected' : '' ?>>
-                                🏪 <?= esc_html($neg->nombre) ?> — <?= esc_html($barrio_nombre ?: 'Sin barrio') ?> (Cliente: <?= esc_html($neg->cliente_nombre) ?>)
-                            </option>
-                        <?php 
+                                $opciones_origen[] = [
+                                    'tipo' => 'negocio',
+                                    'valor' => $neg->barrio_id,
+                                    'texto' => '🏪 ' . $neg->nombre . ' — ' . ($barrio_nombre ?: 'Sin barrio'),
+                                    'data' => [
+                                        'is-negocio' => 'true',
+                                        'negocio-id' => $neg->id,
+                                        'negocio-nombre' => $neg->nombre,
+                                        'negocio-direccion' => $neg->direccion_full,
+                                        'cliente-id' => $neg->user_id,
+                                        'cliente-nombre' => $neg->cliente_nombre,
+                                        'cliente-telefono' => $neg->cliente_telefono,
+                                    ],
+                                    'selected' => ((string)$old_data['origen'] === (string)$neg->barrio_id)
+                                ];
                             endforeach;
-                        endif; 
+                        endif;
+                        
+                        // Agregar barrios
+                        foreach ($barrios as $b): 
+                            $opciones_origen[] = [
+                                'tipo' => 'barrio',
+                                'valor' => $b->id,
+                                'texto' => $b->nombre,
+                                'data' => [],
+                                'selected' => ((string)$old_data['origen'] === (string)$b->id)
+                            ];
+                        endforeach;
+                        
+                        // Ordenar alfabéticamente por texto (sin el emoji para comparar)
+                        usort($opciones_origen, function($a, $b) {
+                            $texto_a = preg_replace('/^🏪 /', '', $a['texto']);
+                            $texto_b = preg_replace('/^🏪 /', '', $b['texto']);
+                            return strcasecmp($texto_a, $texto_b);
+                        });
+                        
+                        // Mostrar opciones ordenadas
+                        foreach ($opciones_origen as $opcion): 
                         ?>
-                        <?php foreach ($barrios as $b): ?>
-                            <option value="<?= esc_attr($b->id) ?>"
-                                <?= ((string)$old_data['origen'] === (string)$b->id ? 'selected' : '') ?>>
-                                <?= esc_html($b->nombre) ?>
+                            <option value="<?= esc_attr($opcion['valor']) ?>"
+                                    <?php foreach ($opcion['data'] as $key => $value): ?>
+                                        data-<?= esc_attr($key) ?>="<?= esc_attr($value) ?>"
+                                    <?php endforeach; ?>
+                                    <?= $opcion['selected'] ? 'selected' : '' ?>>
+                                <?= esc_html($opcion['texto']) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>

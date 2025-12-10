@@ -387,6 +387,7 @@ function gofast_resultado_cotizacion() {
 			"tracking_estado"  => "pendiente",
 			"mensajero_id"     => null,
 			"user_id"          => $user_id_servicio,
+			"fecha"            => gofast_date_mysql()
 		]);
 
 		// ⚠️ Si falla el INSERT, mostramos el error en pantalla

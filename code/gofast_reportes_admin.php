@@ -45,6 +45,7 @@ function gofast_reportes_admin_shortcode() {
     $hasta = isset($_GET['hasta']) ? sanitize_text_field($_GET['hasta']) : '';
     $mensajero_id = isset($_GET['mensajero_id']) ? (int) $_GET['mensajero_id'] : 0;
     $buscar = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
+    $tipo_servicio = isset($_GET['tipo_servicio']) ? sanitize_text_field($_GET['tipo_servicio']) : 'todos';
 
     if ($desde && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) $desde = '';
     if ($hasta && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) $hasta = '';
@@ -88,6 +89,20 @@ function gofast_reportes_admin_shortcode() {
         $params[] = $like;
         $params[] = $like;
     }
+
+    // Filtro por tipo de servicio (normal o intermunicipal)
+    if ($tipo_servicio === 'intermunicipal') {
+        // Filtrar envíos intermunicipales: tienen "tipo_servicio": "intermunicipal" en JSON o "(Intermunicipal)" en direccion_origen
+        $where .= " AND (JSON_EXTRACT(destinos, '$.tipo_servicio') = %s OR direccion_origen LIKE %s)";
+        $params[] = '"intermunicipal"';
+        $params[] = '%(Intermunicipal)%';
+    } elseif ($tipo_servicio === 'normal') {
+        // Filtrar servicios normales: NO tienen tipo_servicio intermunicipal y NO tienen "(Intermunicipal)" en direccion_origen
+        $where .= " AND (JSON_EXTRACT(destinos, '$.tipo_servicio') IS NULL OR JSON_EXTRACT(destinos, '$.tipo_servicio') != %s) AND direccion_origen NOT LIKE %s";
+        $params[] = '"intermunicipal"';
+        $params[] = '%(Intermunicipal)%';
+    }
+    // Si es 'todos', no se aplica filtro
 
     /* ==========================================================
        2. Estadísticas de Servicios
@@ -160,6 +175,17 @@ function gofast_reportes_admin_shortcode() {
         $where_sin_asignar .= " AND (nombre_cliente LIKE %s OR telefono_cliente LIKE %s)";
         $params_sin_asignar[] = $like;
         $params_sin_asignar[] = $like;
+    }
+
+    // Aplicar filtro de tipo de servicio también a pedidos sin asignar
+    if ($tipo_servicio === 'intermunicipal') {
+        $where_sin_asignar .= " AND (JSON_EXTRACT(destinos, '$.tipo_servicio') = %s OR direccion_origen LIKE %s)";
+        $params_sin_asignar[] = '"intermunicipal"';
+        $params_sin_asignar[] = '%(Intermunicipal)%';
+    } elseif ($tipo_servicio === 'normal') {
+        $where_sin_asignar .= " AND (JSON_EXTRACT(destinos, '$.tipo_servicio') IS NULL OR JSON_EXTRACT(destinos, '$.tipo_servicio') != %s) AND direccion_origen NOT LIKE %s";
+        $params_sin_asignar[] = '"intermunicipal"';
+        $params_sin_asignar[] = '%(Intermunicipal)%';
     }
     
     // Condición principal: sin mensajero asignado
@@ -647,6 +673,15 @@ function gofast_reportes_admin_shortcode() {
                         </select>
                     </div>
                 <?php endif; ?>
+
+                <div>
+                    <label>Tipo de Servicio</label>
+                    <select name="tipo_servicio">
+                        <option value="todos"<?php selected($tipo_servicio, 'todos'); ?>>Todos</option>
+                        <option value="normal"<?php selected($tipo_servicio, 'normal'); ?>>Normal</option>
+                        <option value="intermunicipal"<?php selected($tipo_servicio, 'intermunicipal'); ?>>Intermunicipal</option>
+                    </select>
+                </div>
 
                 <div>
                     <label>Buscar</label>

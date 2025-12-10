@@ -104,6 +104,7 @@ function gofast_cotizar_intermunicipal_shortcode() {
     if (isset($_POST['gofast_cotizar_intermunicipal'])) {
         $destino_seleccionado = sanitize_text_field($_POST['destino_intermunicipal'] ?? '');
         $origen_seleccionado = sanitize_text_field($_POST['origen_intermunicipal'] ?? 'tulua');
+        $direccion_recogida = sanitize_text_field($_POST['direccion_recogida'] ?? '');
         $negocio_id_cotizador = isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0;
         
         if (empty($destino_seleccionado) || !isset($destinos_intermunicipales[$destino_seleccionado])) {
@@ -172,6 +173,7 @@ function gofast_cotizar_intermunicipal_shortcode() {
                 'usuario_telefono' => $usuario_telefono,
                 'destino' => $destino_seleccionado,
                 'valor' => $destinos_intermunicipales[$destino_seleccionado],
+                'direccion_recogida' => $direccion_recogida,
             ];
             
             // Guardar última selección de origen
@@ -241,7 +243,7 @@ function gofast_cotizar_intermunicipal_shortcode() {
                                         data-negocio-whatsapp="<?php echo esc_attr($neg->cliente_telefono); ?>"
                                         data-cliente-id="<?php echo esc_attr($neg->user_id); ?>"
                                         <?php echo $isSelected ? 'selected' : ''; ?>>
-                                    🏪 <?php echo esc_html($neg->nombre); ?> — <?php echo esc_html($barrio_nombre ?: 'Tuluá'); ?> (Cliente: <?php echo esc_html($neg->cliente_nombre); ?>)
+                                    🏪 <?php echo esc_html($neg->nombre); ?> — <?php echo esc_html($barrio_nombre ?: 'Tuluá'); ?>
                                 </option>
                             <?php 
                                     } else {
@@ -293,10 +295,23 @@ function gofast_cotizar_intermunicipal_shortcode() {
                         <?php foreach ($destinos_intermunicipales as $destino => $valor): ?>
                             <option value="<?php echo esc_attr($destino); ?>" 
                                     data-valor="<?php echo esc_attr($valor); ?>">
-                                <?php echo esc_html($destino); ?> — $<?php echo number_format($valor, 0, ',', '.'); ?>
+                                <?php echo esc_html($destino); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+            </div>
+
+            <!-- Dirección de Recogida -->
+            <div class="gofast-row">
+                <div style="flex: 1;">
+                    <label><strong>Dirección de Recogida</strong></label>
+                    <input type="text" name="direccion_recogida" class="gofast-box input" 
+                           placeholder="Ej: Calle 5 #10-20, Barrio Centro" 
+                           value="">
+                    <small style="color: #666; font-size: 13px; display: block; margin-top: 4px;">
+                        Especifica la dirección exacta donde se recogerá el pedido.
+                    </small>
                 </div>
             </div>
 

@@ -382,9 +382,10 @@ function gofast_admin_configuracion_shortcode() {
                         'nombre' => $nombre,
                         'valor' => $valor,
                         'activo' => $activo,
-                        'orden' => $orden
+                        'orden' => $orden,
+                        'created_at' => gofast_date_mysql()
                     ],
-                    ['%s', '%d', '%d', '%d']
+                    ['%s', '%d', '%d', '%d', '%s']
                 );
 
                 if ($insertado) {
