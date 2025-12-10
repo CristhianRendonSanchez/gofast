@@ -419,41 +419,41 @@
     z-index: 1 !important;
   }
   
-  /* Select2 dropdown - z-index moderado para no quedar por encima de todo */
+  /* Select2 dropdown - z-index por debajo del menú (menú: 999) */
   .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
     position: absolute !important;
   }
   
   .select2-container {
-    z-index: 999 !important;
+    z-index: 998 !important;
     position: relative;
   }
   
-  /* Cuando está abierto, z-index moderado */
+  /* Cuando está abierto, z-index por debajo del menú */
   .select2-container--open {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
   .select2-container--open .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
     position: absolute !important;
   }
   
-  /* Dropdown de barrio específicamente - z-index más bajo */
+  /* Dropdown de barrio específicamente - z-index por debajo del menú */
   select[name="barrio_id"] + .select2-container,
   select[name="barrio_id"] + .select2-container--open,
   select[name="barrio_id"] + .select2-container .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
-  /* Asegurar que el dropdown siempre esté por encima del campo tipo otro pero no de todo */
+  /* Asegurar que el dropdown siempre esté por encima del campo tipo otro pero no del menú */
   body .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
   body .select2-container--open .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
   /* Asegurar que el campo tipo otro siempre esté por debajo - incluso al hacer scroll */
@@ -476,12 +476,12 @@
     z-index: auto;
   }
   
-  /* Asegurar que el dropdown siempre esté por encima - reglas muy específicas */
+  /* Asegurar que el dropdown siempre esté por encima - reglas muy específicas (pero por debajo del menú) */
   body .select2-dropdown,
   html body .select2-dropdown,
   .gofast-box .select2-dropdown,
   .gofast-checkout-wrapper .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
     position: absolute !important;
   }
   
@@ -489,16 +489,16 @@
   html body .select2-container--open .select2-dropdown,
   .gofast-box .select2-container--open .select2-dropdown,
   .gofast-checkout-wrapper .select2-container--open .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
     position: absolute !important;
   }
   
-  /* Dropdown de barrio específicamente - z-index más bajo */
+  /* Dropdown de barrio específicamente - z-index por debajo del menú */
   select[name="barrio_id"] + .select2-container,
   select[name="barrio_id"] + .select2-container--open,
   select[name="barrio_id"] + .select2-container .select2-dropdown,
   body select[name="barrio_id"] + .select2-container .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
   .gofast-box {
@@ -1108,6 +1108,14 @@
   .gofast-home-advantages {
     margin: 48px 0;
   }
+  
+  .gofast-home-advantages h2 {
+    color: #fff;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
 
   .gofast-home-advantages-grid {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1117,15 +1125,16 @@
   .gofast-home-advantage-card {
     text-align: center;
     padding: 24px 20px;
-    background: linear-gradient(135deg, rgba(244, 197, 36, 0.05) 0%, rgba(244, 197, 36, 0.02) 100%);
-    border: 1px solid rgba(244, 197, 36, 0.2);
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(244, 197, 36, 0.4);
     transition: all 0.3s ease;
   }
 
   .gofast-home-advantage-card:hover {
-    background: linear-gradient(135deg, rgba(244, 197, 36, 0.1) 0%, rgba(244, 197, 36, 0.05) 100%);
+    background: rgba(255, 255, 255, 0.08);
     border-color: var(--gofast-yellow);
     transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(244, 197, 36, 0.2);
   }
 
   .gofast-home-advantage-icon {
@@ -1135,16 +1144,24 @@
   }
 
   .gofast-home-advantage-card h3 {
-    margin: 0 0 8px 0;
-    font-size: 18px;
-    color: var(--gofast-text-dark);
+    margin: 0 0 12px 0;
+    font-size: 22px;
+    color: #fff !important;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
   }
 
   .gofast-home-advantage-card p {
     margin: 0;
-    font-size: 13px;
-    color: #666;
-    line-height: 1.5;
+    font-size: 16px;
+    color: #fff !important;
+    line-height: 1.6;
+    font-weight: 500;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+  }
+  
+  .gofast-home-advantage-card h3 {
+    color: #fff !important;
   }
   
   .gofast-home-hero-panel h3 {
@@ -1178,6 +1195,23 @@
   
   .gofast-home-section h2 {
     margin: 0 0 12px;
+    color: #fff;
+  }
+  
+  /* Títulos dentro de cards blancas mantienen color oscuro */
+  .gofast-box h2,
+  .gofast-box .gofast-home-text {
+    color: var(--gofast-text-dark) !important;
+  }
+  
+  .gofast-box p:not(.gofast-home-text):not(.gofast-home-advantage-card p) {
+    color: #666;
+  }
+  
+  /* Excepción: cards de ventajas mantienen texto blanco */
+  .gofast-box.gofast-home-advantage-card h3,
+  .gofast-box.gofast-home-advantage-card p {
+    color: #fff !important;
   }
   
   .gofast-home-text {
@@ -1190,6 +1224,23 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 14px;
+  }
+  
+  /* Grid de servicios: 5 columnas en escritorio, responsive en móvil */
+  .gofast-home-services-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  
+  @media (max-width: 1200px) {
+    .gofast-home-services-grid {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .gofast-home-services-grid {
+      grid-template-columns: 1fr;
+    }
   }
   
   .gofast-home-clients .gofast-box {
@@ -1616,35 +1667,35 @@
       z-index: 1 !important;
     }
     
-    /* Select2 dropdown - z-index moderado para no quedar por encima de todo */
+    /* Select2 dropdown - z-index por debajo del menú (menú: 999) */
     .select2-dropdown {
-      z-index: 1000 !important;
+      z-index: 998 !important;
       position: absolute !important;
     }
     
     .select2-container--open {
-      z-index: 1000 !important;
+      z-index: 998 !important;
     }
     
     .select2-container--open .select2-dropdown {
-      z-index: 1000 !important;
+      z-index: 998 !important;
       position: absolute !important;
     }
     
-    /* Dropdown de barrio específicamente - z-index más bajo */
+    /* Dropdown de barrio específicamente - z-index por debajo del menú */
     select[name="barrio_id"] + .select2-container,
     select[name="barrio_id"] + .select2-container--open,
     select[name="barrio_id"] + .select2-container .select2-dropdown {
-      z-index: 1000 !important;
+      z-index: 998 !important;
     }
     
-    /* Asegurar que el dropdown siempre esté por encima del campo tipo otro pero no de todo */
+    /* Asegurar que el dropdown siempre esté por encima del campo tipo otro pero no del menú */
     body .select2-dropdown {
-      z-index: 1000 !important;
+      z-index: 998 !important;
     }
     
     body .select2-container--open .select2-dropdown {
-      z-index: 1000 !important;
+      z-index: 998 !important;
     }
     
     .gofast-negocios-table-wrapper {
@@ -1826,20 +1877,20 @@
     transform: none !important;
   }
   
-  /* Forzar que siempre use la clase --below y remover --above */
+  /* Forzar que siempre use la clase --below y remover --above (z-index por debajo del menú) */
   .select2-container.select2-container--open {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
   .select2-container.select2-container--open .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
-  /* Dropdown de barrio específicamente - z-index más bajo */
+  /* Dropdown de barrio específicamente - z-index por debajo del menú */
   select[name="barrio_id"] + .select2-container,
   select[name="barrio_id"] + .select2-container--open,
   select[name="barrio_id"] + .select2-container .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
   /* Convertir cualquier --above a --below visualmente */
@@ -1851,19 +1902,19 @@
   
   .select2-container,
   .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
   .select2-container--open,
   .select2-container--open .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
-  /* Dropdown de barrio específicamente - z-index más bajo */
+  /* Dropdown de barrio específicamente - z-index por debajo del menú */
   select[name="barrio_id"] + .select2-container,
   select[name="barrio_id"] + .select2-container--open,
   select[name="barrio_id"] + .select2-container .select2-dropdown {
-    z-index: 1000 !important;
+    z-index: 998 !important;
   }
   
   /* Asegurar que el dropdown nunca se posicione arriba - REGLAS MÁS ESPECÍFICAS */

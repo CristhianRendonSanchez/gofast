@@ -513,8 +513,8 @@ function initSelect2(container){
             const $container = jQuery(e.target).closest('.select2-container');
             const $dropdown = jQuery('.select2-dropdown');
             
-            // Aplicar z-index moderado para todos los dropdowns
-            const zIndex = 1000;
+            // Aplicar z-index por debajo del menú (menú: 999)
+            const zIndex = 998;
             
             if ($container.length) {
                 $container.css('z-index', zIndex);
@@ -743,12 +743,12 @@ document.addEventListener('DOMContentLoaded', function(){
         mutations.forEach(function(mutation) {
             if (mutation.attributeName === 'class') {
                 const currentZIndex = getSelect2ZIndex();
-                // Aplicar z-index moderado
-                const zIndex = document.body.classList.contains('gofast-menu-open') ? 9998 : 1000;
+                // Aplicar z-index por debajo del menú (menú: 999)
+                const zIndex = document.body.classList.contains('gofast-menu-open') ? 9998 : 998;
                 jQuery('.select2-container--open').each(function() {
                     const $select = jQuery(this).prev('select');
                     const isBarrioField = $select.length && $select.attr('name') === 'barrio_id';
-                    jQuery(this).css('z-index', isBarrioField ? 1000 : zIndex);
+                    jQuery(this).css('z-index', isBarrioField ? 998 : zIndex);
                 });
                 jQuery('.select2-dropdown').each(function() {
                     jQuery(this).css('z-index', zIndex);
@@ -762,11 +762,11 @@ document.addEventListener('DOMContentLoaded', function(){
     window.addEventListener('scroll', function() {
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(function() {
-            const zIndex = document.body.classList.contains('gofast-menu-open') ? 9998 : 1000;
+            const zIndex = document.body.classList.contains('gofast-menu-open') ? 9998 : 998;
             jQuery('.select2-container--open').each(function() {
                 const $select = jQuery(this).prev('select');
                 const isBarrioField = $select.length && $select.attr('name') === 'barrio_id';
-                jQuery(this).css('z-index', isBarrioField ? 1000 : zIndex);
+                jQuery(this).css('z-index', isBarrioField ? 998 : zIndex);
             });
             jQuery('.select2-dropdown').css('z-index', zIndex);
         }, 10);

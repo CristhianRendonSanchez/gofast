@@ -513,12 +513,12 @@ function gofast_home_shortcode() {
     </section>
 
     <!-- SECCIÓN: NUESTROS SERVICIOS -->
-    <section class="gofast-home-section">
+    <section class="gofast-home-section gofast-home-services">
         <h2>Nuestros servicios</h2>
         <p class="gofast-home-text">
             Soluciones de mensajería adaptadas a tus necesidades
         </p>
-        <div class="gofast-home-grid">
+        <div class="gofast-home-grid gofast-home-services-grid">
             <div class="gofast-box gofast-home-service-card">
                 <div class="gofast-home-service-icon">📦</div>
                 <h3>Mensajería urbana</h3>
@@ -541,6 +541,11 @@ function gofast_home_shortcode() {
                 <div class="gofast-home-service-icon">💵</div>
                 <h3>Pagos contraentrega</h3>
                 <p>Entregamos tu producto y recolectamos el dinero para llevarlo de forma segura a tu negocio.</p>
+            </div>
+            <div class="gofast-box gofast-home-service-card">
+                <div class="gofast-home-service-icon">🛒</div>
+                <h3>Compras</h3>
+                <p>Realizamos compras de productos en tiendas y supermercados. Tú pides, nosotros compramos y entregamos.</p>
             </div>
         </div>
     </section>

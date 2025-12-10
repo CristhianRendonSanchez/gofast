@@ -1,15 +1,14 @@
 <?php
 /*******************************************************
- * ⚙️ GOFAST — COTIZADOR ENVÍOS INTERMUNICIPALES PARA ADMIN
+ * ⚙️ GOFAST — COTIZACIÓN INTERMUNICIPAL PARA ADMINISTRADORES
  * Shortcode: [gofast_admin_cotizar_intermunicipal]
  * URL: /admin-cotizar-intermunicipal
  * 
- * Características:
- * - Origen desde Tuluá o negocios
- * - Destinos fijos con valores predefinidos
- * - Selector de mensajero
- * - Pago anticipado requerido
- * - Solo zona urbana
+ * Funcionalidad:
+ * - Paso 1: Seleccionar mensajero, origen y destino intermunicipal
+ * - Paso 2: Resumen editable con datos del cliente
+ * - Botones aceptar/rechazar
+ * - Al aceptar: crea servicio intermunicipal y lo asigna al mensajero seleccionado
  *******************************************************/
 
 function gofast_admin_cotizar_intermunicipal_shortcode() {
@@ -40,12 +39,32 @@ function gofast_admin_cotizar_intermunicipal_shortcode() {
         $rol = 'admin';
     }
 
+    // Obtener datos del admin
+    $admin = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, nombre, telefono, email FROM usuarios_gofast WHERE id = %d AND activo = 1",
+        $user_id
+    ));
+
+    if (!$admin) {
+        return "<div class='gofast-box'>Error: Usuario no encontrado.</div>";
+    }
+
     // Obtener todos los mensajeros activos
     $mensajeros = $wpdb->get_results(
         "SELECT id, nombre, telefono 
          FROM usuarios_gofast 
          WHERE rol = 'mensajero' AND activo = 1 
          ORDER BY nombre ASC"
+    );
+    
+    // Obtener TODOS los negocios registrados
+    $todos_negocios = $wpdb->get_results(
+        "SELECT n.id, n.nombre, n.direccion_full, n.barrio_id, n.whatsapp, n.user_id,
+                u.nombre as cliente_nombre, u.telefono as cliente_telefono
+         FROM negocios_gofast n
+         INNER JOIN usuarios_gofast u ON n.user_id = u.id
+         WHERE n.activo = 1 AND u.activo = 1
+         ORDER BY n.nombre ASC"
     );
 
     // Obtener destinos intermunicipales desde la base de datos
@@ -91,37 +110,43 @@ function gofast_admin_cotizar_intermunicipal_shortcode() {
         ];
     }
 
-    // Origen por defecto es Tuluá
-    $origen_fijo = 'Tuluá';
-    
-    // Obtener TODOS los negocios registrados
-    $todos_negocios = $wpdb->get_results(
-        "SELECT n.id, n.nombre, n.direccion_full, n.barrio_id, n.whatsapp, n.user_id,
-                u.nombre as cliente_nombre, u.telefono as cliente_telefono
-         FROM negocios_gofast n
-         INNER JOIN usuarios_gofast u ON n.user_id = u.id
-         WHERE n.activo = 1 AND u.activo = 1
-         ORDER BY n.nombre ASC"
-    );
-    
-    // Recuperar última selección de origen
-    $origen_seleccionado = isset($_SESSION['gofast_admin_intermunicipal_last_origen']) 
-        ? $_SESSION['gofast_admin_intermunicipal_last_origen'] 
-        : 'tulua';
-
-    // Si se envía el formulario, redirigir a la página de solicitud
-    if (isset($_POST['gofast_admin_cotizar_intermunicipal'])) {
-        $destino_seleccionado = sanitize_text_field($_POST['destino_intermunicipal'] ?? '');
-        $origen_seleccionado = sanitize_text_field($_POST['origen_intermunicipal'] ?? 'tulua');
-        $direccion_recogida = sanitize_text_field($_POST['direccion_recogida'] ?? '');
-        $mensajero_id = isset($_POST['mensajero_id']) ? intval($_POST['mensajero_id']) : 0;
-        $negocio_id_cotizador = isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0;
+    /*******************************************************
+     * PROCESAR ACEPTAR/RECHAZAR
+     * 
+     * Para administradores:
+     * - Rechazar: Limpia la sesión y vuelve al paso 1 (formulario de cotización)
+     * - Aceptar: Crea el servicio intermunicipal con los datos capturados
+     *   - Si es negocio: usa datos del negocio/cliente propietario
+     *   - Si es Tuluá: usa datos del cliente capturados en el resumen
+     *   - Asigna al mensajero seleccionado por el administrador
+     *   - NO redirige a servicio-registrado, muestra mensaje de éxito en la misma página
+     *******************************************************/
+    if (isset($_POST['gofast_admin_aceptar_intermunicipal']) || isset($_POST['gofast_admin_rechazar_intermunicipal'])) {
         
-        if (empty($destino_seleccionado) || !isset($destinos_intermunicipales[$destino_seleccionado])) {
-            $error = 'Debes seleccionar un destino válido.';
-        } elseif (empty($mensajero_id)) {
-            $error = 'Debes seleccionar un mensajero.';
-        } else {
+        if (isset($_POST['gofast_admin_rechazar_intermunicipal'])) {
+            // Rechazar: volver al paso 1
+            unset($_SESSION['gofast_admin_cotizacion_intermunicipal']);
+            // Continuar para mostrar el formulario (no redirigir)
+        } elseif (isset($_POST['gofast_admin_aceptar_intermunicipal'])) {
+            // Aceptar: crear servicio intermunicipal
+            if (empty($_POST['origen_intermunicipal']) || empty($_POST['destino_intermunicipal']) || empty($_POST['mensajero_id'])) {
+                return "<div class='gofast-box'>Error: Faltan datos del servicio (mensajero, origen o destino).</div>";
+            }
+
+            $mensajero_id = intval($_POST['mensajero_id']);
+            $origen_seleccionado = sanitize_text_field($_POST['origen_intermunicipal']);
+            $destino_seleccionado = sanitize_text_field($_POST['destino_intermunicipal']);
+            
+            // Capturar datos del cliente
+            $nombre_cliente = sanitize_text_field($_POST['nombre_cliente'] ?? '');
+            $telefono_cliente = sanitize_text_field($_POST['telefono_cliente'] ?? '');
+            $direccion_recogida = sanitize_text_field($_POST['direccion_recogida'] ?? '');
+            $direccion_destino = sanitize_text_field($_POST['direccion_destino'] ?? '');
+            
+            if (empty($nombre_cliente) || empty($telefono_cliente) || empty($direccion_destino)) {
+                return "<div class='gofast-box'>Error: Debes completar todos los datos del cliente (nombre, teléfono y dirección de destino).</div>";
+            }
+            
             // Verificar que el mensajero existe y está activo
             $mensajero_seleccionado = $wpdb->get_row($wpdb->prepare(
                 "SELECT id, nombre, telefono FROM usuarios_gofast WHERE id = %d AND rol = 'mensajero' AND activo = 1",
@@ -129,198 +154,250 @@ function gofast_admin_cotizar_intermunicipal_shortcode() {
             ));
             
             if (!$mensajero_seleccionado) {
-                $error = 'El mensajero seleccionado no es válido.';
-            } else {
-                // Determinar origen y datos del negocio
-                $origen_nombre = $origen_fijo;
-                $origen_direccion = $origen_fijo;
-                $negocio_seleccionado = null;
-                $negocio_user_id = null;
-                
-                if ($origen_seleccionado !== 'tulua') {
-                    // Extraer ID del negocio del formato "negocio_X"
-                    $negocio_id = 0;
-                    if (preg_match('/^negocio_(\d+)$/', $origen_seleccionado, $matches)) {
-                        $negocio_id = intval($matches[1]);
-                    } else {
-                        $negocio_id = intval($origen_seleccionado);
-                    }
-                    
-                    foreach ($todos_negocios as $neg) {
-                        if (intval($neg->id) === $negocio_id) {
-                            $negocio_seleccionado = $neg;
-                            $barrio_nombre = $wpdb->get_var($wpdb->prepare(
-                                "SELECT nombre FROM barrios WHERE id = %d",
-                                $neg->barrio_id
-                            ));
-                            $origen_nombre = $neg->nombre . ' — ' . ($barrio_nombre ?: 'Tuluá');
-                            $origen_direccion = $neg->direccion_full ?: $neg->nombre;
-                            $negocio_user_id = $neg->user_id;
-                            break;
-                        }
-                    }
+                return "<div class='gofast-box'>Error: El mensajero seleccionado no es válido.</div>";
+            }
+            
+            if (!isset($destinos_intermunicipales[$destino_seleccionado])) {
+                return "<div class='gofast-box'>Error: Destino no válido.</div>";
+            }
+
+            $valor_envio = $destinos_intermunicipales[$destino_seleccionado];
+            
+            // Determinar origen y datos del negocio
+            $origen_nombre = 'Tuluá';
+            $origen_direccion = 'Tuluá';
+            $negocio_seleccionado = null;
+            $negocio_user_id = null;
+            
+            if ($origen_seleccionado !== 'tulua') {
+                // Extraer ID del negocio del formato "negocio_X"
+                $negocio_id = 0;
+                if (preg_match('/^negocio_(\d+)$/', $origen_seleccionado, $matches)) {
+                    $negocio_id = intval($matches[1]);
+                } else {
+                    $negocio_id = intval($origen_seleccionado);
                 }
                 
-                // Obtener datos del admin para prellenar si es Tuluá
-                $usuario_nombre = '';
-                $usuario_telefono = '';
-                if ($origen_seleccionado === 'tulua' && $user_id > 0) {
-                    $usuario_data = $wpdb->get_row($wpdb->prepare(
-                        "SELECT nombre, telefono 
-                         FROM usuarios_gofast 
-                         WHERE id = %d AND activo = 1",
-                        $user_id
-                    ));
-                    if ($usuario_data) {
-                        $usuario_nombre = $usuario_data->nombre;
-                        $usuario_telefono = $usuario_data->telefono;
+                foreach ($todos_negocios as $neg) {
+                    if (intval($neg->id) === $negocio_id) {
+                        $negocio_seleccionado = $neg;
+                        $barrio_nombre = $wpdb->get_var($wpdb->prepare(
+                            "SELECT nombre FROM barrios WHERE id = %d",
+                            $neg->barrio_id
+                        ));
+                        $origen_nombre = $neg->nombre . ' — ' . ($barrio_nombre ?: 'Tuluá');
+                        $origen_direccion = $neg->direccion_full ?: $neg->nombre;
+                        $negocio_user_id = $neg->user_id;
+                        break;
                     }
                 }
-                
-                // Guardar en sesión
-                $_SESSION['gofast_admin_intermunicipal'] = [
-                    'mensajero_id' => $mensajero_id,
-                    'mensajero_nombre' => $mensajero_seleccionado->nombre,
-                    'origen' => $origen_nombre,
-                    'origen_direccion' => $origen_direccion,
-                    'origen_tipo' => ($origen_seleccionado === 'tulua') ? 'tulua' : 'negocio',
+            }
+
+            // Construir JSON de destinos (formato intermunicipal)
+            $destinos_json = json_encode([
+                'origen' => [
+                    'barrio_id' => ($negocio_seleccionado && isset($negocio_seleccionado->barrio_id)) ? intval($negocio_seleccionado->barrio_id) : 0,
+                    'barrio_nombre' => $origen_nombre,
+                    'sector_id' => 0,
+                    'direccion' => $origen_direccion,
                     'negocio_id' => $negocio_seleccionado ? $negocio_seleccionado->id : null,
-                    'negocio_user_id' => $negocio_user_id,
-                    'negocio_nombre' => $negocio_seleccionado ? $negocio_seleccionado->nombre : null,
-                    'negocio_whatsapp' => $negocio_seleccionado ? ($negocio_seleccionado->whatsapp ?? null) : null,
-                    'usuario_nombre' => $usuario_nombre,
-                    'usuario_telefono' => $usuario_telefono,
+                ],
+                'destinos' => [[
+                    'barrio_id' => 0,
+                    'barrio_nombre' => $destino_seleccionado,
+                    'sector_id' => 0,
+                    'direccion' => $direccion_destino,
+                    'monto' => $valor_envio,
+                    'direccion_recogida' => $direccion_recogida,
+                ]],
+                'tipo_servicio' => 'intermunicipal',
+            ], JSON_UNESCAPED_UNICODE);
+
+            // Incluir el destino en direccion_origen para que se muestre correctamente
+            $direccion_origen_servicio = ($negocio_seleccionado) 
+                ? $origen_nombre . ' — ' . $origen_direccion . ' → ' . $destino_seleccionado . ' (Intermunicipal)'
+                : $origen_nombre . ' → ' . $destino_seleccionado . ' (Intermunicipal)';
+            
+            // Si es negocio, usar datos del negocio; si es Tuluá, usar los datos capturados
+            if ($negocio_seleccionado) {
+                $nombre_cliente = $negocio_seleccionado->nombre;
+                $telefono_cliente = $negocio_seleccionado->whatsapp ?: $negocio_seleccionado->cliente_telefono;
+            }
+            
+            $user_id_servicio = $negocio_user_id ?: null; // Si es Tuluá, será null
+            
+            // Verificar si existe el campo asignado_por_user_id
+            $column_exists = $wpdb->get_results("SHOW COLUMNS FROM servicios_gofast LIKE 'asignado_por_user_id'");
+            
+            $data_insert = [
+                'nombre_cliente' => $nombre_cliente,
+                'telefono_cliente' => $telefono_cliente,
+                'direccion_origen' => $direccion_origen_servicio,
+                'destinos' => $destinos_json,
+                'total' => $valor_envio,
+                'estado' => 'asignado',
+                'tracking_estado' => 'asignado',
+                'mensajero_id' => $mensajero_id,
+                'user_id' => $user_id_servicio,
+                'fecha' => gofast_current_time('mysql'),
+            ];
+            
+            // Si existe el campo, guardar quién asignó (el admin)
+            if (!empty($column_exists)) {
+                $data_insert['asignado_por_user_id'] = $admin->id;
+            }
+            
+            // Crear servicio y asignarlo al mensajero seleccionado
+            $insertado = $wpdb->insert('servicios_gofast', $data_insert);
+
+            if ($insertado === false) {
+                return "<div class='gofast-box'><b>Error al crear el servicio:</b><br>" . esc_html($wpdb->last_error) . "</div>";
+            }
+
+            $service_id = (int) $wpdb->insert_id;
+            unset($_SESSION['gofast_admin_cotizacion_intermunicipal']);
+            
+            // Guardar mensaje de éxito en sesión
+            $_SESSION['gofast_admin_success_intermunicipal'] = [
+                'message' => '✅ Servicio intermunicipal creado exitosamente y asignado a ' . esc_html($mensajero_seleccionado->nombre),
+                'service_id' => $service_id,
+                'total' => $valor_envio
+            ];
+            
+            // Continuar para mostrar el formulario de nuevo (no redirigir)
+        }
+    }
+
+    /*******************************************************
+     * PASO 2: MOSTRAR RESUMEN EDITABLE
+     *******************************************************/
+    if (isset($_POST['gofast_admin_cotizar_intermunicipal']) || !empty($_SESSION['gofast_admin_cotizacion_intermunicipal'])) {
+        
+        // Guardar en sesión
+        if (isset($_POST['gofast_admin_cotizar_intermunicipal'])) {
+            $mensajero_id = intval($_POST['mensajero_id'] ?? 0);
+            $origen_seleccionado = sanitize_text_field($_POST['origen_intermunicipal'] ?? 'tulua');
+            $destino_seleccionado = sanitize_text_field($_POST['destino_intermunicipal'] ?? '');
+            
+            if ($mensajero_id > 0 && !empty($destino_seleccionado) && isset($destinos_intermunicipales[$destino_seleccionado])) {
+                $_SESSION['gofast_admin_cotizacion_intermunicipal'] = [
+                    'mensajero_id' => $mensajero_id,
+                    'origen' => $origen_seleccionado,
                     'destino' => $destino_seleccionado,
                     'valor' => $destinos_intermunicipales[$destino_seleccionado],
-                    'direccion_recogida' => $direccion_recogida,
                 ];
-                
-                // Guardar última selección de origen
-                $_SESSION['gofast_admin_intermunicipal_last_origen'] = $origen_seleccionado;
-                
-                // Redirigir a página de solicitud
-                $url_solicitar = esc_url(home_url('/admin-solicitar-intermunicipal'));
-                return '<script>window.location.href = "'.$url_solicitar.'";</script>';
             }
         }
+
+        $cotizacion = $_SESSION['gofast_admin_cotizacion_intermunicipal'] ?? null;
+        
+        if (!$cotizacion || empty($cotizacion['origen']) || empty($cotizacion['destino']) || empty($cotizacion['mensajero_id'])) {
+            // Volver al paso 1
+            unset($_SESSION['gofast_admin_cotizacion_intermunicipal']);
+        } else {
+            // Mostrar resumen editable
+            return gofast_admin_mostrar_resumen_intermunicipal($cotizacion);
+        }
+    }
+
+    /*******************************************************
+     * PASO 1: FORMULARIO DE COTIZACIÓN
+     *******************************************************/
+    
+    // Recuperar última cotización
+    $old_data = $_SESSION['gofast_admin_last_quote_intermunicipal'] ?? ['mensajero_id' => '', 'origen' => 'tulua', 'destino' => ''];
+
+    // Mostrar mensaje de éxito si existe
+    $success_message = '';
+    if (!empty($_SESSION['gofast_admin_success_intermunicipal'])) {
+        $success = $_SESSION['gofast_admin_success_intermunicipal'];
+        $success_message = "<div class='gofast-box' style='background:#d4edda;border-left:4px solid #28a745;padding:12px;margin-bottom:16px;'>";
+        $success_message .= "<strong>✅ " . esc_html($success['message']) . "</strong><br>";
+        $success_message .= "<small>ID del servicio: #" . esc_html($success['service_id']) . " | Total: $" . number_format($success['total'], 0, ',', '.') . "</small>";
+        $success_message .= "</div>";
+        unset($_SESSION['gofast_admin_success_intermunicipal']);
     }
 
     ob_start();
     ?>
+
     <div class="gofast-form">
+        <?php if (!empty($success_message)): ?>
+            <?= $success_message ?>
+        <?php endif; ?>
         
-        <!-- Mensaje informativo -->
-        <div class="gofast-box" style="background: #fff3cd; border-left: 5px solid var(--gofast-amber); padding: 16px; margin-bottom: 20px;">
-            <h3 style="margin-top: 0; color: #856404;">📋 Condiciones del Servicio Intermunicipal</h3>
-            <ul style="margin: 0; padding-left: 20px; color: #856404;">
-                <li>✅ El pedido debe estar <strong>pago con anticipación</strong> antes de solicitar el servicio.</li>
-                <li>✅ El valor del envío también debe ser <strong>cancelado antes</strong> de despachar al mensajero.</li>
-                <li>✅ Solo se aceptan envíos para <strong>zona urbana</strong>.</li>
-                <li>📍 Se anexa vía WhatsApp la <strong>ubicación en tiempo real</strong> del mensajero que recibe el pedido.</li>
-                <li>⚙️ La disponibilidad de este servicio está <strong>sujeta a la administración</strong>.</li>
-                <li>⚠️ En caso de <strong>devolución del pedido</strong> se cobrará un recargo adicional.</li>
-                <li>🚚 El envío es desde <strong>Tuluá</strong> o desde uno de los negocios registrados.</li>
-            </ul>
+        <div class="gofast-box" style="background:#e3f2fd;border-left:4px solid #2196F3;padding:12px;margin-bottom:16px;">
+            <strong>⚙️ Modo Administrador - Intermunicipal</strong><br>
+            <small>Crea servicios intermunicipales y asígnalos a cualquier mensajero. Si seleccionas un negocio, el servicio quedará en el historial del cliente propietario. Al aceptar, el servicio se creará y asignará al mensajero seleccionado.</small>
         </div>
 
-        <?php if (!empty($error)): ?>
-            <div class="gofast-box" style="background: #ffe5e5; border-left: 5px solid var(--gofast-danger); padding: 12px; margin-bottom: 16px;">
-                ⚠️ <?php echo esc_html($error); ?>
-            </div>
-        <?php endif; ?>
-
-        <form method="post" id="gofast-form-admin-intermunicipal">
-            
-            <!-- Mensajero -->
+        <form method="post" action="" id="gofast-admin-form-intermunicipal">
             <div class="gofast-row">
-                <div style="flex: 1;">
+                <div style="flex:1;">
                     <label><strong>Mensajero <span style="color: var(--gofast-danger);">*</span></strong></label>
                     <select name="mensajero_id" class="gofast-select" id="mensajero_id" required>
                         <option value="">Seleccionar mensajero...</option>
                         <?php foreach ($mensajeros as $m): ?>
-                            <option value="<?php echo esc_attr($m->id); ?>">
-                                🚚 <?php echo esc_html($m->nombre); ?> (<?php echo esc_html($m->telefono); ?>)
+                            <option value="<?= esc_attr($m->id) ?>"
+                                <?= ((string)$old_data['mensajero_id'] === (string)$m->id ? 'selected' : '') ?>>
+                                🚚 <?= esc_html($m->nombre) ?> (<?= esc_html($m->telefono) ?>)
                             </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
             </div>
 
-            <!-- Origen (Tuluá o negocios) -->
             <div class="gofast-row">
-                <div style="flex: 1;">
+                <div style="flex:1;">
                     <label><strong>Origen</strong></label>
-                    <?php if (!empty($todos_negocios) || $user_id > 0): ?>
-                        <select name="origen_intermunicipal" class="gofast-select" id="origen-intermunicipal" required>
-                            <option value="tulua" <?php echo ($origen_seleccionado === 'tulua') ? 'selected' : ''; ?>>
-                                🚚 Tuluá (Datos del cliente)
+                    <select name="origen_intermunicipal" class="gofast-select" id="origen-intermunicipal" required>
+                        <option value="tulua" <?= ($old_data['origen'] === 'tulua') ? 'selected' : '' ?>>
+                            🚚 Tuluá (Datos del cliente)
+                        </option>
+                        <?php 
+                        if (!empty($todos_negocios)): 
+                            foreach ($todos_negocios as $neg): 
+                                $barrio_nombre = $wpdb->get_var($wpdb->prepare(
+                                    "SELECT nombre FROM barrios WHERE id = %d",
+                                    $neg->barrio_id
+                                ));
+                                $negocio_value = 'negocio_' . $neg->id;
+                                $isSelected = ($old_data['origen'] === $negocio_value);
+                        ?>
+                            <option value="<?= esc_attr($negocio_value) ?>" 
+                                    data-negocio-id="<?= esc_attr($neg->id) ?>"
+                                    data-negocio-nombre="<?= esc_attr($neg->nombre) ?>"
+                                    data-negocio-direccion="<?= esc_attr($neg->direccion_full) ?>"
+                                    data-cliente-id="<?= esc_attr($neg->user_id) ?>"
+                                    <?= $isSelected ? 'selected' : '' ?>>
+                                🏪 <?= esc_html($neg->nombre) ?> — <?= esc_html($barrio_nombre ?: 'Tuluá') ?>
                             </option>
-                            <?php 
-                            if (!empty($todos_negocios)): 
-                                foreach ($todos_negocios as $neg): 
-                                    $barrio_nombre = $wpdb->get_var($wpdb->prepare(
-                                        "SELECT nombre FROM barrios WHERE id = %d",
-                                        $neg->barrio_id
-                                    ));
-                                    
-                                    $negocio_value = 'negocio_' . $neg->id;
-                                    $isSelected = ($origen_seleccionado === $negocio_value);
-                            ?>
-                                <option value="<?php echo esc_attr($negocio_value); ?>" 
-                                        data-negocio-id="<?php echo esc_attr($neg->id); ?>"
-                                        data-negocio-nombre="<?php echo esc_attr($neg->nombre); ?>"
-                                        data-negocio-direccion="<?php echo esc_attr($neg->direccion_full); ?>"
-                                        data-negocio-whatsapp="<?php echo esc_attr($neg->whatsapp); ?>"
-                                        data-cliente-id="<?php echo esc_attr($neg->user_id); ?>"
-                                        <?php echo $isSelected ? 'selected' : ''; ?>>
-                                    🏪 <?php echo esc_html($neg->nombre); ?> — <?php echo esc_html($barrio_nombre ?: 'Tuluá'); ?>
-                                </option>
-                            <?php 
-                                endforeach; 
-                            endif; 
-                            ?>
-                        </select>
-                        <small style="color: #666; font-size: 13px; display: block; margin-top: 4px;">
+                        <?php 
+                            endforeach;
+                        endif; 
+                        ?>
+                    </select>
+                    <?php if (!empty($todos_negocios)): ?>
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
                             Si seleccionas un negocio, el servicio quedará asociado al cliente propietario y aparecerá en su historial.
-                        </small>
-                    <?php else: ?>
-                        <input type="text" value="<?php echo esc_attr($origen_fijo); ?>" readonly 
-                               style="background: #f5f5f5; cursor: not-allowed;" 
-                               class="gofast-box input">
-                        <input type="hidden" name="origen_intermunicipal" value="tulua">
-                        <small style="color: #666; font-size: 13px; display: block; margin-top: 4px;">
-                            El envío siempre es desde Tuluá.
                         </small>
                     <?php endif; ?>
                 </div>
             </div>
 
-            <!-- Destino -->
             <div class="gofast-row">
-                <div style="flex: 1;">
-                    <label><strong>Destino</strong> <span style="color: var(--gofast-danger);">*</span></label>
+                <div style="flex:1;">
+                    <label><strong>Destino Intermunicipal</strong> <span style="color: var(--gofast-danger);">*</span></label>
                     <select name="destino_intermunicipal" class="gofast-select" id="destino-intermunicipal" required>
                         <option value="">Selecciona un destino...</option>
                         <?php foreach ($destinos_intermunicipales as $destino => $valor): ?>
-                            <option value="<?php echo esc_attr($destino); ?>" 
-                                    data-valor="<?php echo esc_attr($valor); ?>">
-                                <?php echo esc_html($destino); ?>
+                            <option value="<?= esc_attr($destino) ?>" 
+                                    data-valor="<?= esc_attr($valor) ?>"
+                                    <?= ($old_data['destino'] === $destino) ? 'selected' : '' ?>>
+                                <?= esc_html($destino) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
-                </div>
-            </div>
-
-            <!-- Dirección de Recogida -->
-            <div class="gofast-row">
-                <div style="flex: 1;">
-                    <label><strong>Dirección de Recogida</strong></label>
-                    <input type="text" name="direccion_recogida" class="gofast-box input" 
-                           placeholder="Ej: Calle 5 #10-20, Barrio Centro" 
-                           value="">
-                    <small style="color: #666; font-size: 13px; display: block; margin-top: 4px;">
-                        Especifica la dirección exacta donde se recogerá el pedido.
-                    </small>
                 </div>
             </div>
 
@@ -330,31 +407,27 @@ function gofast_admin_cotizar_intermunicipal_shortcode() {
                     <div style="font-size: 18px; font-weight: 700; color: #000;">
                         💰 Valor del envío: <span id="valor-envio">$0</span>
                     </div>
-                    <div style="font-size: 13px; color: #666; margin-top: 8px;">
-                        Recuerda que este valor debe ser cancelado antes de despachar al mensajero.
-                    </div>
                 </div>
             </div>
 
             <div class="gofast-btn-group" style="margin-top: 24px;">
                 <button type="submit" name="gofast_admin_cotizar_intermunicipal" class="gofast-submit">
-                    Cotizar Envío Intermunicipal 🚀
+                    Ver resumen 🚀
                 </button>
             </div>
-
         </form>
     </div>
 
     <script>
-    (function() {
-        // Proteger contra errores de toggleOtro
-        const tipoSelectExists = document.getElementById("tipo_negocio");
-        const wrapperOtroExists = document.getElementById("tipo_otro_wrapper");
-        
-        if (!tipoSelectExists || !wrapperOtroExists) {
-            window.toggleOtro = function() {
-                return;
-            };
+    document.addEventListener('DOMContentLoaded', function(){
+        if (window.jQuery && jQuery.fn.select2) {
+            jQuery('.gofast-select').select2({
+                placeholder: '🔍 Escribe para buscar...',
+                width: '100%',
+                dropdownParent: jQuery('body'),
+                allowClear: true,
+                minimumResultsForSearch: 0,
+            });
         }
 
         const selectDestino = document.getElementById('destino-intermunicipal');
@@ -374,8 +447,7 @@ function gofast_admin_cotizar_intermunicipal_shortcode() {
             });
         }
 
-        // Validación del formulario
-        const form = document.getElementById('gofast-form-admin-intermunicipal');
+        const form = document.getElementById('gofast-admin-form-intermunicipal');
         if (form) {
             form.addEventListener('submit', function(e) {
                 const mensajero = document.getElementById('mensajero_id').value;
@@ -392,11 +464,175 @@ function gofast_admin_cotizar_intermunicipal_shortcode() {
                 }
             });
         }
-    })();
+    });
     </script>
 
     <?php
     return ob_get_clean();
 }
-add_shortcode('gofast_admin_cotizar_intermunicipal', 'gofast_admin_cotizar_intermunicipal_shortcode');
 
+/*******************************************************
+ * FUNCIÓN: MOSTRAR RESUMEN EDITABLE CON DATOS DEL CLIENTE
+ * 
+ * Para administradores:
+ * - Muestra el resumen del servicio intermunicipal
+ * - Muestra el mensajero asignado
+ * - Permite capturar/editar datos del cliente (nombre, teléfono, direcciones)
+ * - Si es negocio: prellena con datos del negocio
+ * - Si es Tuluá: permite ingresar datos del cliente manualmente
+ * - Botones para aceptar (crear servicio y asignar al mensajero) o rechazar (volver)
+ *******************************************************/
+function gofast_admin_mostrar_resumen_intermunicipal($cotizacion) {
+    global $wpdb;
+
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $mensajero_id = $cotizacion['mensajero_id'] ?? 0;
+    $origen_seleccionado = $cotizacion['origen'] ?? 'tulua';
+    $destino_seleccionado = $cotizacion['destino'] ?? '';
+    $valor_envio = $cotizacion['valor'] ?? 0;
+
+    // Obtener datos del mensajero
+    $mensajero = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, nombre, telefono FROM usuarios_gofast WHERE id = %d AND rol = 'mensajero' AND activo = 1",
+        $mensajero_id
+    ));
+
+    if (!$mensajero) {
+        return "<div class='gofast-box'>Error: Mensajero no encontrado.</div>";
+    }
+
+    // Obtener todos los negocios para mostrar el origen
+    $todos_negocios = $wpdb->get_results(
+        "SELECT n.id, n.nombre, n.direccion_full, n.barrio_id, n.whatsapp, n.user_id,
+                u.nombre as cliente_nombre, u.telefono as cliente_telefono
+         FROM negocios_gofast n
+         INNER JOIN usuarios_gofast u ON n.user_id = u.id
+         WHERE n.activo = 1 AND u.activo = 1
+         ORDER BY n.nombre ASC"
+    );
+
+    // Determinar nombre del origen y dirección del negocio
+    $origen_nombre = 'Tuluá';
+    $origen_direccion = '';
+    $negocio_seleccionado = null;
+    $es_negocio = false;
+    
+    if ($origen_seleccionado !== 'tulua') {
+        $es_negocio = true;
+        $negocio_id = 0;
+        if (preg_match('/^negocio_(\d+)$/', $origen_seleccionado, $matches)) {
+            $negocio_id = intval($matches[1]);
+        }
+        
+        foreach ($todos_negocios as $neg) {
+            if (intval($neg->id) === $negocio_id) {
+                $negocio_seleccionado = $neg;
+                $barrio_nombre = $wpdb->get_var($wpdb->prepare(
+                    "SELECT nombre FROM barrios WHERE id = %d",
+                    $neg->barrio_id
+                ));
+                $origen_nombre = $neg->nombre . ' — ' . ($barrio_nombre ?: 'Tuluá');
+                $origen_direccion = $neg->direccion_full ?: '';
+                break;
+            }
+        }
+    }
+
+    ob_start();
+    ?>
+
+    <div class="gofast-checkout-wrapper">
+        <div class="gofast-box" style="max-width:800px;margin:0 auto;">
+            
+            <div style="background:#e3f2fd;border-left:4px solid #2196F3;padding:12px;margin-bottom:20px;border-radius:8px;">
+                <strong>⚙️ Resumen del Servicio Intermunicipal</strong><br>
+                <small>Mensajero asignado: <strong><?= esc_html($mensajero->nombre) ?></strong></small><br>
+                <small>Completa los datos del cliente antes de aceptar.</small>
+            </div>
+
+            <h3 style="margin-top:0;">📍 Origen: <?= esc_html($origen_nombre) ?></h3>
+            
+            <?php if (!empty($origen_direccion)): ?>
+                <div style="margin:12px 0;padding:12px;background:#e8f4ff;border-left:4px solid #2196F3;border-radius:8px;">
+                    <strong>🏢 Dirección del Negocio:</strong><br>
+                    <?= esc_html($origen_direccion) ?>
+                </div>
+            <?php endif; ?>
+            
+            <h3>🎯 Destino: <?= esc_html($destino_seleccionado) ?></h3>
+
+            <div class="gofast-total-box" style="margin:20px 0;text-align:center;">
+                💰 <strong style="font-size:24px;">Total: $<?= number_format($valor_envio, 0, ',', '.') ?></strong>
+            </div>
+
+            <!-- Formulario con datos del cliente -->
+            <form method="post" id="form-aceptar-rechazar-intermunicipal">
+                <input type="hidden" name="mensajero_id" value="<?= esc_attr($mensajero_id) ?>">
+                <input type="hidden" name="origen_intermunicipal" value="<?= esc_attr($origen_seleccionado) ?>">
+                <input type="hidden" name="destino_intermunicipal" value="<?= esc_attr($destino_seleccionado) ?>">
+
+                <h3 style="margin-top:24px;">📝 Datos del Cliente</h3>
+                
+                <label><strong>Nombre completo</strong> <span style="color: var(--gofast-danger);">*</span></label>
+                <input type="text" name="nombre_cliente" 
+                       value="<?= $es_negocio && $negocio_seleccionado ? esc_attr($negocio_seleccionado->nombre) : '' ?>"
+                       required 
+                       class="gofast-box input"
+                       placeholder="Ej: Juan Pérez">
+
+                <label><strong>Teléfono / WhatsApp</strong> <span style="color: var(--gofast-danger);">*</span></label>
+                <input type="text" name="telefono_cliente" 
+                       value="<?= $es_negocio && $negocio_seleccionado ? esc_attr($negocio_seleccionado->whatsapp ?: $negocio_seleccionado->cliente_telefono) : '' ?>"
+                       required 
+                       class="gofast-box input"
+                       placeholder="Ej: 3112345678">
+
+                <label><strong>Dirección de Recogida</strong></label>
+                <input type="text" name="direccion_recogida" 
+                       value="<?= $es_negocio && $negocio_seleccionado ? esc_attr($negocio_seleccionado->direccion_full) : '' ?>"
+                       class="gofast-box input"
+                       placeholder="Ej: Calle 5 #10-20, Barrio Centro">
+                <small style="color: #666; font-size: 13px; display: block; margin-top: 4px; margin-bottom: 16px;">
+                    Especifica la dirección exacta donde se recogerá el pedido en el origen.
+                </small>
+
+                <label><strong>Dirección de destino (zona urbana)</strong> <span style="color: var(--gofast-danger);">*</span></label>
+                <textarea name="direccion_destino" 
+                          required 
+                          class="gofast-box input"
+                          rows="3"
+                          placeholder="Ej: Calle 10 # 5-20, Barrio Centro"></textarea>
+                <small style="color: #666; font-size: 13px; display: block; margin-top: -12px; margin-bottom: 16px;">
+                    Especifica la dirección completa en <?= esc_html($destino_seleccionado) ?> (solo zona urbana)
+                </small>
+
+                <div class="gofast-box" style="background: #e8f4ff; border-left: 4px solid #1f6feb; padding: 12px; margin-top: 20px; margin-bottom: 16px;">
+                    <strong style="color: #004085;">💡 Recordatorio:</strong>
+                    <p style="margin: 8px 0 0 0; color: #004085; font-size: 13px;">
+                        Asegúrate de que el pedido este pago con anticipación antes de confirmar. 
+                        y que el mensajero reciba el valor del envío antes de despachar el pedido. Solo después de esto se despachará el pedido.
+                        <strong>Recuerda:</strong> Se debe anexar la ubicación en tiempo real del cliente que recibe el domicilio en el destino.
+                    </p>
+                </div>
+
+                <div class="gofast-btn-group" style="margin-top:24px;">
+                    <button type="submit" name="gofast_admin_aceptar_intermunicipal" class="gofast-btn-request" style="background:#4CAF50;color:#fff;">
+                        ✅ Aceptar y crear servicio
+                    </button>
+                    <button type="submit" name="gofast_admin_rechazar_intermunicipal" class="gofast-btn-action gofast-secondary" formnovalidate>
+                        ❌ Rechazar y volver
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    <?php
+    return ob_get_clean();
+}
+
+add_shortcode('gofast_admin_cotizar_intermunicipal', 'gofast_admin_cotizar_intermunicipal_shortcode');

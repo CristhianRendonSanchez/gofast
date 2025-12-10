@@ -104,7 +104,6 @@ function gofast_cotizar_intermunicipal_shortcode() {
     if (isset($_POST['gofast_cotizar_intermunicipal'])) {
         $destino_seleccionado = sanitize_text_field($_POST['destino_intermunicipal'] ?? '');
         $origen_seleccionado = sanitize_text_field($_POST['origen_intermunicipal'] ?? 'tulua');
-        $direccion_recogida = sanitize_text_field($_POST['direccion_recogida'] ?? '');
         $negocio_id_cotizador = isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0;
         
         if (empty($destino_seleccionado) || !isset($destinos_intermunicipales[$destino_seleccionado])) {
@@ -173,7 +172,7 @@ function gofast_cotizar_intermunicipal_shortcode() {
                 'usuario_telefono' => $usuario_telefono,
                 'destino' => $destino_seleccionado,
                 'valor' => $destinos_intermunicipales[$destino_seleccionado],
-                'direccion_recogida' => $direccion_recogida,
+                'direccion_recogida' => '',
             ];
             
             // Guardar última selección de origen
@@ -196,7 +195,7 @@ function gofast_cotizar_intermunicipal_shortcode() {
                 <li>✅ El pedido debe estar <strong>pago con anticipación</strong> antes de solicitar el servicio.</li>
                 <li>✅ El valor del envío también debe ser <strong>cancelado antes</strong> de despachar al mensajero.</li>
                 <li>✅ Solo se aceptan envíos para <strong>zona urbana</strong>.</li>
-                <li>📍 Se anexa vía WhatsApp la <strong>ubicación en tiempo real</strong> del mensajero que recibe el pedido.</li>
+                <li>📍 Se debe anexar la <strong>ubicación en tiempo real</strong> del cliente que recibe el domicilio en el destino.</li>
                 <li>⚙️ La disponibilidad de este servicio está <strong>sujeta a la administración</strong>.</li>
                 <li>⚠️ En caso de <strong>devolución del pedido</strong> se cobrará un recargo adicional.</li>
                 <li>🚚 El envío es desde <strong>Tuluá</strong> o desde uno de tus negocios registrados.</li>
@@ -302,18 +301,6 @@ function gofast_cotizar_intermunicipal_shortcode() {
                 </div>
             </div>
 
-            <!-- Dirección de Recogida -->
-            <div class="gofast-row">
-                <div style="flex: 1;">
-                    <label><strong>Dirección de Recogida</strong></label>
-                    <input type="text" name="direccion_recogida" class="gofast-box input" 
-                           placeholder="Ej: Calle 5 #10-20, Barrio Centro" 
-                           value="">
-                    <small style="color: #666; font-size: 13px; display: block; margin-top: 4px;">
-                        Especifica la dirección exacta donde se recogerá el pedido.
-                    </small>
-                </div>
-            </div>
 
             <!-- Resumen del valor -->
             <div id="resumen-valor" style="display: none; margin-top: 16px;">

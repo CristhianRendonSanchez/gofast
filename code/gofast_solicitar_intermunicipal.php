@@ -148,6 +148,7 @@ function gofast_solicitar_intermunicipal_shortcode() {
         $nombre = sanitize_text_field($_POST['nombre'] ?? '');
         $telefono = sanitize_text_field($_POST['telefono'] ?? '');
         $direccion_destino = sanitize_text_field($_POST['direccion_destino'] ?? '');
+        $direccion_recogida_nueva = sanitize_text_field($_POST['direccion_recogida'] ?? '');
         
         error_log('Datos POST - nombre: ' . ($nombre ?: 'VACIO') . ', telefono: ' . ($telefono ?: 'VACIO') . ', direccion: ' . ($direccion_destino ?: 'VACIO'));
         error_log('Destino: ' . ($destino ?: 'VACIO') . ', Valor: ' . $valor_envio);
@@ -178,15 +179,16 @@ function gofast_solicitar_intermunicipal_shortcode() {
                     'sector_id' => 0,
                     'direccion' => $direccion_destino,
                     'monto' => $valor_envio,
-                    'direccion_recogida' => $direccion_recogida,
+                    'direccion_recogida' => !empty($direccion_recogida_nueva) ? $direccion_recogida_nueva : $direccion_recogida,
                 ]],
                 'tipo_servicio' => 'intermunicipal', // Indicador especial
             ], JSON_UNESCAPED_UNICODE);
 
             // Guardar servicio en la base de datos
+            // Incluir el destino en direccion_origen para que se muestre correctamente
             $direccion_origen_servicio = ($origen_tipo === 'negocio' && $negocio_datos) 
-                ? $origen . ' — ' . $origen_direccion . ' (Intermunicipal)'
-                : $origen . ' (Intermunicipal)';
+                ? $origen . ' — ' . $origen_direccion . ' → ' . $destino . ' (Intermunicipal)'
+                : $origen . ' → ' . $destino . ' (Intermunicipal)';
             
             // Determinar user_id: si es mensajero/admin y hay negocio_user_id, usar ese
             $user_id_servicio = $usuario ? $usuario->id : null;
@@ -245,20 +247,32 @@ function gofast_solicitar_intermunicipal_shortcode() {
                     // Guardar en sesión para referencia
                     $_SESSION['gofast_pending_service'] = $service_id;
                     
-                    // Redirigir a página de confirmación
-                    $url_confirmacion = esc_url(home_url('/servicio-registrado?id=' . $service_id));
-                    
-                    // Usar wp_redirect si es posible, sino JavaScript
-                    // Pero primero necesitamos evitar que se ejecute ob_start()
-                    // Retornar el script de redirección inmediatamente
-                    $redirect_script = '<script type="text/javascript">';
-                    $redirect_script .= 'window.location.href = "'.esc_js($url_confirmacion).'";';
-                    $redirect_script .= '</script>';
-                    $redirect_script .= '<noscript>';
-                    $redirect_script .= '<meta http-equiv="refresh" content="0;url='.esc_attr($url_confirmacion).'">';
-                    $redirect_script .= '</noscript>';
-                    
-                    return $redirect_script;
+                    // Si es admin o mensajero, NO redirigir a servicio-registrado, solo mostrar mensaje
+                    if ($es_mensajero_o_admin) {
+                        // Mostrar mensaje de éxito y limpiar
+                        $success_message = '<div class="gofast-box" style="background:#d4edda;border-left:4px solid #28a745;padding:16px;margin:20px auto;max-width:600px;">';
+                        $success_message .= '<h2 style="margin-top:0;color:#155724;">✅ Servicio Registrado Exitosamente</h2>';
+                        $success_message .= '<p><strong>ID del Servicio:</strong> #' . esc_html($service_id) . '</p>';
+                        $success_message .= '<p><strong>Total:</strong> $' . number_format($valor_envio, 0, ',', '.') . '</p>';
+                        $success_message .= '<p style="margin-bottom:0;"><a href="' . esc_url(home_url('/mis-pedidos')) . '" class="gofast-btn" style="display:inline-block;margin-top:12px;">Ver mis pedidos</a></p>';
+                        $success_message .= '</div>';
+                        return $success_message;
+                    } else {
+                        // Cliente normal: redirigir a página de confirmación
+                        $url_confirmacion = esc_url(home_url('/servicio-registrado?id=' . $service_id));
+                        
+                        // Usar wp_redirect si es posible, sino JavaScript
+                        // Pero primero necesitamos evitar que se ejecute ob_start()
+                        // Retornar el script de redirección inmediatamente
+                        $redirect_script = '<script type="text/javascript">';
+                        $redirect_script .= 'window.location.href = "'.esc_js($url_confirmacion).'";';
+                        $redirect_script .= '</script>';
+                        $redirect_script .= '<noscript>';
+                        $redirect_script .= '<meta http-equiv="refresh" content="0;url='.esc_attr($url_confirmacion).'">';
+                        $redirect_script .= '</noscript>';
+                        
+                        return $redirect_script;
+                    }
                 }
             }
         }
@@ -309,7 +323,7 @@ function gofast_solicitar_intermunicipal_shortcode() {
                     <li>El pedido debe estar <strong>pago con anticipación</strong>.</li>
                     <li>El valor del envío debe ser <strong>cancelado antes</strong> de despachar.</li>
                     <li>Solo se aceptan envíos para <strong>zona urbana</strong>.</li>
-                    <li>Se enviará la ubicación en tiempo real vía WhatsApp.</li>
+                    <li>Se debe anexar la <strong>ubicación en tiempo real</strong> del cliente que recibe el domicilio en el destino.</li>
                     <li>La disponibilidad está sujeta a la administración.</li>
                     <li>En caso de devolución se cobrará recargo adicional.</li>
                 </ul>
@@ -360,6 +374,15 @@ function gofast_solicitar_intermunicipal_shortcode() {
                        class="gofast-box input"
                        placeholder="Ej: 3112345678">
 
+                <label><strong>Dirección de Recogida</strong></label>
+                <input type="text" name="direccion_recogida" 
+                       value="<?php echo esc_attr($direccion_recogida); ?>"
+                       class="gofast-box input"
+                       placeholder="Ej: Calle 5 #10-20, Barrio Centro">
+                <small style="color: #666; font-size: 13px; display: block; margin-top: 4px; margin-bottom: 16px;">
+                    Especifica la dirección exacta donde se recogerá el pedido en el origen.
+                </small>
+
                 <label><strong>Dirección de destino (zona urbana)</strong> <span style="color: var(--gofast-danger);">*</span></label>
                 <textarea name="direccion_destino" 
                           required 
@@ -374,7 +397,9 @@ function gofast_solicitar_intermunicipal_shortcode() {
                     <strong style="color: #004085;">💡 Recordatorio:</strong>
                     <p style="margin: 8px 0 0 0; color: #004085; font-size: 13px;">
                         Asegúrate de que el pedido este pago con anticipación antes de confirmar. 
-                        y pagarle al mensajero el valor del envío. solo después de esto se despachará el pedido.
+                        y pagarle al mensajero el valor del envío. Solo después de esto se despachará el pedido.
+                        <strong>Recuerda:</strong> Se debe anexar la ubicación en tiempo real del cliente que recibe el domicilio en el destino.
+                    </p>
                 </div>
 
                 <div class="gofast-btn-group">
@@ -566,9 +591,10 @@ add_action('template_redirect', function() {
     ], JSON_UNESCAPED_UNICODE);
     
     // Guardar servicio
+    // Incluir el destino en direccion_origen para que se muestre correctamente
     $direccion_origen_servicio = ($origen_tipo === 'negocio' && $negocio_datos) 
-        ? $origen . ' — ' . $origen_direccion . ' (Intermunicipal)'
-        : $origen . ' (Intermunicipal)';
+        ? $origen . ' — ' . $origen_direccion . ' → ' . $destino . ' (Intermunicipal)'
+        : $origen . ' → ' . $destino . ' (Intermunicipal)';
     
             // Determinar user_id: si es mensajero/admin y hay negocio_user_id, usar ese
             $user_id_servicio = $usuario ? $usuario->id : null;

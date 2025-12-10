@@ -469,14 +469,41 @@ function gofast_admin_configuracion_shortcode() {
          LIMIT 1000"
     );
     
-    // Obtener sectores que ya tienen tarifas configuradas (como origen o destino)
-    // Solo para mostrar en el formulario de agregar tarifa
-    $sectores_con_tarifa_ids = $wpdb->get_col(
-        "SELECT DISTINCT origen_sector_id FROM tarifas
-         UNION
-         SELECT DISTINCT destino_sector_id FROM tarifas"
-    );
-    $sectores_con_tarifa = array_map('intval', $sectores_con_tarifa_ids);
+    // Construir matriz de tarifas existentes: origen_id => [destino_ids]
+    $tarifas_existentes = [];
+    foreach ($tarifas as $t) {
+        $origen_id = (int) $t->origen_sector_id;
+        $destino_id = (int) $t->destino_sector_id;
+        if (!isset($tarifas_existentes[$origen_id])) {
+            $tarifas_existentes[$origen_id] = [];
+        }
+        $tarifas_existentes[$origen_id][] = $destino_id;
+    }
+    
+    // Generar todas las combinaciones posibles (matriz completa: cada sector a cada sector)
+    $combinaciones_faltantes = [];
+    $sectores_ids = array_map(function($s) { return (int) $s->id; }, $sectores);
+    
+    foreach ($sectores_ids as $origen_id) {
+        foreach ($sectores_ids as $destino_id) {
+            // Verificar si esta combinación ya existe
+            $existe = false;
+            if (isset($tarifas_existentes[$origen_id]) && in_array($destino_id, $tarifas_existentes[$origen_id])) {
+                $existe = true;
+            }
+            
+            if (!$existe) {
+                // Esta combinación falta
+                if (!isset($combinaciones_faltantes[$origen_id])) {
+                    $combinaciones_faltantes[$origen_id] = [];
+                }
+                $combinaciones_faltantes[$origen_id][] = $destino_id;
+            }
+        }
+    }
+    
+    // Convertir a JSON para usar en JavaScript
+    $combinaciones_faltantes_json = json_encode($combinaciones_faltantes);
 
     // Obtener barrios con información de sectores (limitado para optimización)
     $barrios = $wpdb->get_results(
@@ -554,28 +581,28 @@ function gofast_admin_configuracion_shortcode() {
                             <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Sector Origen:</label>
                             <select name="origen_sector_id" id="agregar-tarifa-origen" class="gofast-select-search" required style="width: 100%; font-size: 14px;">
                                 <option value="">— Seleccionar —</option>
-                                <?php foreach ($sectores as $s): ?>
-                                    <?php if (!in_array($s->id, $sectores_con_tarifa)): ?>
-                                        <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
+                                <?php 
+                                // Mostrar solo sectores que tienen al menos una combinación faltante
+                                foreach ($sectores as $s): 
+                                    if (isset($combinaciones_faltantes[(int)$s->id]) && count($combinaciones_faltantes[(int)$s->id]) > 0):
+                                ?>
+                                    <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
+                                <?php 
+                                    endif;
+                                endforeach; 
+                                ?>
                             </select>
                             <small style="display: block; color: #666; font-size: 11px; margin-top: 4px;">
-                                Solo sectores sin tarifa configurada
+                                Solo sectores con combinaciones faltantes
                             </small>
                         </div>
                         <div>
                             <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Sector Destino:</label>
-                            <select name="destino_sector_id" id="agregar-tarifa-destino" class="gofast-select-search" required style="width: 100%; font-size: 14px;">
-                                <option value="">— Seleccionar —</option>
-                                <?php foreach ($sectores as $s): ?>
-                                    <?php if (!in_array($s->id, $sectores_con_tarifa)): ?>
-                                        <option value="<?= esc_attr($s->id) ?>"><?= esc_html($s->nombre) ?></option>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
+                            <select name="destino_sector_id" id="agregar-tarifa-destino" class="gofast-select-search" required style="width: 100%; font-size: 14px;" disabled>
+                                <option value="">— Primero selecciona un origen —</option>
                             </select>
                             <small style="display: block; color: #666; font-size: 11px; margin-top: 4px;">
-                                Solo sectores sin tarifa configurada
+                                Se actualizará según el origen seleccionado
                             </small>
                         </div>
                         <div>
@@ -1213,6 +1240,16 @@ function mostrarTab(tab) {
 }
 
 jQuery(document).ready(function($) {
+    // Datos de combinaciones faltantes y sectores desde PHP
+    const combinacionesFaltantes = <?= $combinaciones_faltantes_json ?>;
+    const sectoresMap = {
+        <?php 
+        foreach ($sectores as $s): 
+            echo (int)$s->id . ': "' . esc_js($s->nombre) . '",';
+        endforeach; 
+        ?>
+    };
+    
     // Normalizador para búsqueda (quita tildes)
     const normalize = s => (s || "")
         .toLowerCase()
@@ -1315,6 +1352,51 @@ jQuery(document).ready(function($) {
             });
         }
     }
+    
+    // Función para actualizar el dropdown de destino según el origen seleccionado
+    function actualizarDestinoTarifa(origenId) {
+        const $destinoSelect = $('#agregar-tarifa-destino');
+        
+        // Limpiar opciones actuales
+        $destinoSelect.empty();
+        
+        if (!origenId || origenId === '') {
+            $destinoSelect.append('<option value="">— Primero selecciona un origen —</option>');
+            $destinoSelect.prop('disabled', true);
+            if ($destinoSelect.data('select2')) {
+                $destinoSelect.select2('destroy');
+            }
+            initSelect2Config();
+            return;
+        }
+        
+        // Obtener destinos faltantes para este origen
+        const destinosFaltantes = combinacionesFaltantes[origenId] || [];
+        
+        if (destinosFaltantes.length === 0) {
+            $destinoSelect.append('<option value="">— No hay combinaciones faltantes para este origen —</option>');
+            $destinoSelect.prop('disabled', true);
+        } else {
+            $destinoSelect.append('<option value="">— Seleccionar —</option>');
+            destinosFaltantes.forEach(function(destinoId) {
+                const nombreDestino = sectoresMap[destinoId] || 'Sector ' + destinoId;
+                $destinoSelect.append('<option value="' + destinoId + '">' + nombreDestino + '</option>');
+            });
+            $destinoSelect.prop('disabled', false);
+        }
+        
+        // Reinicializar Select2
+        if ($destinoSelect.data('select2')) {
+            $destinoSelect.select2('destroy');
+        }
+        initSelect2Config();
+    }
+    
+    // Listener para el cambio del dropdown de origen
+    $(document).on('change', '#agregar-tarifa-origen', function() {
+        const origenId = $(this).val();
+        actualizarDestinoTarifa(origenId);
+    });
     
     // Inicializar Select2 al cargar
     initSelect2Config();
