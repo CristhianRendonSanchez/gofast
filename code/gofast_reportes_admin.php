@@ -46,6 +46,13 @@ function gofast_reportes_admin_shortcode() {
     $mensajero_id = isset($_GET['mensajero_id']) ? (int) $_GET['mensajero_id'] : 0;
     $buscar = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
     $tipo_servicio = isset($_GET['tipo_servicio']) ? sanitize_text_field($_GET['tipo_servicio']) : 'todos';
+    
+    // Paginación para tablas
+    $por_pagina = 15;
+    $pg_pedidos = isset($_GET['pg_pedidos']) ? max(1, (int) $_GET['pg_pedidos']) : 1;
+    $pg_mensajeros = isset($_GET['pg_mensajeros']) ? max(1, (int) $_GET['pg_mensajeros']) : 1;
+    $pg_dias = isset($_GET['pg_dias']) ? max(1, (int) $_GET['pg_dias']) : 1;
+    $pg_compras = isset($_GET['pg_compras']) ? max(1, (int) $_GET['pg_compras']) : 1;
 
     if ($desde && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) $desde = '';
     if ($hasta && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) $hasta = '';
@@ -362,11 +369,13 @@ function gofast_reportes_admin_shortcode() {
     }
     
     $total_pedidos_hoy = (int) ($wpdb->get_var($sql_count_hoy) ?? 0);
-    $limite_pedidos_hoy = 500; // Límite de registros a mostrar
+    $total_paginas_pedidos = max(1, (int) ceil($total_pedidos_hoy / $por_pagina));
+    $offset_pedidos = ($pg_pedidos - 1) * $por_pagina;
     
-    // Obtener pedidos del día actual (con límite)
+    // Obtener pedidos del día actual (con paginación)
     $params_pedidos_hoy_limit = $params_pedidos_hoy;
-    $params_pedidos_hoy_limit[] = $limite_pedidos_hoy;
+    $params_pedidos_hoy_limit[] = $por_pagina;
+    $params_pedidos_hoy_limit[] = $offset_pedidos;
     
     if (!empty($params_pedidos_hoy)) {
         $sql_pedidos_hoy = $wpdb->prepare(
@@ -380,7 +389,7 @@ function gofast_reportes_admin_shortcode() {
              FROM $tabla
              WHERE $where_pedidos_hoy
              ORDER BY fecha DESC
-             LIMIT %d",
+             LIMIT %d OFFSET %d",
             $params_pedidos_hoy_limit
         );
     } else {
@@ -395,16 +404,42 @@ function gofast_reportes_admin_shortcode() {
              FROM $tabla
              WHERE $where_pedidos_hoy
              ORDER BY fecha DESC
-             LIMIT %d",
-            $limite_pedidos_hoy
+             LIMIT %d OFFSET %d",
+            $por_pagina,
+            $offset_pedidos
         );
     }
     
     $pedidos_hoy = $wpdb->get_results($sql_pedidos_hoy);
 
-    // Top mensajeros (solo para admin)
+    // Top mensajeros (solo para admin) - con paginación
     $top_mensajeros = [];
+    $total_mensajeros = 0;
+    $total_paginas_mensajeros = 0;
     if ($es_admin) {
+        // Contar total de mensajeros
+        if (!empty($params)) {
+            $sql_count_mensajeros = $wpdb->prepare(
+                "SELECT COUNT(DISTINCT u.id)
+                 FROM $tabla s
+                 INNER JOIN usuarios_gofast u ON s.mensajero_id = u.id
+                 WHERE $where AND s.tracking_estado = 'entregado'",
+                $params
+            );
+        } else {
+            $sql_count_mensajeros = "SELECT COUNT(DISTINCT u.id)
+                 FROM $tabla s
+                 INNER JOIN usuarios_gofast u ON s.mensajero_id = u.id
+                 WHERE $where AND s.tracking_estado = 'entregado'";
+        }
+        $total_mensajeros = (int) ($wpdb->get_var($sql_count_mensajeros) ?? 0);
+        $total_paginas_mensajeros = max(1, (int) ceil($total_mensajeros / $por_pagina));
+        $offset_mensajeros = ($pg_mensajeros - 1) * $por_pagina;
+        
+        $params_mensajeros = $params;
+        $params_mensajeros[] = $por_pagina;
+        $params_mensajeros[] = $offset_mensajeros;
+        
         $top_mensajeros = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT 
@@ -417,8 +452,8 @@ function gofast_reportes_admin_shortcode() {
                  WHERE $where AND s.tracking_estado = 'entregado'
                  GROUP BY u.id, u.nombre
                  ORDER BY total_entregados DESC
-                 LIMIT 10",
-                $params
+                 LIMIT %d OFFSET %d",
+                $params_mensajeros
             )
         );
     }
@@ -462,8 +497,29 @@ function gofast_reportes_admin_shortcode() {
     $params_compras_dia[] = $fecha_desde_30dias . ' 00:00:00';
     $params_compras_dia[] = $fecha_hasta_hoy . ' 23:59:59';
     
+    // Contar total de días únicos para paginación
     if (!empty($params_pedidos_dia)) {
-        // Consulta de servicios con destinos y ingresos
+        $sql_count_dias = $wpdb->prepare(
+            "SELECT COUNT(DISTINCT DATE(fecha))
+             FROM $tabla
+             WHERE $where_pedidos_dia AND tracking_estado != 'cancelado'",
+            $params_pedidos_dia
+        );
+    } else {
+        $sql_count_dias = "SELECT COUNT(DISTINCT DATE(fecha))
+             FROM $tabla
+             WHERE $where_pedidos_dia AND tracking_estado != 'cancelado'";
+    }
+    $total_dias = (int) ($wpdb->get_var($sql_count_dias) ?? 0);
+    $total_paginas_dias = max(1, (int) ceil($total_dias / $por_pagina));
+    $offset_dias = ($pg_dias - 1) * $por_pagina;
+    
+    if (!empty($params_pedidos_dia)) {
+        // Consulta de servicios con destinos y ingresos (con paginación)
+        $params_pedidos_dia_limit = $params_pedidos_dia;
+        $params_pedidos_dia_limit[] = $por_pagina;
+        $params_pedidos_dia_limit[] = $offset_dias;
+        
         $pedidos_por_dia = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT 
@@ -474,8 +530,8 @@ function gofast_reportes_admin_shortcode() {
                  WHERE $where_pedidos_dia AND tracking_estado != 'cancelado'
                  GROUP BY DATE(fecha)
                  ORDER BY dia DESC
-                 LIMIT 30",
-                $params_pedidos_dia
+                 LIMIT %d OFFSET %d",
+                $params_pedidos_dia_limit
             )
         );
         
@@ -539,6 +595,8 @@ function gofast_reportes_admin_shortcode() {
         $pedidos_por_dia = array_values($pedidos_por_dia_completo);
     } else {
         $pedidos_por_dia = [];
+        $total_dias = 0;
+        $total_paginas_dias = 0;
     }
 
     /* ==========================================================
@@ -554,6 +612,56 @@ function gofast_reportes_admin_shortcode() {
             "
         );
     }
+    
+    /* ==========================================================
+       3.1. Resumen de Compras (con paginación)
+    ========================================================== */
+    // Contar total de compras
+    $total_compras_count = (int) ($wpdb->get_var($sql_total_compras) ?? 0);
+    $total_paginas_compras = max(1, (int) ceil($total_compras_count / $por_pagina));
+    $offset_compras = ($pg_compras - 1) * $por_pagina;
+    
+    // Obtener compras con paginación
+    $params_compras_limit = $params_compras;
+    $params_compras_limit[] = $por_pagina;
+    $params_compras_limit[] = $offset_compras;
+    
+    if (!empty($params_compras)) {
+        $sql_compras_lista = $wpdb->prepare(
+            "SELECT c.*, 
+                    m.nombre as mensajero_nombre,
+                    m.telefono as mensajero_telefono,
+                    u.nombre as creador_nombre,
+                    b.nombre as barrio_nombre
+             FROM $tabla_compras c
+             LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
+             LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
+             LEFT JOIN barrios b ON c.barrio_id = b.id
+             WHERE $where_compras
+             ORDER BY c.fecha_creacion DESC
+             LIMIT %d OFFSET %d",
+            $params_compras_limit
+        );
+    } else {
+        $sql_compras_lista = $wpdb->prepare(
+            "SELECT c.*, 
+                    m.nombre as mensajero_nombre,
+                    m.telefono as mensajero_telefono,
+                    u.nombre as creador_nombre,
+                    b.nombre as barrio_nombre
+             FROM $tabla_compras c
+             LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
+             LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
+             LEFT JOIN barrios b ON c.barrio_id = b.id
+             WHERE $where_compras
+             ORDER BY c.fecha_creacion DESC
+             LIMIT %d OFFSET %d",
+            $por_pagina,
+            $offset_compras
+        );
+    }
+    
+    $compras_lista = $wpdb->get_results($sql_compras_lista);
 
     /* ==========================================================
        4. Exportar a CSV
@@ -761,15 +869,9 @@ function gofast_reportes_admin_shortcode() {
         <div class="gofast-box" style="margin-bottom:20px;">
             <h3 style="margin-top:0;">
                 📅 Pedidos del Día Actual (<?= gofast_date_format($fecha_hoy, 'd/m/Y'); ?>)
-                <?php if ($total_pedidos_hoy > $limite_pedidos_hoy): ?>
-                    <span style="font-size:14px;color:#ff9800;font-weight:normal;">
-                        (Mostrando <?= number_format($limite_pedidos_hoy); ?> de <?= number_format($total_pedidos_hoy); ?>)
-                    </span>
-                <?php else: ?>
-                    <span style="font-size:14px;color:#666;font-weight:normal;">
-                        (<?= number_format($total_pedidos_hoy); ?> registros)
-                    </span>
-                <?php endif; ?>
+                <span style="font-size:14px;color:#666;font-weight:normal;">
+                    (<?= number_format($total_pedidos_hoy); ?> registro(s) total(es))
+                </span>
             </h3>
             <div style="margin-bottom:10px;padding:8px;background:#f0f7ff;border-left:3px solid #2196F3;border-radius:4px;font-size:12px;color:#1976D2;">
                 💡 <strong>En móvil:</strong> Desliza horizontalmente para ver todas las columnas
@@ -827,6 +929,23 @@ function gofast_reportes_admin_shortcode() {
                     </tbody>
                 </table>
             </div>
+            
+            <?php if ($total_paginas_pedidos > 1): ?>
+                <div class="gofast-pagination" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                    <?php
+                    $base_url_pedidos = get_permalink();
+                    $query_args_pedidos = $_GET;
+                    for ($i = 1; $i <= $total_paginas_pedidos; $i++):
+                        $query_args_pedidos['pg_pedidos'] = $i;
+                        $url_pedidos = esc_url( add_query_arg($query_args_pedidos, $base_url_pedidos) );
+                        $active_pedidos = ($i === $pg_pedidos) ? 'gofast-page-current' : '';
+                        ?>
+                        <a href="<?php echo $url_pedidos; ?>" class="gofast-page-link <?php echo $active_pedidos; ?>" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;background:#fff;<?php echo $active_pedidos ? 'background:var(--gofast-yellow);font-weight:700;' : ''; ?>">
+                            <?php echo $i; ?>
+                        </a>
+                    <?php endfor; ?>
+                </div>
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <div class="gofast-box" style="margin-bottom:20px;">
@@ -866,6 +985,124 @@ function gofast_reportes_admin_shortcode() {
                     </tbody>
                 </table>
             </div>
+            
+            <?php if ($total_paginas_mensajeros > 1): ?>
+                <div class="gofast-pagination" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                    <?php
+                    $base_url_mensajeros = get_permalink();
+                    $query_args_mensajeros = $_GET;
+                    for ($i = 1; $i <= $total_paginas_mensajeros; $i++):
+                        $query_args_mensajeros['pg_mensajeros'] = $i;
+                        $url_mensajeros = esc_url( add_query_arg($query_args_mensajeros, $base_url_mensajeros) );
+                        $active_mensajeros = ($i === $pg_mensajeros) ? 'gofast-page-current' : '';
+                        ?>
+                        <a href="<?php echo $url_mensajeros; ?>" class="gofast-page-link <?php echo $active_mensajeros; ?>" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;background:#fff;<?php echo $active_mensajeros ? 'background:var(--gofast-yellow);font-weight:700;' : ''; ?>">
+                            <?php echo $i; ?>
+                        </a>
+                    <?php endfor; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    
+
+    <!-- =====================================================
+         E) RESUMEN DE COMPRAS
+    ====================================================== -->
+    <?php if (!empty($compras_lista) || $total_compras_count > 0): ?>
+        <div class="gofast-box" style="margin-bottom:20px;">
+            <h3 style="margin-top:0;">
+                🛒 Resumen de Compras
+                <span style="font-size:14px;color:#666;font-weight:normal;">
+                    (<?= number_format($total_compras_count); ?> compra(s) total(es))
+                </span>
+            </h3>
+            <div style="margin-bottom:10px;padding:8px;background:#f0f7ff;border-left:3px solid #2196F3;border-radius:4px;font-size:12px;color:#1976D2;">
+                💡 <strong>En móvil:</strong> Desliza horizontalmente para ver todas las columnas
+            </div>
+            <div class="gofast-table-wrap" style="width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;display:block;">
+                <table class="gofast-table" style="min-width:800px;width:100%;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fecha</th>
+                            <?php if ($es_admin): ?>
+                                <th>Mensajero</th>
+                                <th>Creado por</th>
+                            <?php endif; ?>
+                            <th>Valor</th>
+                            <th>Destino</th>
+                            <th>Estado</th>
+                            <th>Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($compras_lista as $compra): ?>
+                            <tr>
+                                <td>#<?= (int) $compra->id; ?></td>
+                                <td><?= esc_html( gofast_date_format($compra->fecha_creacion, 'd/m/Y H:i') ); ?></td>
+                                <?php if ($es_admin): ?>
+                                    <td>
+                                        <?= esc_html($compra->mensajero_nombre ?: 'N/A'); ?>
+                                        <?php if ($compra->mensajero_telefono): ?>
+                                            <br><small style="color:#666;"><?= esc_html($compra->mensajero_telefono); ?></small>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= esc_html($compra->creador_nombre ?: 'N/A'); ?></td>
+                                <?php endif; ?>
+                                <td><strong>$<?= number_format($compra->valor, 0, ',', '.'); ?></strong></td>
+                                <td><?= esc_html($compra->barrio_nombre ?: 'N/A'); ?></td>
+                                <td>
+                                    <?php
+                                    $estado_compra = $compra->estado;
+                                    $estado_colors = [
+                                        'pendiente' => '#fff3cd',
+                                        'en_proceso' => '#cfe2ff',
+                                        'completada' => '#d4edda',
+                                        'cancelada' => '#f8d7da'
+                                    ];
+                                    $estado_labels = [
+                                        'pendiente' => 'Pendiente',
+                                        'en_proceso' => 'En Proceso',
+                                        'completada' => 'Completada',
+                                        'cancelada' => 'Cancelada'
+                                    ];
+                                    $color = $estado_colors[$estado_compra] ?? '#f8f9fa';
+                                    $label = $estado_labels[$estado_compra] ?? $estado_compra;
+                                    ?>
+                                    <span style="display:inline-block;padding:4px 10px;border-radius:4px;background:<?= $color; ?>;font-size:12px;font-weight:600;">
+                                        <?= esc_html($label); ?>
+                                    </span>
+                                </td>
+                                <td><?= esc_html($compra->observaciones ?: '—'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            
+            <?php if ($total_paginas_compras > 1): ?>
+                <div class="gofast-pagination" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                    <?php
+                    $base_url_compras = get_permalink();
+                    $query_args_compras = $_GET;
+                    for ($i = 1; $i <= $total_paginas_compras; $i++):
+                        $query_args_compras['pg_compras'] = $i;
+                        $url_compras = esc_url( add_query_arg($query_args_compras, $base_url_compras) );
+                        $active_compras = ($i === $pg_compras) ? 'gofast-page-current' : '';
+                        ?>
+                        <a href="<?php echo $url_compras; ?>" class="gofast-page-link <?php echo $active_compras; ?>" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;background:#fff;<?php echo $active_compras ? 'background:var(--gofast-yellow);font-weight:700;' : ''; ?>">
+                            <?php echo $i; ?>
+                        </a>
+                    <?php endfor; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php else: ?>
+        <div class="gofast-box" style="margin-bottom:20px;">
+            <h3 style="margin-top:0;">🛒 Resumen de Compras</h3>
+            <p>No hay compras registradas con los filtros seleccionados.</p>
         </div>
     <?php endif; ?>
 
@@ -873,7 +1110,7 @@ function gofast_reportes_admin_shortcode() {
          D) PEDIDOS POR DÍA (ÚLTIMOS 30 DÍAS)
     ====================================================== -->
     <?php if (!empty($pedidos_por_dia)): ?>
-        <div class="gofast-box">
+        <div class="gofast-box" style="margin-bottom:20px;">
             <h3 style="margin-top:0;">📈 Pedidos por Día (Últimos 30 días)</h3>
             <div style="margin-bottom:10px;padding:8px;background:#f0f7ff;border-left:3px solid #2196F3;border-radius:4px;font-size:12px;color:#1976D2;">
                 💡 <strong>En móvil:</strong> Desliza horizontalmente para ver todas las columnas
@@ -902,6 +1139,23 @@ function gofast_reportes_admin_shortcode() {
                     </tbody>
                 </table>
             </div>
+            
+            <?php if ($total_paginas_dias > 1): ?>
+                <div class="gofast-pagination" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                    <?php
+                    $base_url_dias = get_permalink();
+                    $query_args_dias = $_GET;
+                    for ($i = 1; $i <= $total_paginas_dias; $i++):
+                        $query_args_dias['pg_dias'] = $i;
+                        $url_dias = esc_url( add_query_arg($query_args_dias, $base_url_dias) );
+                        $active_dias = ($i === $pg_dias) ? 'gofast-page-current' : '';
+                        ?>
+                        <a href="<?php echo $url_dias; ?>" class="gofast-page-link <?php echo $active_dias; ?>" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;background:#fff;<?php echo $active_dias ? 'background:var(--gofast-yellow);font-weight:700;' : ''; ?>">
+                            <?php echo $i; ?>
+                        </a>
+                    <?php endfor; ?>
+                </div>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
@@ -1568,6 +1822,52 @@ add_shortcode('gofast_reportes_admin', 'gofast_reportes_admin_shortcode');
     .gofast-home > div:first-child > a {
         width: 100% !important;
         text-align: center !important;
+    }
+    
+    /* Estilos para paginación */
+    .gofast-pagination {
+        margin-top: 20px !important;
+        display: flex !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+    }
+    
+    .gofast-page-link {
+        padding: 8px 12px !important;
+        border: 1px solid #ddd !important;
+        border-radius: 6px !important;
+        text-decoration: none !important;
+        color: #333 !important;
+        background: #fff !important;
+        font-size: 14px !important;
+        min-width: 40px !important;
+        text-align: center !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    .gofast-page-link:hover {
+        background: #f5f5f5 !important;
+        border-color: #bbb !important;
+    }
+    
+    .gofast-page-current {
+        background: var(--gofast-yellow, #F4C524) !important;
+        font-weight: 700 !important;
+        border-color: var(--gofast-yellow, #F4C524) !important;
+        color: #000 !important;
+    }
+    
+    @media (max-width: 768px) {
+        .gofast-pagination {
+            gap: 6px !important;
+        }
+        
+        .gofast-page-link {
+            padding: 6px 10px !important;
+            font-size: 13px !important;
+            min-width: 36px !important;
+        }
     }
 }
 </style>
