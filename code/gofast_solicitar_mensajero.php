@@ -317,14 +317,29 @@ function gofast_resultado_cotizacion() {
 			$tel = $negocio_usado->whatsapp ?: ($usuario ? $usuario->telefono : ''); // WhatsApp del negocio primero
 		}
 
-		// Dirección origen
-		$dir_origen = !empty($_POST['dir_origen_custom'])
+		// Dirección origen - Estandarizada según reglas:
+		// 1. Solo barrio (si no hay negocio y no hay dirección)
+		// 2. Negocio + dirección (si hay negocio)
+		// 3. Barrio + dirección (si hay dirección pero no negocio)
+		$dir_origen_input = !empty($_POST['dir_origen_custom'])
 			? sanitize_text_field($_POST['dir_origen_custom'])
-			: sanitize_text_field($_POST['dir_origen']);
+			: sanitize_text_field($_POST['dir_origen'] ?? '');
 		
-		// Si hay negocio seleccionado, usar su dirección
-		if ($negocio_seleccionado && $negocio_seleccionado->direccion_full) {
-			$dir_origen = $negocio_seleccionado->direccion_full;
+		// Construir direccion_origen según las reglas
+		if ($negocio_seleccionado) {
+			// Caso 2: Negocio + dirección
+			$dir_origen_negocio = $negocio_seleccionado->direccion_full ?: '';
+			if (!empty($dir_origen_negocio)) {
+				$dir_origen = $negocio_seleccionado->nombre . ' — ' . $dir_origen_negocio;
+			} else {
+				$dir_origen = $negocio_seleccionado->nombre;
+			}
+		} elseif (!empty($dir_origen_input)) {
+			// Caso 3: Barrio + dirección
+			$dir_origen = $nombre_origen . ' — ' . $dir_origen_input;
+		} else {
+			// Caso 1: Solo barrio
+			$dir_origen = $nombre_origen;
 		}
 
 		// Direcciones destino opcionales

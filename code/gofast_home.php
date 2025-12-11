@@ -60,6 +60,16 @@ function gofast_home_shortcode() {
     $url_admin_cotizar = esc_url( home_url('/admin-cotizar') );
     $url_admin_cotizar_intermunicipal = esc_url( home_url('/admin-cotizar-intermunicipal') );
     $url_mensajero_cotizar_intermunicipal = esc_url( home_url('/mensajero-cotizar-intermunicipal') );
+    
+    // URL del botón principal según el rol del usuario
+    if ($rol === 'mensajero') {
+        $url_cotizar_principal = $url_mensajero_cotizar;
+    } elseif ($rol === 'admin') {
+        $url_cotizar_principal = $url_admin_cotizar;
+    } else {
+        // visitante o cliente
+        $url_cotizar_principal = $url_cotizar;
+    }
 
     /* ==========================================================
        Estadísticas para mensajero y admin
@@ -219,7 +229,7 @@ function gofast_home_shortcode() {
 
             <div class="gofast-home-hero-ctas">
                 <!-- Botón principal de cotizar - ULTRA VISIBLE -->
-                <a href="<?php echo $url_cotizar; ?>" class="gofast-btn-hero-mega">
+                <a href="<?php echo $url_cotizar_principal; ?>" class="gofast-btn-hero-mega">
                     <span class="gofast-btn-hero-icon">🛵</span>
                     <span class="gofast-btn-hero-text">Cotizar envío ahora</span>
                     <span class="gofast-btn-hero-arrow">→</span>

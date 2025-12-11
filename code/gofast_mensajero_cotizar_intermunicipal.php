@@ -199,10 +199,25 @@ function gofast_mensajero_cotizar_intermunicipal_shortcode() {
                 'tipo_servicio' => 'intermunicipal',
             ], JSON_UNESCAPED_UNICODE);
 
-            // Incluir el destino en direccion_origen para que se muestre correctamente
-            $direccion_origen_servicio = ($negocio_seleccionado) 
-                ? $origen_nombre . ' — ' . $origen_direccion . ' → ' . $destino_seleccionado . ' (Intermunicipal)'
-                : $origen_nombre . ' → ' . $destino_seleccionado . ' (Intermunicipal)';
+            // Construir direccion_origen según reglas (sin incluir destino, eso va en el JSON):
+            // 1. Solo barrio (si no hay negocio y no hay dirección)
+            // 2. Negocio + dirección (si hay negocio)
+            // 3. Barrio + dirección (si hay dirección pero no negocio)
+            if ($negocio_seleccionado) {
+                // Caso 2: Negocio + dirección
+                $dir_origen_negocio = $origen_direccion ?: '';
+                if (!empty($dir_origen_negocio)) {
+                    $direccion_origen_servicio = $negocio_seleccionado->nombre . ' — ' . $dir_origen_negocio;
+                } else {
+                    $direccion_origen_servicio = $negocio_seleccionado->nombre;
+                }
+            } elseif (!empty($origen_direccion)) {
+                // Caso 3: Barrio + dirección
+                $direccion_origen_servicio = $origen_nombre . ' — ' . $origen_direccion;
+            } else {
+                // Caso 1: Solo barrio
+                $direccion_origen_servicio = $origen_nombre;
+            }
             
             $user_id_servicio = $cliente_propietario ?: null; // Si es Tuluá, será null (servicio sin cliente asociado)
             

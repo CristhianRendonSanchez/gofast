@@ -1820,19 +1820,45 @@
     border: 1px solid var(--gofast-gray-400);
     border-radius: var(--radius-s);
     height: 42px;
-    padding: 6px 10px;
+    padding: 0 !important;
+    padding-left: 10px !important;
+    padding-right: 30px !important;
+    display: flex !important;
+    align-items: center !important;
+    position: relative !important;
+    box-sizing: border-box !important;
   }
   
   .select2-container--default .select2-selection--single .select2-selection__rendered {
     background: #fff !important;
     color: #000 !important;
     line-height: 30px;
+    padding: 0 !important;
+    padding-right: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    height: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    margin-right: 30px !important;
   }
   
   .select2-selection__rendered {
     color: #000 !important;
     line-height: 30px;
     background: #fff !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    margin-right: 30px !important;
   }
   
   /* Asegurar fondo blanco en TODOS los estados del select */
@@ -1856,8 +1882,103 @@
     background: #fff !important;
   }
   
+  .select2-selection__arrow {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: absolute !important;
+    right: 8px !important;
+    width: 20px !important;
+  }
+  
   .select2-selection__arrow b {
     border-color: #555 transparent transparent transparent;
+    margin-top: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+  }
+  
+  /* Estilos unificados para Select2 en filtros (mis-pedidos.php) - igual que en cotizador */
+  .gofast-filtros-form .select2-container--default .select2-selection--single {
+    background: #fff !important;
+    border: 1px solid var(--gofast-gray-400) !important;
+    border-radius: var(--radius-s) !important;
+    height: 42px !important;
+    padding: 0 !important;
+    padding-left: 10px !important;
+    padding-right: 30px !important;
+    display: flex !important;
+    align-items: center !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+  }
+  
+  .gofast-filtros-form .select2-container--default .select2-selection--single .select2-selection__rendered {
+    background: #fff !important;
+    color: #000 !important;
+    line-height: 30px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    height: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    margin-right: 30px !important;
+  }
+  
+  .gofast-filtros-form .select2-selection__rendered {
+    color: #000 !important;
+    line-height: 30px !important;
+    background: #fff !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    margin-right: 30px !important;
+  }
+  
+  /* Asegurar que el span dentro del rendered tenga el tamaño correcto en desktop */
+  .gofast-filtros-form .select2-selection__rendered span,
+  .gofast-filtros-form .select2-container--default .select2-selection--single .select2-selection__rendered span {
+    font-size: inherit !important;
+    line-height: inherit !important;
+    display: inline-block !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  
+  .gofast-filtros-form .select2-container--default.select2-container--focus .select2-selection--single,
+  .gofast-filtros-form .select2-container--default.select2-container--open .select2-selection--single,
+  .gofast-filtros-form .select2-container--default .select2-selection--single[aria-expanded="false"],
+  .gofast-filtros-form .select2-container--default .select2-selection--single[aria-expanded="true"] {
+    background: #fff !important;
+  }
+  
+  .gofast-filtros-form .select2-selection__arrow {
+    height: 42px !important;
+    top: 0 !important;
+    right: 8px !important;
+    width: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: absolute !important;
+  }
+  
+  .gofast-filtros-form .select2-selection__arrow b {
+    border-color: #555 transparent transparent transparent !important;
+    margin-top: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
   }
   
   /* FORZAR DROPDOWN SIEMPRE HACIA ABAJO - REGLAS ULTRA AGRESIVAS */
@@ -2066,13 +2187,70 @@
     /* Mejorar el contenedor principal en móvil */
     .select2-container--default .select2-selection--single {
       height: 50px !important;
-      padding: 8px 12px !important;
+      padding: 0 !important;
+      padding-left: 12px !important;
+      padding-right: 35px !important;
       font-size: 16px !important;
+      display: flex !important;
+      align-items: center !important;
+      position: relative !important;
+      box-sizing: border-box !important;
+    }
+    
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+      line-height: 34px !important;
+      font-size: 16px !important;
+      padding: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      height: 100% !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      margin-right: 35px !important;
     }
     
     .select2-selection__rendered {
       line-height: 34px !important;
       font-size: 16px !important;
+      display: flex !important;
+      align-items: center !important;
+      padding: 0 !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      margin-right: 35px !important;
+    }
+    
+    /* Asegurar que el span dentro del rendered tenga el tamaño correcto en móvil */
+    .select2-selection__rendered span,
+    .select2-container--default .select2-selection--single .select2-selection__rendered span {
+      font-size: 16px !important;
+      line-height: 34px !important;
+      display: inline-block !important;
+      width: 100% !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
+    
+    .select2-selection__arrow {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      position: absolute !important;
+      right: 10px !important;
+      width: 20px !important;
+    }
+    
+    .select2-selection__arrow b {
+      margin-top: 0 !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
     }
   }
   

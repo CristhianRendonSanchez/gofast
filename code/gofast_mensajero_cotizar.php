@@ -188,18 +188,17 @@ function gofast_mensajero_cotizar_shortcode() {
                 ];
             }
 
-            // JSON final
-            // Usar el nombre del barrio como origen real si no hay negocio seleccionado
-            $direccion_origen = $nombre_origen;
+            // JSON final - Dirección para el JSON (puede ser diferente de direccion_origen_servicio)
+            $direccion_origen_json = '';
             if ($negocio_seleccionado) {
-                $direccion_origen = $negocio_seleccionado->direccion_full ?: $negocio_seleccionado->nombre;
+                $direccion_origen_json = $negocio_seleccionado->direccion_full ?: '';
             }
             
             $origen_completo = [
                 'barrio_id' => $origen,
                 'barrio_nombre' => $nombre_origen,
                 'sector_id' => $sector_origen,
-                'direccion' => $direccion_origen,
+                'direccion' => $direccion_origen_json,
                 'negocio_id' => $negocio_seleccionado ? $negocio_seleccionado->id : null,
             ];
 
@@ -214,16 +213,27 @@ function gofast_mensajero_cotizar_shortcode() {
             // Determinar nombre y teléfono del cliente
             $nombre_cliente = $mensajero->nombre . ' (' . ($rol === 'admin' ? 'Admin' : 'Mensajero') . ')';
             $telefono_cliente = $mensajero->telefono;
-            // Usar el nombre del barrio como origen real si no hay negocio seleccionado
-            $direccion_origen_servicio = $nombre_origen;
             $user_id_servicio = $mensajero->id; // Por defecto el mensajero/admin
             
+            // Construir direccion_origen_servicio según reglas:
+            // 1. Solo barrio (si no hay negocio)
+            // 2. Negocio + dirección (si hay negocio)
             if ($negocio_seleccionado) {
                 // Usar datos del NEGOCIO (no del cliente)
                 $nombre_cliente = $negocio_seleccionado->nombre; // Nombre del negocio
                 $telefono_cliente = $negocio_seleccionado->whatsapp ?: $negocio_seleccionado->cliente_telefono; // WhatsApp del negocio primero
-                $direccion_origen_servicio = $negocio_seleccionado->nombre . ' — ' . ($negocio_seleccionado->direccion_full ?: $nombre_origen);
                 $user_id_servicio = $cliente_propietario; // Asociar al cliente propietario del negocio
+                
+                // Caso 2: Negocio + dirección
+                $dir_origen_negocio = $negocio_seleccionado->direccion_full ?: '';
+                if (!empty($dir_origen_negocio)) {
+                    $direccion_origen_servicio = $negocio_seleccionado->nombre . ' — ' . $dir_origen_negocio;
+                } else {
+                    $direccion_origen_servicio = $negocio_seleccionado->nombre;
+                }
+            } else {
+                // Caso 1: Solo barrio
+                $direccion_origen_servicio = $nombre_origen;
             }
             
             $data_insert = [

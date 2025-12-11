@@ -281,7 +281,8 @@ function gofast_pedidos_shortcode() {
     $filtro_origen = isset($_GET['filtro_origen']) ? (int) $_GET['filtro_origen'] : 0;
     $filtro_destino = isset($_GET['filtro_destino']) ? (int) $_GET['filtro_destino'] : 0;
     $filtro_negocio = isset($_GET['filtro_negocio']) ? (int) $_GET['filtro_negocio'] : 0;
-    $filtro_asignado_por = isset($_GET['filtro_asignado_por']) ? (int) $_GET['filtro_asignado_por'] : 0;
+    $filtro_asignado_por = isset($_GET['filtro_asignado_por']) ? sanitize_text_field($_GET['filtro_asignado_por']) : '';
+    $filtro_intermunicipal = isset($_GET['filtro_intermunicipal']) ? sanitize_text_field($_GET['filtro_intermunicipal']) : '';
 
     // Predefinir fecha al día actual si no hay filtros de fecha (para todos los usuarios)
     // Usar zona horaria de Colombia
@@ -365,10 +366,13 @@ function gofast_pedidos_shortcode() {
             }
         }
         
-        if ($filtro_asignado_por > 0) {
-            // Buscar servicios donde el user_id corresponde al que asignó
-            $where   .= " AND user_id = %d";
-            $params[] = $filtro_asignado_por;
+        // Filtro por asignado por (admin o mensajero auto-asignado)
+        if ($filtro_asignado_por === 'admin') {
+            // Servicios donde un admin asignó el mensajero (asignado_por_user_id != mensajero_id y es admin)
+            $where .= " AND asignado_por_user_id IS NOT NULL AND asignado_por_user_id != COALESCE(mensajero_id, 0) AND EXISTS (SELECT 1 FROM usuarios_gofast WHERE id = asignado_por_user_id AND rol = 'admin')";
+        } elseif ($filtro_asignado_por === 'mensajero') {
+            // Servicios donde el mensajero se auto-asignó (asignado_por_user_id = mensajero_id)
+            $where .= " AND asignado_por_user_id IS NOT NULL AND asignado_por_user_id = mensajero_id";
         }
         
         // Filtro por origen (buscar en JSON)
@@ -381,6 +385,15 @@ function gofast_pedidos_shortcode() {
         if ($filtro_destino > 0) {
             $where   .= " AND JSON_CONTAINS(destinos, JSON_OBJECT('barrio_id', %d), '$.destinos')";
             $params[] = $filtro_destino;
+        }
+        
+        // Filtro por envíos intermunicipales
+        if ($filtro_intermunicipal === 'si') {
+            $where .= " AND (JSON_EXTRACT(destinos, '$.tipo_servicio') = 'intermunicipal' OR direccion_origen LIKE %s)";
+            $params[] = '%(Intermunicipal)%';
+        } elseif ($filtro_intermunicipal === 'no') {
+            $where .= " AND (JSON_EXTRACT(destinos, '$.tipo_servicio') IS NULL OR JSON_EXTRACT(destinos, '$.tipo_servicio') != 'intermunicipal') AND (direccion_origen IS NULL OR direccion_origen NOT LIKE %s)";
+            $params[] = '%(Intermunicipal)%';
         }
     }
 
@@ -477,12 +490,12 @@ function gofast_pedidos_shortcode() {
         <form method="get" class="gofast-filtros-form">
             <!-- Mantener otros parámetros GET si existen -->
             <?php foreach ($_GET as $key => $value): ?>
-                <?php if (!in_array($key, ['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'pg'])): ?>
+                <?php if (!in_array($key, ['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'pg'])): ?>
                     <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                 <?php endif; ?>
             <?php endforeach; ?>
             
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px;">
+            <div class="gofast-filtros-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px;">
                 <div>
                     <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Estado</label>
                     <select name="estado" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
@@ -523,7 +536,7 @@ function gofast_pedidos_shortcode() {
                 <?php if ($rol === 'admin'): ?>
                     <div>
                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Mensajero</label>
-                        <select name="filtro_mensajero" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <select name="filtro_mensajero" class="gofast-select-filtro" data-placeholder="Todos los mensajeros" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                             <option value="0">Todos</option>
                             <?php foreach ($mensajeros as $m): ?>
                                 <option value="<?php echo (int) $m->id; ?>"<?php selected($filtro_mensajero, $m->id); ?>>
@@ -559,7 +572,7 @@ function gofast_pedidos_shortcode() {
 
                     <div>
                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Negocio</label>
-                        <select name="filtro_negocio" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <select name="filtro_negocio" class="gofast-select-filtro" data-placeholder="Todos los negocios" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                             <option value="0">Todos</option>
                             <?php if (!empty($negocios)): ?>
                                 <?php foreach ($negocios as $neg): ?>
@@ -574,27 +587,18 @@ function gofast_pedidos_shortcode() {
                     <div>
                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Asignado por</label>
                         <select name="filtro_asignado_por" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-                            <option value="0">Todos</option>
-                            <?php 
-                            $asignadores = $wpdb->get_results("
-                                SELECT DISTINCT user_id 
-                                FROM servicios_gofast 
-                                WHERE user_id IS NOT NULL
-                            ");
-                            foreach ($asignadores as $a): 
-                                $usuario = $wpdb->get_row($wpdb->prepare(
-                                    "SELECT id, nombre FROM usuarios_gofast WHERE id = %d", 
-                                    $a->user_id
-                                ));
-                                if ($usuario):
-                            ?>
-                                <option value="<?php echo (int) $usuario->id; ?>"<?php selected($filtro_asignado_por, $usuario->id); ?>>
-                                    <?php echo esc_html($usuario->nombre); ?>
-                                </option>
-                            <?php 
-                                endif;
-                            endforeach; 
-                            ?>
+                            <option value="">Todos</option>
+                            <option value="admin"<?php selected($filtro_asignado_por, 'admin'); ?>>Admin</option>
+                            <option value="mensajero"<?php selected($filtro_asignado_por, 'mensajero'); ?>>Mensajero (Auto-asignado)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Envío Intermunicipal</label>
+                        <select name="filtro_intermunicipal" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                            <option value="">Todos</option>
+                            <option value="si"<?php selected($filtro_intermunicipal, 'si'); ?>>Sí</option>
+                            <option value="no"<?php selected($filtro_intermunicipal, 'no'); ?>>No</option>
                         </select>
                     </div>
                 <?php endif; ?>
@@ -606,7 +610,7 @@ function gofast_pedidos_shortcode() {
                 </button>
                 <?php
                 // Construir URL sin los parámetros de filtro
-                $clean_url = remove_query_arg(['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'pg']);
+                $clean_url = remove_query_arg(['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'pg']);
                 if (empty($clean_url) || $clean_url === home_url('/')) {
                     $clean_url = get_permalink();
                 }
@@ -2009,7 +2013,7 @@ function gofast_pedidos_shortcode() {
                 return jQuery(this).data('placeholder') || '🔍 Escribe para buscar...';
             },
             width: '100%',
-            allowClear: true,
+            allowClear: false,
             minimumResultsForSearch: 0,
             matcher: matcherDestinos,
             sorter: function(results) {
@@ -2176,6 +2180,20 @@ function gofast_pedidos_shortcode() {
             }, 50);
         });
         });
+        
+        // Ocultar todos los selects con Select2 inmediatamente después de inicializarlos
+        jQuery('.gofast-select-filtro').each(function() {
+            if (jQuery(this).data('select2')) {
+                jQuery(this).css({
+                    'visibility': 'hidden',
+                    'position': 'absolute',
+                    'width': '1px',
+                    'height': '1px',
+                    'opacity': '0',
+                    'pointer-events': 'none'
+                });
+            }
+        });
     } else {
         // Si las funciones no están disponibles, reintentar después de un breve delay
         setTimeout(function() {
@@ -2190,7 +2208,7 @@ function gofast_pedidos_shortcode() {
                             return jQuery(this).data('placeholder') || '🔍 Escribe para buscar...';
                         },
                         width: '100%',
-                        allowClear: true,
+                        allowClear: false,
                         minimumResultsForSearch: 0,
                         matcher: window.matcherDestinos,
                         sorter: function(results) {
@@ -2409,6 +2427,16 @@ function gofast_pedidos_shortcode() {
 /* Estilos para formulario de filtros */
 .gofast-filtros-form {
     width: 100%;
+    box-sizing: border-box;
+}
+
+.gofast-filtros-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .gofast-filtros-form label {
@@ -2417,6 +2445,8 @@ function gofast_pedidos_shortcode() {
     margin-bottom: 4px;
     font-size: 13px;
     color: #000;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .gofast-filtros-form input[type="date"],
@@ -2431,6 +2461,98 @@ function gofast_pedidos_shortcode() {
     background: #fff;
     color: #000;
     box-sizing: border-box;
+    display: block;
+}
+
+/* Ocultar select original cuando Select2 está activo - INMEDIATAMENTE */
+.gofast-filtros-form select.gofast-select-filtro {
+    visibility: hidden !important;
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+}
+
+/* Mostrar el contenedor de Select2 */
+.gofast-filtros-form .select2-container {
+    width: 100% !important;
+    display: block !important;
+    margin-bottom: 16px !important;
+}
+
+/* Estilos unificados para Select2 en filtros (desktop) - igual que en cotizador */
+.gofast-filtros-form .select2-container--default .select2-selection--single {
+    background: #fff !important;
+    border: 1px solid var(--gofast-gray-400) !important;
+    border-radius: var(--radius-s) !important;
+    height: 42px !important;
+    padding: 0 !important;
+    padding-left: 10px !important;
+    padding-right: 30px !important;
+    display: flex !important;
+    align-items: center !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+}
+
+.gofast-filtros-form .select2-container--default .select2-selection--single .select2-selection__rendered {
+    background: #fff !important;
+    color: #000 !important;
+    line-height: 30px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    height: 100% !important;
+    width: calc(100% - 30px) !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.gofast-filtros-form .select2-selection__rendered {
+    color: #000 !important;
+    line-height: 30px !important;
+    background: #fff !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 !important;
+    width: calc(100% - 30px) !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.gofast-filtros-form .select2-container--default.select2-container--focus .select2-selection--single,
+.gofast-filtros-form .select2-container--default.select2-container--open .select2-selection--single,
+.gofast-filtros-form .select2-container--default .select2-selection--single[aria-expanded="false"],
+.gofast-filtros-form .select2-container--default .select2-selection--single[aria-expanded="true"] {
+    background: #fff !important;
+}
+
+.gofast-filtros-form .select2-selection__arrow {
+    height: 42px !important;
+    top: 0 !important;
+    right: 8px !important;
+    width: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: absolute !important;
+}
+
+.gofast-filtros-form .select2-selection__arrow b {
+    border-color: #555 transparent transparent transparent !important;
+    margin-top: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
 }
 
 /* Responsive para móvil - tabla de pedidos */
@@ -2518,16 +2640,130 @@ function gofast_pedidos_shortcode() {
         box-sizing: border-box !important;
     }
     
-    /* Filtros en móvil */
-    .gofast-filtros-form > div {
+    /* Filtros en móvil - Layout corregido */
+    .gofast-filtros-grid {
         grid-template-columns: 1fr !important;
         gap: 12px !important;
+    }
+    
+    .gofast-filtros-grid > div {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        float: none !important;
+        clear: both !important;
+    }
+    
+    .gofast-filtros-form label {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-bottom: 4px !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        box-sizing: border-box !important;
+    }
+    
+    .gofast-filtros-form select,
+    .gofast-filtros-form input[type="text"],
+    .gofast-filtros-form input[type="date"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        display: block !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        float: none !important;
+    }
+    
+    /* Asegurar que Select2 en filtros móviles tenga el ancho correcto */
+    .gofast-filtros-form .select2-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        display: block !important;
+        margin: 0 !important;
+    }
+    
+    /* Estilos Select2 en móvil - EXACTAMENTE igual que en el cotizador */
+    .gofast-filtros-form .select2-container--default .select2-selection--single {
+        height: 50px !important;
+        padding: 0 !important;
+        padding-left: 12px !important;
+        padding-right: 35px !important;
+        font-size: 16px !important;
+        display: flex !important;
+        align-items: center !important;
+        position: relative !important;
+        box-sizing: border-box !important;
+    }
+    
+    .gofast-filtros-form .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 34px !important;
+        font-size: 16px !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        height: 100% !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        margin-right: 35px !important;
+    }
+    
+    .gofast-filtros-form .select2-selection__rendered {
+        line-height: 34px !important;
+        font-size: 16px !important;
+        display: flex !important;
+        align-items: center !important;
+        padding: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        margin-right: 35px !important;
+    }
+    
+    /* Asegurar que el span dentro del rendered tenga el tamaño correcto */
+    .gofast-filtros-form .select2-selection__rendered span,
+    .gofast-filtros-form .select2-container--default .select2-selection--single .select2-selection__rendered span {
+        font-size: 16px !important;
+        line-height: 34px !important;
+        display: inline-block !important;
+        width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    
+    .gofast-filtros-form .select2-selection__arrow {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: absolute !important;
+        right: 10px !important;
+        width: 20px !important;
+    }
+    
+    .gofast-filtros-form .select2-selection__arrow b {
+        margin-top: 0 !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
     }
     
     .gofast-filtros-form button,
     .gofast-filtros-form a {
         width: 100% !important;
         min-width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
     }
     
     /* Modal editar destinos en móvil */

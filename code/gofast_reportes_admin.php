@@ -662,8 +662,8 @@ function gofast_reportes_admin_shortcode() {
 
                 <?php if ($es_admin): ?>
                     <div>
-                        <label>Mensajero</label>
-                        <select name="mensajero_id">
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Mensajero</label>
+                        <select name="mensajero_id" class="gofast-select-filtro" data-placeholder="Todos los mensajeros" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                             <option value="0">Todos</option>
                             <?php foreach ($mensajeros as $m): ?>
                                 <option value="<?= (int) $m->id; ?>"<?php selected($mensajero_id, $m->id); ?>>
@@ -906,6 +906,485 @@ function gofast_reportes_admin_shortcode() {
     <?php endif; ?>
 
 </div>
+
+<script>
+(function() {
+    // Asegurar que las funciones normalize y matcherDestinos estén disponibles
+    if (typeof window.normalize === 'undefined') {
+        window.normalize = function(s) {
+            return (s || "")
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        };
+    }
+    
+    if (typeof window.matcherDestinos === 'undefined') {
+        window.matcherDestinos = function(params, data) {
+            if (!data) return null;
+            
+            if (data.children && Array.isArray(data.children)) {
+                return data;
+            }
+            
+            if (!data.id) {
+                if (!params.term || !params.term.trim()) {
+                    return data;
+                }
+                return null;
+            }
+            
+            if (!data.text) return null;
+            
+            if (!params.term || !params.term.trim()) {
+                data.matchScore = 0;
+                return data;
+            }
+
+            const term = window.normalize(params.term);
+            if (!term) {
+                data.matchScore = 0;
+                return data;
+            }
+
+            const text = window.normalize(data.text);
+            
+            if (text === term) {
+                data.matchScore = 10000;
+                return data;
+            }
+            
+            if (text.indexOf(term) === 0) {
+                data.matchScore = 9500;
+                return data;
+            }
+            
+            const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
+            
+            const searchWords = term.split(/\s+/).filter(Boolean).filter(word => {
+                return word.length > 2 && !stopWords.includes(word);
+            });
+            
+            if (searchWords.length === 0) {
+                if (text.indexOf(term) !== -1) {
+                    data.matchScore = 7000;
+                    return data;
+                }
+                return null;
+            }
+            
+            const significantMatches = searchWords.filter(word => {
+                if (word.length <= 2) {
+                    return text.split(/\s+/).some(textWord => textWord.indexOf(word) === 0);
+                }
+                return text.indexOf(word) !== -1;
+            });
+            
+            if (significantMatches.length === 0) return null;
+            
+            const allSignificantMatch = searchWords.length === significantMatches.length;
+            
+            let score = 0;
+            
+            const textWithoutStopWords = text.split(/\s+/).filter(w => !stopWords.includes(w)).join(' ');
+            const termWithoutStopWords = searchWords.join(' ');
+            
+            if (textWithoutStopWords === termWithoutStopWords) {
+                score = 10000;
+            } else if (textWithoutStopWords.indexOf(termWithoutStopWords) === 0) {
+                score = 9000;
+            } else if (textWithoutStopWords.indexOf(termWithoutStopWords) !== -1) {
+                score = 8000;
+            } else if (searchWords.some(word => text.indexOf(word) === 0)) {
+                score = 7000;
+            } else if (text.indexOf(term) !== -1) {
+                score = 6000;
+            } else {
+                score = allSignificantMatch ? 5000 : 3000;
+                
+                let lastIndex = -1;
+                let wordsInOrder = true;
+                searchWords.forEach(word => {
+                    const wordIndex = text.indexOf(word, lastIndex + 1);
+                    if (wordIndex === -1) {
+                        wordsInOrder = false;
+                    } else {
+                        if (wordIndex < lastIndex) wordsInOrder = false;
+                        lastIndex = wordIndex;
+                        if (text.indexOf(word) === 0) score += 500;
+                    }
+                });
+                
+                if (wordsInOrder) score += 1000;
+            }
+            
+            data.matchScore = score;
+            return data;
+        };
+    }
+    
+    // Inicializar Select2 para filtro de mensajero
+    if (window.jQuery && jQuery.fn.select2 && typeof window.matcherDestinos === 'function' && typeof window.normalize === 'function') {
+        jQuery('.gofast-select-filtro').each(function() {
+            if (jQuery(this).data('select2')) {
+                return;
+            }
+            
+            jQuery(this).select2({
+                placeholder: function() {
+                    return jQuery(this).data('placeholder') || '🔍 Escribe para buscar...';
+                },
+                width: '100%',
+                allowClear: false,
+                minimumResultsForSearch: 0,
+                matcher: window.matcherDestinos,
+                sorter: function(results) {
+                    return results.sort(function(a, b) {
+                        return (b.matchScore || 0) - (a.matchScore || 0);
+                    });
+                },
+                templateResult: function(data, container) {
+                    if (!data || !data.text) {
+                        return data ? data.text : '';
+                    }
+                    
+                    if (!data.id) return data.text;
+                    
+                    let originalText = data.text;
+                    let searchTerm = "";
+                    const $activeField = jQuery('.select2-container--open .select2-search__field');
+                    if ($activeField.length) {
+                        searchTerm = $activeField.val() || "";
+                    }
+                    
+                    if (!searchTerm || !searchTerm.trim()) {
+                        const $result = jQuery('<span>').text(originalText);
+                        if (data.matchScore !== undefined) {
+                            $result.attr('data-match-score', data.matchScore);
+                        }
+                        return $result;
+                    }
+                    
+                    const normalizedSearch = window.normalize(searchTerm);
+                    const normalizedText = window.normalize(originalText);
+                    const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
+                    const searchWords = normalizedSearch.split(/\s+/).filter(Boolean).filter(word => {
+                        return word.length > 2 && !stopWords.includes(word);
+                    });
+                    const wordsToHighlight = searchWords.length > 0 ? searchWords : [normalizedSearch];
+                    const highlightRanges = [];
+                    
+                    wordsToHighlight.forEach(function(word) {
+                        let searchPos = 0;
+                        while ((searchPos = normalizedText.indexOf(word, searchPos)) !== -1) {
+                            const endPos = searchPos + word.length;
+                            let origStart = -1;
+                            let origEnd = -1;
+                            let normPos = 0;
+                            
+                            for (let i = 0; i < originalText.length && origStart === -1; i++) {
+                                const charNorm = window.normalize(originalText[i]);
+                                if (normPos === searchPos) {
+                                    origStart = i;
+                                }
+                                normPos += charNorm.length;
+                            }
+                            
+                            if (origStart >= 0) {
+                                normPos = searchPos;
+                                for (let i = origStart; i < originalText.length; i++) {
+                                    const charNorm = window.normalize(originalText[i]);
+                                    normPos += charNorm.length;
+                                    if (normPos >= endPos) {
+                                        origEnd = i + 1;
+                                        break;
+                                    }
+                                }
+                                
+                                if (origStart >= 0 && origEnd > origStart) {
+                                    highlightRanges.push({ start: origStart, end: origEnd });
+                                }
+                            }
+                            
+                            searchPos = endPos;
+                        }
+                    });
+                    
+                    if (highlightRanges.length > 0) {
+                        highlightRanges.sort((a, b) => a.start - b.start);
+                        const mergedRanges = [highlightRanges[0]];
+                        
+                        for (let i = 1; i < highlightRanges.length; i++) {
+                            const current = highlightRanges[i];
+                            const last = mergedRanges[mergedRanges.length - 1];
+                            
+                            if (current.start <= last.end) {
+                                last.end = Math.max(last.end, current.end);
+                            } else {
+                                mergedRanges.push(current);
+                            }
+                        }
+                        
+                        const parts = [];
+                        let lastIndex = 0;
+                        
+                        mergedRanges.forEach(function(range) {
+                            if (range.start > lastIndex) {
+                                parts.push(originalText.substring(lastIndex, range.start));
+                            }
+                            
+                            const matchText = originalText.substring(range.start, range.end);
+                            parts.push('<span style="background-color:#F4C524;color:#000;font-weight:bold;padding:1px 2px;">' + 
+                                       matchText + '</span>');
+                            
+                            lastIndex = range.end;
+                        });
+                        
+                        if (lastIndex < originalText.length) {
+                            parts.push(originalText.substring(lastIndex));
+                        }
+                        
+                        const result = parts.join('');
+                        const $result = jQuery('<span>').html(result);
+                        if (data.matchScore !== undefined) {
+                            $result.attr('data-match-score', data.matchScore);
+                        }
+                        return $result;
+                    }
+                    
+                    const $result = jQuery('<span>').text(originalText);
+                    if (data.matchScore !== undefined) {
+                        $result.attr('data-match-score', data.matchScore);
+                    }
+                    return $result;
+                }
+            }).on('select2:open', function(e) {
+                setTimeout(function() {
+                    const $dropdown = jQuery('.select2-dropdown');
+                    const $searchContainer = $dropdown.find('.select2-search--dropdown');
+                    const $searchField = $searchContainer.find('.select2-search__field');
+                    
+                    if ($searchContainer.length) {
+                        $searchContainer.css({
+                            'display': 'block',
+                            'visibility': 'visible',
+                            'opacity': '1'
+                        });
+                    }
+                    
+                    if ($searchField.length) {
+                        $searchField.css({
+                            'display': 'block',
+                            'visibility': 'visible',
+                            'opacity': '1'
+                        });
+                        
+                        setTimeout(function() {
+                            $searchField.focus();
+                        }, 100);
+                    }
+                }, 50);
+            });
+        });
+        
+        // Ocultar select original cuando Select2 está activo
+        jQuery('.gofast-select-filtro').each(function() {
+            if (jQuery(this).data('select2')) {
+                jQuery(this).css({
+                    'visibility': 'hidden',
+                    'position': 'absolute',
+                    'width': '1px',
+                    'height': '1px',
+                    'opacity': '0',
+                    'pointer-events': 'none'
+                });
+            }
+        });
+    } else {
+        // Reintentar después de un breve delay
+        setTimeout(function() {
+            if (window.jQuery && jQuery.fn.select2 && typeof window.matcherDestinos === 'function' && typeof window.normalize === 'function') {
+                jQuery('.gofast-select-filtro').each(function() {
+                    if (jQuery(this).data('select2')) {
+                        return;
+                    }
+                    
+                    jQuery(this).select2({
+                        placeholder: function() {
+                            return jQuery(this).data('placeholder') || '🔍 Escribe para buscar...';
+                        },
+                        width: '100%',
+                        allowClear: false,
+                        minimumResultsForSearch: 0,
+                        matcher: window.matcherDestinos,
+                        sorter: function(results) {
+                            return results.sort(function(a, b) {
+                                return (b.matchScore || 0) - (a.matchScore || 0);
+                            });
+                        },
+                        templateResult: function(data, container) {
+                            if (!data || !data.text) {
+                                return data ? data.text : '';
+                            }
+                            
+                            if (!data.id) return data.text;
+                            
+                            let originalText = data.text;
+                            let searchTerm = "";
+                            const $activeField = jQuery('.select2-container--open .select2-search__field');
+                            if ($activeField.length) {
+                                searchTerm = $activeField.val() || "";
+                            }
+                            
+                            if (!searchTerm || !searchTerm.trim()) {
+                                const $result = jQuery('<span>').text(originalText);
+                                if (data.matchScore !== undefined) {
+                                    $result.attr('data-match-score', data.matchScore);
+                                }
+                                return $result;
+                            }
+                            
+                            const normalizedSearch = window.normalize(searchTerm);
+                            const normalizedText = window.normalize(originalText);
+                            const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
+                            const searchWords = normalizedSearch.split(/\s+/).filter(Boolean).filter(word => {
+                                return word.length > 2 && !stopWords.includes(word);
+                            });
+                            const wordsToHighlight = searchWords.length > 0 ? searchWords : [normalizedSearch];
+                            const highlightRanges = [];
+                            
+                            wordsToHighlight.forEach(function(word) {
+                                let searchPos = 0;
+                                while ((searchPos = normalizedText.indexOf(word, searchPos)) !== -1) {
+                                    const endPos = searchPos + word.length;
+                                    let origStart = -1;
+                                    let origEnd = -1;
+                                    let normPos = 0;
+                                    
+                                    for (let i = 0; i < originalText.length && origStart === -1; i++) {
+                                        const charNorm = window.normalize(originalText[i]);
+                                        if (normPos === searchPos) {
+                                            origStart = i;
+                                        }
+                                        normPos += charNorm.length;
+                                    }
+                                    
+                                    if (origStart >= 0) {
+                                        normPos = searchPos;
+                                        for (let i = origStart; i < originalText.length; i++) {
+                                            const charNorm = window.normalize(originalText[i]);
+                                            normPos += charNorm.length;
+                                            if (normPos >= endPos) {
+                                                origEnd = i + 1;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (origStart >= 0 && origEnd > origStart) {
+                                            highlightRanges.push({ start: origStart, end: origEnd });
+                                        }
+                                    }
+                                    
+                                    searchPos = endPos;
+                                }
+                            });
+                            
+                            if (highlightRanges.length > 0) {
+                                highlightRanges.sort((a, b) => a.start - b.start);
+                                const mergedRanges = [highlightRanges[0]];
+                                
+                                for (let i = 1; i < highlightRanges.length; i++) {
+                                    const current = highlightRanges[i];
+                                    const last = mergedRanges[mergedRanges.length - 1];
+                                    
+                                    if (current.start <= last.end) {
+                                        last.end = Math.max(last.end, current.end);
+                                    } else {
+                                        mergedRanges.push(current);
+                                    }
+                                }
+                                
+                                const parts = [];
+                                let lastIndex = 0;
+                                
+                                mergedRanges.forEach(function(range) {
+                                    if (range.start > lastIndex) {
+                                        parts.push(originalText.substring(lastIndex, range.start));
+                                    }
+                                    
+                                    const matchText = originalText.substring(range.start, range.end);
+                                    parts.push('<span style="background-color:#F4C524;color:#000;font-weight:bold;padding:1px 2px;">' + 
+                                               matchText + '</span>');
+                                    
+                                    lastIndex = range.end;
+                                });
+                                
+                                if (lastIndex < originalText.length) {
+                                    parts.push(originalText.substring(lastIndex));
+                                }
+                                
+                                const result = parts.join('');
+                                const $result = jQuery('<span>').html(result);
+                                if (data.matchScore !== undefined) {
+                                    $result.attr('data-match-score', data.matchScore);
+                                }
+                                return $result;
+                            }
+                            
+                            const $result = jQuery('<span>').text(originalText);
+                            if (data.matchScore !== undefined) {
+                                $result.attr('data-match-score', data.matchScore);
+                            }
+                            return $result;
+                        }
+                    }).on('select2:open', function(e) {
+                        setTimeout(function() {
+                            const $dropdown = jQuery('.select2-dropdown');
+                            const $searchContainer = $dropdown.find('.select2-search--dropdown');
+                            const $searchField = $searchContainer.find('.select2-search__field');
+                            
+                            if ($searchContainer.length) {
+                                $searchContainer.css({
+                                    'display': 'block',
+                                    'visibility': 'visible',
+                                    'opacity': '1'
+                                });
+                            }
+                            
+                            if ($searchField.length) {
+                                $searchField.css({
+                                    'display': 'block',
+                                    'visibility': 'visible',
+                                    'opacity': '1'
+                                });
+                                
+                                setTimeout(function() {
+                                    $searchField.focus();
+                                }, 100);
+                            }
+                        }, 50);
+                    });
+                });
+                
+                // Ocultar select original
+                jQuery('.gofast-select-filtro').each(function() {
+                    if (jQuery(this).data('select2')) {
+                        jQuery(this).css({
+                            'visibility': 'hidden',
+                            'position': 'absolute',
+                            'width': '1px',
+                            'height': '1px',
+                            'opacity': '0',
+                            'pointer-events': 'none'
+                        });
+                    }
+                });
+            }
+        }, 500);
+    }
+})();
+</script>
 
 <?php
     return ob_get_clean();

@@ -225,10 +225,25 @@ function gofast_admin_solicitar_intermunicipal_shortcode() {
             ], JSON_UNESCAPED_UNICODE);
 
             // Guardar servicio en la base de datos
-            // Incluir el destino en direccion_origen para que se muestre correctamente
-            $direccion_origen_servicio = ($origen_tipo === 'negocio' && $negocio_datos) 
-                ? $origen . ' — ' . $origen_direccion . ' → ' . $destino . ' (Intermunicipal)'
-                : $origen . ' → ' . $destino . ' (Intermunicipal)';
+            // Construir direccion_origen según reglas (sin incluir destino, eso va en el JSON):
+            // 1. Solo barrio (si no hay negocio y no hay dirección)
+            // 2. Negocio + dirección (si hay negocio)
+            // 3. Barrio + dirección (si hay dirección pero no negocio)
+            if ($origen_tipo === 'negocio' && $negocio_datos) {
+                // Caso 2: Negocio + dirección
+                $dir_origen_negocio = $origen_direccion ?: '';
+                if (!empty($dir_origen_negocio)) {
+                    $direccion_origen_servicio = $negocio_datos->nombre . ' — ' . $dir_origen_negocio;
+                } else {
+                    $direccion_origen_servicio = $negocio_datos->nombre;
+                }
+            } elseif (!empty($origen_direccion) && $origen_direccion !== 'Tuluá') {
+                // Caso 3: Barrio + dirección
+                $direccion_origen_servicio = $origen . ' — ' . $origen_direccion;
+            } else {
+                // Caso 1: Solo barrio
+                $direccion_origen_servicio = $origen;
+            }
             
             // Determinar user_id: si es mensajero/admin y hay negocio_user_id, usar ese
             $user_id_servicio = $usuario ? $usuario->id : null;
