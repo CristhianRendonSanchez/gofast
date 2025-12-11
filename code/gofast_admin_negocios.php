@@ -116,9 +116,63 @@ function gofast_admin_negocios_shortcode() {
      * OBTENER DATOS
      *********************************************/
 
-    // Obtener todos los negocios con información del cliente
-    $negocios = $wpdb->get_results(
-        "SELECT n.*, 
+    // Obtener filtro de tipo de negocio
+    $filtro_tipo = isset($_GET['filtro_tipo']) ? sanitize_text_field($_GET['filtro_tipo']) : '';
+
+    // Tipos de negocio (definir antes de construir la consulta)
+    $tipos_negocio = [
+        "Panadería",
+        "Pastelería / Repostería",
+        "Cafetería",
+        "Restaurante",
+        "Comida rápida",
+        "Heladería",
+        "Pizzería",
+        "Asadero",
+        "Supermercado / Minimarket",
+        "Carnicería",
+        "Pescadería",
+        "Fruver",
+        "Boutique",
+        "Zapatería",
+        "Tienda de accesorios",
+        "Papelería",
+        "Librería",
+        "Tienda de regalos",
+        "Floristería",
+        "Ferretería",
+        "Tienda de mascotas / Pet shop",
+        "Tienda de tecnología",
+        "Tienda de electrodomésticos",
+        "Peluquería / Barbería",
+        "Spa / Centro de belleza",
+        "Taller de motos o autos",
+        "Servicio técnico de celulares",
+        "Lavandería",
+        "Fotocopiadora",
+        "Estudio fotográfico",
+        "Agencia de publicidad",
+        "Gimnasio",
+        "Droguería / Farmacia",
+        "Consultorio médico",
+        "Odontología",
+        "Óptica",
+        "Centro de terapias",
+        "Veterinaria",
+        "Pintura",
+        "Decoración",
+        "Inmobiliaria",
+        "Colegio",
+        "Tienda online",
+        "Marketing digital",
+        "Tienda Erótica",
+        "Tienda de químicos / aseo",
+        "Lencería para el hogar",
+        "Otro"
+    ];
+
+    // Construir consulta SQL con filtro opcional
+    $sql_base = "SELECT n.*, 
                 u.nombre as cliente_nombre, 
                 u.telefono as cliente_telefono,
                 u.email as cliente_email,
@@ -127,15 +181,40 @@ function gofast_admin_negocios_shortcode() {
          FROM negocios_gofast n
          LEFT JOIN usuarios_gofast u ON n.user_id = u.id
          LEFT JOIN barrios b ON n.barrio_id = b.id
-         LEFT JOIN sectores s ON n.sector_id = s.id
-         ORDER BY n.created_at DESC"
-    );
+         LEFT JOIN sectores s ON n.sector_id = s.id";
+    
+    $where_clause = "";
+    $sql_params = [];
+    
+    if (!empty($filtro_tipo)) {
+        if ($filtro_tipo === 'Otro') {
+            // Si el filtro es "Otro", mostrar todos los tipos que NO están en la lista predefinida
+            // Excluir "Otro" de la lista para la comparación
+            $tipos_predefinidos = array_filter($tipos_negocio, function($t) { return $t !== 'Otro'; });
+            if (!empty($tipos_predefinidos)) {
+                $placeholders = implode(',', array_fill(0, count($tipos_predefinidos), '%s'));
+                $where_clause = " WHERE n.tipo NOT IN ($placeholders)";
+                $sql_params = array_values($tipos_predefinidos);
+            }
+        } else {
+            // Filtro normal por tipo específico
+            $where_clause = " WHERE n.tipo = %s";
+            $sql_params = [$filtro_tipo];
+        }
+    }
+    
+    $sql = $sql_base . $where_clause . " ORDER BY n.created_at DESC";
+    
+    // Preparar la consulta si hay parámetros
+    if (!empty($sql_params)) {
+        $sql = $wpdb->prepare($sql, $sql_params);
+    }
+
+    // Obtener todos los negocios con información del cliente
+    $negocios = $wpdb->get_results($sql);
 
     // Obtener barrios para el formulario de edición
     $barrios = $wpdb->get_results("SELECT id, nombre FROM barrios ORDER BY nombre ASC");
-
-    // Tipos de negocio
-    $tipos_negocio = ["Restaurante", "Tienda", "Cafetería", "Papelería", "Farmacia", "Otro"];
 
     ob_start();
     ?>
@@ -181,11 +260,31 @@ function gofast_admin_negocios_shortcode() {
 
     <!-- Listado de negocios -->
     <div class="gofast-box">
-        <h3>📋 Todos los Negocios</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+            <h3 style="margin:0;">📋 Todos los Negocios</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <label style="font-weight:600;font-size:14px;white-space:nowrap;">Filtrar por tipo:</label>
+                <select id="filtro-tipo-negocio" 
+                        style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;min-width:200px;"
+                        onchange="filtrarPorTipo()">
+                    <option value="">— Todos los tipos —</option>
+                    <?php foreach ($tipos_negocio as $tipo): ?>
+                        <option value="<?= esc_attr($tipo) ?>" <?= $filtro_tipo === $tipo ? 'selected' : '' ?>>
+                            <?= esc_html($tipo) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <?php if (!empty($filtro_tipo)): ?>
+                    <a href="?" class="gofast-btn-mini" style="background:#6c757d;color:#fff;text-decoration:none;">
+                        Limpiar filtro
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
         
         <?php if (empty($negocios)): ?>
             <p style="text-align: center; color: #666; padding: 20px;">
-                No hay negocios registrados.
+                <?= !empty($filtro_tipo) ? 'No hay negocios registrados con el tipo seleccionado.' : 'No hay negocios registrados.' ?>
             </p>
         <?php else: ?>
             <!-- Vista Desktop: Tabla -->
@@ -425,6 +524,20 @@ function gofast_admin_negocios_shortcode() {
 </div>
 
 <script>
+function filtrarPorTipo() {
+    const selectTipo = document.getElementById('filtro-tipo-negocio');
+    if (selectTipo) {
+        const tipo = selectTipo.value;
+        const url = new URL(window.location.href);
+        if (tipo) {
+            url.searchParams.set('filtro_tipo', tipo);
+        } else {
+            url.searchParams.delete('filtro_tipo');
+        }
+        window.location.href = url.toString();
+    }
+}
+
 function toggleTipoOtroAdmin() {
     const tipoSelect = document.getElementById('editar-negocio-tipo');
     const wrapperOtro = document.getElementById('tipo_otro_wrapper_admin');
@@ -463,7 +576,56 @@ jQuery(document).ready(function($) {
         $('#editar-negocio-activo').prop('checked', negocioActivo == '1');
         
         // Manejar tipo
-        const tiposDefault = ['Restaurante', 'Tienda', 'Cafetería', 'Papelería', 'Farmacia', 'Otro'];
+        const tiposDefault = [
+            'Panadería',
+            'Pastelería / Repostería',
+            'Cafetería',
+            'Restaurante',
+            'Comida rápida',
+            'Heladería',
+            'Pizzería',
+            'Asadero',
+            'Supermercado / Minimarket',
+            'Carnicería',
+            'Pescadería',
+            'Fruver',
+            'Boutique',
+            'Zapatería',
+            'Tienda de accesorios',
+            'Papelería',
+            'Librería',
+            'Tienda de regalos',
+            'Floristería',
+            'Ferretería',
+            'Tienda de mascotas / Pet shop',
+            'Tienda de tecnología',
+            'Tienda de electrodomésticos',
+            'Peluquería / Barbería',
+            'Spa / Centro de belleza',
+            'Taller de motos o autos',
+            'Servicio técnico de celulares',
+            'Lavandería',
+            'Fotocopiadora',
+            'Estudio fotográfico',
+            'Agencia de publicidad',
+            'Gimnasio',
+            'Droguería / Farmacia',
+            'Consultorio médico',
+            'Odontología',
+            'Óptica',
+            'Centro de terapias',
+            'Veterinaria',
+            'Pintura',
+            'Decoración',
+            'Inmobiliaria',
+            'Colegio',
+            'Tienda online',
+            'Marketing digital',
+            'Tienda Erótica',
+            'Tienda de químicos / aseo',
+            'Lencería para el hogar',
+            'Otro'
+        ];
         if (tiposDefault.includes(negocioTipo)) {
             $('#editar-negocio-tipo').val(negocioTipo);
             $('#editar-negocio-tipo-otro').val('');

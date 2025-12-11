@@ -66,6 +66,33 @@ add_shortcode("gofast_confirmacion", function() {
     $detalle_envios = [];
     $total_calculado = 0;
     
+    // Cargar recargos fijos y variables para calcular recargos automáticos
+    $recargos_fijos = $wpdb->get_results("SELECT id, nombre, valor_fijo FROM recargos WHERE activo = 1 AND tipo = 'fijo'");
+    $recargo_fijo_por_envio = 0;
+    foreach ((array) $recargos_fijos as $r) {
+        $monto = intval($r->valor_fijo);
+        if ($monto > 0) {
+            $recargo_fijo_por_envio += $monto;
+        }
+    }
+    
+    $recargos_variables = $wpdb->get_results("SELECT r.id, r.nombre, rr.monto_min, rr.monto_max, rr.recargo FROM recargos r JOIN recargos_rangos rr ON rr.recargo_id = r.id WHERE r.activo = 1 AND r.tipo = 'por_valor' ORDER BY rr.monto_min ASC");
+    $calcular_recargos_variables = function($valor) use ($recargos_variables) {
+        $valor = intval($valor);
+        $total_variable = 0;
+        foreach ((array) $recargos_variables as $r) {
+            $min = intval($r->monto_min);
+            $max = intval($r->monto_max);
+            $rec = intval($r->recargo);
+            $cumple_min = ($valor >= $min);
+            $cumple_max = ($max <= 0) ? true : ($valor <= $max);
+            if ($cumple_min && $cumple_max && $rec > 0) {
+                $total_variable += $rec;
+            }
+        }
+        return $total_variable;
+    };
+    
     foreach ($destinos as $d) {
         $nombre_destino = '';
         if (!empty($d['barrio_nombre'])) {
@@ -89,15 +116,29 @@ add_shortcode("gofast_confirmacion", function() {
             $monto_destino = $precio ? intval($precio) : 0;
         }
         
+        // Calcular recargos automáticos (fijos + variables)
+        $recargo_variable = $calcular_recargos_variables($monto_destino);
+        $recargo_automatico = $recargo_fijo_por_envio + $recargo_variable;
+        
+        // Obtener recargo seleccionable del JSON
+        $recargo_seleccionable_valor = !empty($d['recargo_seleccionable_valor']) ? intval($d['recargo_seleccionable_valor']) : 0;
+        $recargo_seleccionable_nombre = !empty($d['recargo_seleccionable_nombre']) ? $d['recargo_seleccionable_nombre'] : null;
+        $recargo_seleccionable_id = !empty($d['recargo_seleccionable_id']) ? intval($d['recargo_seleccionable_id']) : null;
+        
+        $total_trayecto = $monto_destino + $recargo_automatico + $recargo_seleccionable_valor;
+        
         $detalle_envios[] = [
             'id' => !empty($d['barrio_id']) ? intval($d['barrio_id']) : 0,
             'nombre' => $nombre_destino,
             'precio' => $monto_destino,
-            'recargo' => 0, // Los recargos ya están incluidos en el total del servicio
-            'total' => $monto_destino,
+            'recargo' => $recargo_automatico,
+            'recargo_seleccionable_valor' => $recargo_seleccionable_valor,
+            'recargo_seleccionable_nombre' => $recargo_seleccionable_nombre,
+            'recargo_seleccionable_id' => $recargo_seleccionable_id,
+            'total' => $total_trayecto,
         ];
         
-        $total_calculado += $monto_destino;
+        $total_calculado += $total_trayecto;
     }
     
     // Si no hay destinos con monto, usar el total del servicio dividido entre destinos
@@ -121,8 +162,23 @@ add_shortcode("gofast_confirmacion", function() {
     
     $telefono_empresa = "573194642513"; // +57 319 4642513
     
-    // Mensaje personalizado para servicios intermunicipales
+    // Obtener datos del origen
+    $barrio_origen_nombre = '';
+    if (!empty($origen_data['barrio_nombre'])) {
+        $barrio_origen_nombre = $origen_data['barrio_nombre'];
+    } elseif (!empty($nombre_origen)) {
+        $barrio_origen_nombre = $nombre_origen;
+    }
+    
+    // Extraer dirección de recogida (sin el barrio si está incluido)
+    $direccion_recogida = $pedido->direccion_origen;
+    if (!empty($origen_data['direccion']) && $origen_data['direccion'] !== $pedido->direccion_origen) {
+        $direccion_recogida = $origen_data['direccion'];
+    }
+    
+    // Construir mensaje según el formato solicitado
     if ($es_intermunicipal) {
+        // Mensaje para servicios intermunicipales
         $destino_nombre = '';
         if (!empty($destinos[0]['barrio_nombre'])) {
             $destino_nombre = $destinos[0]['barrio_nombre'];
@@ -130,26 +186,71 @@ add_shortcode("gofast_confirmacion", function() {
             $destino_nombre = $destinos[0]['direccion'];
         }
         
+        $dir_destino_inter = !empty($destinos[0]['direccion']) ? trim($destinos[0]['direccion']) : '';
+        $barrio_destino_inter = !empty($destinos[0]['barrio_nombre']) ? trim($destinos[0]['barrio_nombre']) : '';
+        
+        $destino_display_inter = $dir_destino_inter ?: ($barrio_destino_inter ?: 'No especificado');
+        
         $mensaje = urlencode(
-            "🚚 Hola, acabo de solicitar un servicio INTERMUNICIPAL en GoFast.\n\n" .
+            "🚚 Hola! He solicitado un servicio INTERMUNICIPAL en GoFast.\n\n" .
             "📦 Servicio: #$id\n" .
-            "📍 Origen: {$pedido->direccion_origen}\n" .
-            "🎯 Destino: " . ($destino_nombre ?: 'No especificado') . "\n" .
-            "💰 Total: $" . number_format($pedido->total, 0, ',', '.') . "\n\n" .
-            "⚠️ IMPORTANTE:\n" .
-            "• El pedido debe estar pago con anticipación.\n" .
-            "• El valor del envío debe ser cancelado antes de despachar.\n" .
-            "• Solo zona urbana.\n\n" .
-            "Por favor confirmar la recogida. Gracias."
+            "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n" .
+            ($barrio_origen_nombre ? "🏙 Barrio: $barrio_origen_nombre\n" : "") .
+            "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n" .
+            "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n" .
+            "💲 Monto a pagar:\n" .
+            "💰 Costo del envío: $" . number_format($pedido->total, 0, ',', '.') . "\n\n" .
+            "🚫 IMPORTANTE:\n" .
+            "Si ya no necesitas el servicio, recuerda cancelarlo antes de que el mensajero llegue al punto de recogida. En caso contrario, se aplicará un recargo por desplazamiento.\n\n" .
+            "📍 Destino: $destino_display_inter\n" .
+            ($barrio_destino_inter && $barrio_destino_inter !== $dir_destino_inter && $dir_destino_inter ? "🏙 Barrio: $barrio_destino_inter\n" : "")
         );
     } else {
-        $mensaje = urlencode(
-            "🚀 Hola, acabo de solicitar un servicio en GoFast.\n\n" .
-            "📦 Servicio: #$id\n" .
-            "📍 Origen: {$pedido->direccion_origen}\n" .
-            "💰 Total: $" . number_format($pedido->total, 0, ',', '.') . "\n\n" .
-            "Por favor confirmar la recogida. Gracias."
-        );
+        // Mensaje para servicios normales (múltiples destinos posibles)
+        $mensaje_texto = "🚀 Hola! He solicitado un servicio en GoFast.\n\n";
+        $mensaje_texto .= "📦 Servicio: #$id\n";
+        $mensaje_texto .= "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n";
+        if ($barrio_origen_nombre) {
+            $mensaje_texto .= "🏙 Barrio: $barrio_origen_nombre\n";
+        }
+        $mensaje_texto .= "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n";
+        $mensaje_texto .= "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n";
+        $mensaje_texto .= "💲 Monto a pagar:\n";
+        $mensaje_texto .= "💰 Costo del envío: $" . number_format($pedido->total, 0, ',', '.') . "\n\n";
+        $mensaje_texto .= "🚫 IMPORTANTE:\n";
+        $mensaje_texto .= "Si ya no necesitas el servicio, recuerda cancelarlo antes de que el mensajero llegue al punto de recogida. En caso contrario, se aplicará un recargo por desplazamiento.\n\n";
+        
+        // Agregar información de cada destino
+        if (!empty($destinos)) {
+            foreach ($destinos as $idx => $dest) {
+                $dir_destino = !empty($dest['direccion']) ? trim($dest['direccion']) : '';
+                $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
+                
+                if ($idx > 0) {
+                    $mensaje_texto .= "\n";
+                }
+                
+                // Destino: usar dirección si existe, sino el barrio
+                $destino_display = $dir_destino ?: ($barrio_destino ?: 'No especificado');
+                $mensaje_texto .= "📍 Destino: $destino_display\n";
+                
+                // Barrio: solo mostrar si es diferente de la dirección
+                if ($barrio_destino && $barrio_destino !== $dir_destino && $dir_destino) {
+                    $mensaje_texto .= "🏙 Barrio: $barrio_destino\n";
+                } elseif ($barrio_destino && !$dir_destino) {
+                    // Si solo hay barrio, no duplicar en Destino y Barrio
+                    // Ya está en Destino, así que no lo repetimos
+                }
+                
+                // Indicaciones: por ahora vacío, pero se puede agregar si hay un campo específico en el futuro
+                // Si en el futuro se agrega un campo 'indicaciones' al JSON, se mostraría aquí
+            }
+        } else {
+            // Si no hay destinos en el JSON, usar datos básicos
+            $mensaje_texto .= "📍 Destino: No especificado\n";
+        }
+        
+        $mensaje = urlencode($mensaje_texto);
     }
 
     /* ==========================================================
@@ -212,12 +313,24 @@ add_shortcode("gofast_confirmacion", function() {
                              data-total="<?= esc_attr($d['total']) ?>">
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f8f9fa;border-radius:8px;margin-bottom:10px;border-left:4px solid #F4C524;">
                                 <div style="flex:1;">
-                                    <strong>🎯 <?= esc_html($d['nombre']) ?></strong><br>
+                                    <strong>🎯 <?= esc_html($d['nombre']) ?></strong>
+                                    <?php if (!empty($d['recargo_seleccionable_id']) && !empty($d['recargo_seleccionable_valor'])): ?>
+                                        <span style="background:#4CAF50;color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;margin-left:8px;font-weight:normal;">
+                                            ⭐ Con recargo adicional
+                                        </span>
+                                    <?php endif; ?>
+                                    <br>
                                     <?php if ($d['precio'] > 0): ?>
                                         <small style="color:#666;">
                                             Base: $<?= number_format($d['precio'], 0, ',', '.') ?>
                                             <?php if ($d['recargo'] > 0): ?>
-                                                | Recargo: $<?= number_format($d['recargo'], 0, ',', '.') ?>
+                                                | Recargo automático: $<?= number_format($d['recargo'], 0, ',', '.') ?>
+                                            <?php endif; ?>
+                                            <?php if (!empty($d['recargo_seleccionable_id']) && !empty($d['recargo_seleccionable_valor'])): ?>
+                                                | <strong style="color:#4CAF50;">Recargo adicional: $<?= number_format($d['recargo_seleccionable_valor'], 0, ',', '.') ?></strong>
+                                                <?php if (!empty($d['recargo_seleccionable_nombre'])): ?>
+                                                    <span style="color:#666;">(<?= esc_html($d['recargo_seleccionable_nombre']) ?>)</span>
+                                                <?php endif; ?>
                                             <?php endif; ?>
                                         </small><br>
                                     <?php endif; ?>

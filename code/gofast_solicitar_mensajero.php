@@ -116,8 +116,16 @@ function gofast_resultado_cotizacion() {
     $nombre_origen = $wpdb->get_var("SELECT nombre FROM barrios WHERE id = $origen");
 
     /* ==========================================================
-       ✅ 2) Recargos activos (FIJOS + POR VALOR)
+       ✅ 2) Recargos activos (FIJOS + POR VALOR + SELECCIONABLES)
     ========================================================== */
+
+    // 🔹 Recargos SELECCIONABLES (por_volumen_peso) - para que el cliente pueda elegir
+    $recargos_seleccionables = $wpdb->get_results("
+        SELECT id, nombre, valor_fijo 
+        FROM recargos
+        WHERE activo = 1 AND tipo = 'por_volumen_peso'
+        ORDER BY nombre ASC
+    ");
 
     // 🔹 Recargos FIJOS (siempre se aplican por cada trayecto)
     $recargos_fijos = $wpdb->get_results("
@@ -216,6 +224,7 @@ function gofast_resultado_cotizacion() {
 
         $detalle_envios[] = [
             "destino"                  => $nombre_destino,
+            "destino_id"               => $destino,
             "valor"                    => $precio,
             "recargo_fijo"             => $recargo_fijo_por_envio,
             "recargo_variable_monto"   => $recargo_variable_monto,
@@ -350,6 +359,19 @@ function gofast_resultado_cotizacion() {
 			$m = trim($m);
 			$montos_dest[$i] = ($m === "" ? 0 : intval(preg_replace('/[^\d]/', '', $m)));
 		}
+		
+		// Obtener recargos seleccionables por destino
+		$recargos_seleccionables_por_destino = [];
+		if (!empty($_POST['recargo_seleccionable']) && is_array($_POST['recargo_seleccionable'])) {
+			foreach ($_POST['recargo_seleccionable'] as $destino_index => $recargo_id) {
+				$destino_index = intval($destino_index);
+				$recargo_id = intval($recargo_id);
+				if ($destino_index >= 0 && $recargo_id > 0 && isset($destinos[$destino_index])) {
+					$dest_id = intval($destinos[$destino_index]);
+					$recargos_seleccionables_por_destino[$dest_id] = $recargo_id;
+				}
+			}
+		}
 
 		// JSON de origen
 		$origen_completo = [
@@ -367,6 +389,22 @@ function gofast_resultado_cotizacion() {
 
 			$barrio_nombre = $wpdb->get_var("SELECT nombre FROM barrios WHERE id = $dest_id");
 			$sector_id     = intval($wpdb->get_var("SELECT sector_id FROM barrios WHERE id = $dest_id"));
+			
+			// Agregar recargo seleccionable si existe para este destino
+			$recargo_seleccionable_id = null;
+			$recargo_seleccionable_valor = 0;
+			$recargo_seleccionable_nombre = null;
+			if (isset($recargos_seleccionables_por_destino[$dest_id])) {
+				$recargo_seleccionable_id = intval($recargos_seleccionables_por_destino[$dest_id]);
+				$recargo_seleccionable = $wpdb->get_row($wpdb->prepare(
+					"SELECT id, nombre, valor_fijo FROM recargos WHERE id = %d AND tipo = 'por_volumen_peso' AND activo = 1",
+					$recargo_seleccionable_id
+				));
+				if ($recargo_seleccionable) {
+					$recargo_seleccionable_valor = intval($recargo_seleccionable->valor_fijo);
+					$recargo_seleccionable_nombre = $recargo_seleccionable->nombre;
+				}
+			}
 
 			$destinos_completos[] = [
 				"barrio_id"     => $dest_id,
@@ -374,6 +412,9 @@ function gofast_resultado_cotizacion() {
 				"sector_id"     => $sector_id,
 				"direccion"     => !empty($dirs_dest[$i]) ? sanitize_text_field($dirs_dest[$i]) : "",
 				"monto"         => !empty($montos_dest[$i]) ? $montos_dest[$i] : 0,
+				"recargo_seleccionable_id" => $recargo_seleccionable_id,
+				"recargo_seleccionable_valor" => $recargo_seleccionable_valor,
+				"recargo_seleccionable_nombre" => $recargo_seleccionable_nombre,
 			];
 		}
 
@@ -391,13 +432,35 @@ function gofast_resultado_cotizacion() {
 			$user_id_servicio = $cliente_propietario; // Asociar al cliente propietario del negocio
 		}
 		
+		// Recalcular total incluyendo recargos seleccionables
+		$total_final = 0;
+		foreach ($destinos_completos as $dest) {
+			// Buscar el precio base de este destino
+			$sector_dest = intval($dest['sector_id']);
+			$precio_base = $wpdb->get_var($wpdb->prepare(
+				"SELECT precio FROM tarifas WHERE origen_sector_id=%d AND destino_sector_id=%d",
+				$sector_origen,
+				$sector_dest
+			));
+			$precio_base = $precio_base ? intval($precio_base) : 0;
+			
+			// Calcular recargos automáticos
+			$calc_var = $calcular_recargos_variables($precio_base);
+			$recargo_auto = $recargo_fijo_por_envio + $calc_var['total'];
+			
+			// Agregar recargo seleccionable si existe
+			$recargo_sel = intval($dest['recargo_seleccionable_valor'] ?? 0);
+			
+			$total_final += $precio_base + $recargo_auto + $recargo_sel;
+		}
+		
 		// Guardar servicio
 		$insertado = $wpdb->insert("servicios_gofast", [
 			"nombre_cliente"   => $nombre,
 			"telefono_cliente" => $tel,
 			"direccion_origen" => $dir_origen,
 			"destinos"         => $json_final,
-			"total"            => $total,
+			"total"            => $total_final,
 			"estado"           => "pendiente",
 			"tracking_estado"  => "pendiente",
 			"mensajero_id"     => null,
@@ -576,14 +639,35 @@ function gofast_resultado_cotizacion() {
 
                 <div id="direcciones-destinos-wrapper">
                     <?php foreach ($detalle_envios as $idx => $d): ?>
-                        <div class="gofast-dir-item" data-destino-index="<?= esc_attr($idx) ?>">
-                            <label><?= esc_html($d["destino"]) ?></label>
+                        <div class="gofast-dir-item" data-destino-index="<?= esc_attr($idx) ?>" data-destino-id="<?= esc_attr($d['destino_id'] ?? '') ?>">
+                            <label><strong><?= esc_html($d["destino"]) ?></strong></label>
 
                             <!-- Dirección destino OPCIONAL -->
-                            <input type="text" name="dir_destino[]" placeholder="Ej: Calle 12 #3-15">
+                            <input type="text" name="dir_destino[]" placeholder="Ej: Calle 12 #3-15" style="margin-top:8px;">
 
                             <!-- Monto OPCIONAL -->
-                            <input type="text" name="monto_destino[]" class="gofast-money" placeholder="$ 0">
+                            <input type="text" name="monto_destino[]" class="gofast-money" placeholder="$ 0" style="margin-top:8px;">
+                            
+                            <?php if (!empty($recargos_seleccionables)): ?>
+                                <div style="margin-top:12px;">
+                                    <label style="display:block;margin-bottom:4px;font-size:13px;color:#666;">
+                                        <strong>➕ Recargo adicional (opcional):</strong>
+                                    </label>
+                                    <select name="recargo_seleccionable[<?= esc_attr($idx) ?>]" 
+                                            class="recargo-seleccionable-select" 
+                                            data-destino-index="<?= esc_attr($idx) ?>"
+                                            style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:14px;">
+                                        <option value="">Sin recargo adicional</option>
+                                        <?php foreach ($recargos_seleccionables as $rs): ?>
+                                            <option value="<?= esc_attr($rs->id) ?>" 
+                                                    data-valor="<?= esc_attr($rs->valor_fijo) ?>"
+                                                    data-nombre="<?= esc_attr($rs->nombre) ?>">
+                                                <?= esc_html($rs->nombre) ?> (+$<?= number_format($rs->valor_fijo, 0, ',', '.') ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>

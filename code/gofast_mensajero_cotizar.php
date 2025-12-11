@@ -96,6 +96,18 @@ function gofast_mensajero_cotizar_shortcode() {
                 return "<div class='gofast-box'>Debes tener al menos un destino.</div>";
             }
             
+            // Obtener recargos seleccionables por destino
+            $recargos_seleccionables_por_destino = [];
+            if (!empty($_POST['recargo_seleccionable']) && is_array($_POST['recargo_seleccionable'])) {
+                foreach ($_POST['recargo_seleccionable'] as $destino_id => $recargo_id) {
+                    $destino_id = intval($destino_id);
+                    $recargo_id = intval($recargo_id);
+                    if ($destino_id > 0 && $recargo_id > 0) {
+                        $recargos_seleccionables_por_destino[$destino_id] = $recargo_id;
+                    }
+                }
+            }
+            
             // Obtener datos del negocio si se seleccionó uno
             $negocio_seleccionado = null;
             $cliente_propietario = null;
@@ -176,7 +188,24 @@ function gofast_mensajero_cotizar_shortcode() {
 
                 $recargo_variable = $calcular_recargos_variables($precio);
                 $recargo_total = $recargo_fijo_por_envio + $recargo_variable;
-                $total_trayecto = $precio + $recargo_total;
+                
+                // Agregar recargo seleccionable si existe para este destino
+                $recargo_seleccionable_valor = 0;
+                $recargo_seleccionable_id = null;
+                $recargo_seleccionable_nombre = null;
+                if (isset($recargos_seleccionables_por_destino[$dest_id])) {
+                    $recargo_seleccionable_id = $recargos_seleccionables_por_destino[$dest_id];
+                    $recargo_seleccionable = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, nombre, valor_fijo FROM recargos WHERE id = %d AND tipo = 'por_volumen_peso' AND activo = 1",
+                        $recargo_seleccionable_id
+                    ));
+                    if ($recargo_seleccionable) {
+                        $recargo_seleccionable_valor = intval($recargo_seleccionable->valor_fijo);
+                        $recargo_seleccionable_nombre = $recargo_seleccionable->nombre;
+                    }
+                }
+                
+                $total_trayecto = $precio + $recargo_total + $recargo_seleccionable_valor;
                 $total += $total_trayecto;
 
                 $destinos_completos[] = [
@@ -185,6 +214,9 @@ function gofast_mensajero_cotizar_shortcode() {
                     'sector_id' => $sector_destino,
                     'direccion' => '',
                     'monto' => 0,
+                    'recargo_seleccionable_id' => $recargo_seleccionable_id,
+                    'recargo_seleccionable_valor' => $recargo_seleccionable_valor,
+                    'recargo_seleccionable_nombre' => $recargo_seleccionable_nombre,
                 ];
             }
 
@@ -287,11 +319,37 @@ function gofast_mensajero_cotizar_shortcode() {
             $negocio_id = isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0;
             $destinos = array_map('intval', (array) ($_POST['destino'] ?? []));
             
+            // Eliminar duplicados y valores vacíos/cero
+            $destinos = array_filter($destinos, function($id) {
+                return $id > 0;
+            });
+            $destinos = array_unique($destinos);
+            $destinos = array_values($destinos); // Reindexar array
+            
+            // Guardar recargos seleccionables si vienen en el POST
+            $recargos_seleccionables_guardar = [];
+            if (!empty($_POST['recargo_seleccionable']) && is_array($_POST['recargo_seleccionable'])) {
+                foreach ($_POST['recargo_seleccionable'] as $destino_id => $recargo_id) {
+                    $destino_id = intval($destino_id);
+                    $recargo_id = intval($recargo_id);
+                    if ($destino_id > 0 && $recargo_id > 0) {
+                        $recargos_seleccionables_guardar[$destino_id] = $recargo_id;
+                    }
+                }
+            }
+            
+            // Mantener recargos seleccionables existentes de la sesión si no vienen en POST
+            $cotizacion_anterior = $_SESSION['gofast_mensajero_cotizacion'] ?? null;
+            if (!empty($cotizacion_anterior['recargos_seleccionables']) && empty($recargos_seleccionables_guardar)) {
+                $recargos_seleccionables_guardar = $cotizacion_anterior['recargos_seleccionables'];
+            }
+            
             if ($origen > 0 && !empty($destinos)) {
                 $_SESSION['gofast_mensajero_cotizacion'] = [
                     'origen' => $origen,
                     'destinos' => $destinos,
                     'negocio_id' => $negocio_id,
+                    'recargos_seleccionables' => $recargos_seleccionables_guardar,
                 ];
             }
         }
@@ -302,8 +360,15 @@ function gofast_mensajero_cotizar_shortcode() {
             // Volver al paso 1
             unset($_SESSION['gofast_mensajero_cotizacion']);
         } else {
+            // Eliminar duplicados antes de mostrar resumen
+            $destinos_unicos = array_values(array_unique(array_filter($cotizacion['destinos'], function($id) {
+                return $id > 0;
+            })));
+            $cotizacion['destinos'] = $destinos_unicos;
+            $_SESSION['gofast_mensajero_cotizacion'] = $cotizacion;
+            
             // Mostrar resumen editable
-            return gofast_mensajero_mostrar_resumen($cotizacion['origen'], $cotizacion['destinos']);
+            return gofast_mensajero_mostrar_resumen($cotizacion['origen'], $destinos_unicos);
         }
     }
 
@@ -961,6 +1026,9 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
             $recargos_fijos_nombres[] = $r->nombre;
         }
     }
+    
+    // Recargos seleccionables (por_volumen_peso)
+    $recargos_seleccionables = $wpdb->get_results("SELECT id, nombre, valor_fijo FROM recargos WHERE activo = 1 AND tipo = 'por_volumen_peso' ORDER BY nombre ASC");
 
     $recargos_variables = $wpdb->get_results("SELECT r.id, r.nombre, rr.monto_min, rr.monto_max, rr.recargo FROM recargos r JOIN recargos_rangos rr ON rr.recargo_id = r.id WHERE r.activo = 1 AND r.tipo = 'por_valor' ORDER BY rr.monto_min ASC");
     
@@ -998,7 +1066,11 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
 
         $recargo_variable = $calcular_recargos_variables($precio);
         $recargo_total = $recargo_fijo_por_envio + $recargo_variable;
-        $total_trayecto = $precio + $recargo_total;
+        
+        // Recargo seleccionable inicialmente 0 (se puede cambiar en el resumen)
+        $recargo_seleccionable_valor = 0;
+        
+        $total_trayecto = $precio + $recargo_total + $recargo_seleccionable_valor;
         $total += $total_trayecto;
 
         $detalle_envios[] = [
@@ -1006,6 +1078,7 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
             'nombre' => $nombre_destino,
             'precio' => $precio,
             'recargo' => $recargo_total,
+            'recargo_seleccionable' => $recargo_seleccionable_valor,
             'total' => $total_trayecto,
         ];
     }
@@ -1039,21 +1112,57 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
                          data-destino-id="<?= esc_attr($d['id']) ?>"
                          data-precio="<?= esc_attr($d['precio']) ?>"
                          data-recargo="<?= esc_attr($d['recargo']) ?>"
+                         data-recargo-seleccionable="<?= esc_attr($d['recargo_seleccionable'] ?? 0) ?>"
+                         data-recargo-seleccionable-id="<?= esc_attr($d['recargo_seleccionable_id'] ?? '') ?>"
                          data-total="<?= esc_attr($d['total']) ?>">
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f8f9fa;border-radius:8px;margin-bottom:10px;border-left:4px solid #F4C524;">
-                            <div style="flex:1;">
-                                <strong>🎯 <?= esc_html($d['nombre']) ?></strong><br>
-                                <small style="color:#666;">
-                                    Base: $<?= number_format($d['precio'], 0, ',', '.') ?> | 
-                                    Recargo: $<?= number_format($d['recargo'], 0, ',', '.') ?>
-                                </small><br>
-                                <strong style="color:#4CAF50;font-size:18px;">
+                        <div style="padding:12px;background:#f8f9fa;border-radius:8px;margin-bottom:10px;border-left:4px solid #F4C524;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                <div style="flex:1;">
+                                    <strong>🎯 <?= esc_html($d['nombre']) ?></strong>
+                                    <?php if (!empty($d['recargo_seleccionable_id']) && !empty($d['recargo_seleccionable'])): ?>
+                                        <span style="background:#4CAF50;color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;margin-left:8px;font-weight:normal;">
+                                            ⭐ Con recargo adicional
+                                        </span>
+                                    <?php endif; ?>
+                                    <br>
+                                    <small style="color:#666;">
+                                        Base: $<?= number_format($d['precio'], 0, ',', '.') ?> | 
+                                        Recargo automático: $<?= number_format($d['recargo'], 0, ',', '.') ?>
+                                        <?php if (!empty($d['recargo_seleccionable_id']) && !empty($d['recargo_seleccionable'])): ?>
+                                            | <strong style="color:#4CAF50;">Recargo adicional: $<?= number_format($d['recargo_seleccionable'], 0, ',', '.') ?></strong>
+                                        <?php endif; ?>
+                                    </small>
+                                </div>
+                                <button type="button" class="gofast-btn-delete" onclick="eliminarDestinoResumen(<?= esc_attr($d['id']) ?>)" style="margin-left:12px;padding:8px 12px;">
+                                    ❌ Eliminar
+                                </button>
+                            </div>
+                            <?php if (!empty($recargos_seleccionables)): ?>
+                                <div style="margin-top:8px;padding-top:8px;border-top:1px solid #ddd;">
+                                    <label style="display:block;margin-bottom:4px;font-size:13px;color:#666;">
+                                        <strong>➕ Recargo adicional (opcional):</strong>
+                                    </label>
+                                    <select name="recargo_seleccionable[<?= esc_attr($d['id']) ?>]" 
+                                            class="recargo-seleccionable-select" 
+                                            data-destino-id="<?= esc_attr($d['id']) ?>"
+                                            style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:14px;">
+                                        <option value="">Sin recargo adicional</option>
+                                        <?php foreach ($recargos_seleccionables as $rs): ?>
+                                            <option value="<?= esc_attr($rs->id) ?>" 
+                                                    data-valor="<?= esc_attr($rs->valor_fijo) ?>"
+                                                    data-nombre="<?= esc_attr($rs->nombre) ?>"
+                                                    <?= (isset($d['recargo_seleccionable_id']) && $d['recargo_seleccionable_id'] == $rs->id) ? 'selected' : '' ?>>
+                                                <?= esc_html($rs->nombre) ?> (+$<?= number_format($rs->valor_fijo, 0, ',', '.') ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endif; ?>
+                            <div style="margin-top:8px;text-align:right;">
+                                <strong style="color:#4CAF50;font-size:18px;" class="destino-total-display">
                                     $<?= number_format($d['total'], 0, ',', '.') ?>
                                 </strong>
                             </div>
-                            <button type="button" class="gofast-btn-delete" onclick="eliminarDestinoResumen(<?= esc_attr($d['id']) ?>)" style="margin-left:12px;padding:8px 12px;">
-                                ❌ Eliminar
-                            </button>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -1096,6 +1205,7 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
             <form method="post" id="form-aceptar-rechazar">
                 <input type="hidden" name="origen" id="input-origen" value="<?= esc_attr($origen) ?>">
                 <input type="hidden" name="destinos_finales" id="input-destinos" value="<?= esc_attr(implode(',', array_column($detalle_envios, 'id'))) ?>">
+                <!-- Los recargos seleccionables se agregarán dinámicamente con JavaScript -->
 
                 <div class="gofast-btn-group" style="margin-top:24px;">
                     <button type="submit" name="gofast_mensajero_aceptar" class="gofast-btn-request" style="background:#4CAF50;color:#fff;">
@@ -1111,6 +1221,53 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
     </div>
 
     <script>
+    // Proteger contra errores de toggleOtro si se ejecuta desde otro archivo
+    (function() {
+        const tipoSelectExists = document.getElementById("tipo_negocio");
+        const wrapperOtroExists = document.getElementById("tipo_otro_wrapper");
+        
+        // Si los elementos no existen, crear una función segura desde el inicio
+        if (!tipoSelectExists || !wrapperOtroExists) {
+            if (typeof window.toggleOtro === 'undefined') {
+                window.toggleOtro = function() {
+                    // Función vacía segura - no hacer nada
+                    return;
+                };
+            } else if (typeof window.toggleOtro === 'function') {
+                // Si existe y los elementos no están presentes, proteger la función
+                const originalToggleOtro = window.toggleOtro;
+                window.toggleOtro = function() {
+                    try {
+                        const tipoSelect = document.getElementById("tipo_negocio");
+                        const wrapperOtro = document.getElementById("tipo_otro_wrapper");
+                        if (tipoSelect && wrapperOtro && tipoSelect.parentNode && wrapperOtro.parentNode) {
+                            return originalToggleOtro();
+                        }
+                    } catch(e) {
+                        // Silenciar error completamente
+                        return;
+                    }
+                };
+            }
+        }
+        
+        // También prevenir que setTimeout ejecute toggleOtro si no están los elementos
+        const originalSetTimeout = window.setTimeout;
+        window.setTimeout = function(func, delay) {
+            if (typeof func === 'function') {
+                const funcStr = func.toString();
+                if (funcStr.includes('toggleOtro')) {
+                    const tipoSelect = document.getElementById("tipo_negocio");
+                    const wrapperOtro = document.getElementById("tipo_otro_wrapper");
+                    if (!tipoSelect || !wrapperOtro) {
+                        return null; // No ejecutar si no existen los elementos
+                    }
+                }
+            }
+            return originalSetTimeout.apply(this, arguments);
+        };
+    })();
+    
     // Datos para JavaScript
     const datosResumen = {
         origen: <?= json_encode($origen) ?>,
@@ -1167,9 +1324,14 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
                     return;
                 }
                 
-                // Verificar que no esté ya agregado
-                if (obtenerDestinosActuales().includes(destinoId.toString())) {
+                // Verificar duplicados - convertir a números para comparación
+                const destinosActuales = obtenerDestinosActuales().map(id => parseInt(id));
+                if (destinosActuales.includes(destinoId)) {
                     alert('Este destino ya está en el resumen');
+                    select.value = '';
+                    if (window.jQuery && jQuery.fn.select2) {
+                        jQuery(select).val(null).trigger('change');
+                    }
                     return;
                 }
                 
@@ -1191,6 +1353,20 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
     }
 
     function agregarDestinoResumen(destinoId) {
+        // Verificar nuevamente antes de agregar (por si acaso)
+        const destinosActuales = obtenerDestinosActuales().map(id => parseInt(id));
+        if (destinosActuales.includes(destinoId)) {
+            alert('Este destino ya está en el resumen');
+            const select = document.getElementById('nuevo-destino-select');
+            if (select) {
+                select.value = '';
+                if (window.jQuery && jQuery.fn.select2) {
+                    jQuery(select).val(null).trigger('change');
+                }
+            }
+            return;
+        }
+        
         // Recargar página con nuevo destino agregado (más confiable para recargos variables)
         const form = document.createElement('form');
         form.method = 'POST';
@@ -1199,18 +1375,42 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
         const inputOrigen = document.createElement('input');
         inputOrigen.type = 'hidden';
         inputOrigen.name = 'origen';
-        inputOrigen.value = document.getElementById('input-origen').value;
-        form.appendChild(inputOrigen);
+        const origenInput = document.getElementById('input-origen');
+        if (origenInput) {
+            inputOrigen.value = origenInput.value;
+            form.appendChild(inputOrigen);
+        }
         
-        const destinosActuales = obtenerDestinosActuales();
-        destinosActuales.push(destinoId.toString());
-        
-        destinosActuales.forEach(function(id) {
+        // Agregar todos los destinos actuales (sin duplicados)
+        const destinosUnicos = [...new Set(destinosActuales)];
+        destinosUnicos.forEach(function(id) {
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = 'destino[]';
             input.value = id;
             form.appendChild(input);
+        });
+        
+        // Agregar el nuevo destino solo si no está ya en la lista
+        if (!destinosUnicos.includes(destinoId)) {
+            const nuevoDestinoInput = document.createElement('input');
+            nuevoDestinoInput.type = 'hidden';
+            nuevoDestinoInput.name = 'destino[]';
+            nuevoDestinoInput.value = destinoId;
+            form.appendChild(nuevoDestinoInput);
+        }
+        
+        // Agregar recargos seleccionables actuales para preservarlos
+        document.querySelectorAll('.recargo-seleccionable-select').forEach(function(select) {
+            const destinoIdSelect = select.getAttribute('data-destino-id');
+            const recargoId = select.value;
+            if (destinoIdSelect && recargoId && recargoId !== '') {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'recargo_seleccionable[' + destinoIdSelect + ']';
+                input.value = recargoId;
+                form.appendChild(input);
+            }
         });
         
         const submit = document.createElement('input');
@@ -1224,10 +1424,15 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
     }
 
     function obtenerDestinosActuales() {
-        const items = document.querySelectorAll('[data-destino-id]');
+        const items = document.querySelectorAll('.gofast-destino-resumen-item[data-destino-id]');
         const ids = [];
+        const idsSet = new Set(); // Usar Set para evitar duplicados más eficientemente
         items.forEach(function(item) {
-            ids.push(item.getAttribute('data-destino-id'));
+            const id = item.getAttribute('data-destino-id');
+            if (id && id !== 'null' && id !== 'undefined' && !idsSet.has(id)) {
+                idsSet.add(id);
+                ids.push(id);
+            }
         });
         return ids;
     }
@@ -1238,12 +1443,21 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
     }
 
     function recalcularTotalJS() {
-        const items = document.querySelectorAll('[data-destino-id]');
+        const items = document.querySelectorAll('.gofast-destino-resumen-item');
         let total = 0;
         
         items.forEach(function(item) {
-            const itemTotal = parseFloat(item.getAttribute('data-total')) || 0;
+            const precioBase = parseFloat(item.getAttribute('data-precio')) || 0;
+            const recargoAuto = parseFloat(item.getAttribute('data-recargo')) || 0;
+            const recargoSeleccionable = parseFloat(item.getAttribute('data-recargo-seleccionable')) || 0;
+            const itemTotal = precioBase + recargoAuto + recargoSeleccionable;
             total += itemTotal;
+            
+            // Actualizar display del total del destino
+            const totalDisplay = item.querySelector('.destino-total-display');
+            if (totalDisplay) {
+                totalDisplay.textContent = '$' + itemTotal.toLocaleString('es-CO');
+            }
         });
         
         // Actualizar total en pantalla
@@ -1258,6 +1472,50 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
             // Recargar para volver al paso 1
             window.location.href = '<?= esc_url(home_url('/mensajero-cotizar')) ?>';
         }
+    }
+    
+    // Manejar cambio de recargo seleccionable
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('recargo-seleccionable-select')) {
+            const select = e.target;
+            const destinoId = select.getAttribute('data-destino-id');
+            const item = document.querySelector('[data-destino-id="' + destinoId + '"]');
+            
+            if (item) {
+                const option = select.options[select.selectedIndex];
+                const valor = option ? parseFloat(option.getAttribute('data-valor') || 0) : 0;
+                const recargoId = select.value || '';
+                item.setAttribute('data-recargo-seleccionable', valor);
+                item.setAttribute('data-recargo-seleccionable-id', recargoId);
+                recalcularTotalJS();
+            }
+        }
+    });
+    
+    // Agregar recargos seleccionables al formulario antes de enviar
+    const formAceptar = document.getElementById('form-aceptar-rechazar');
+    if (formAceptar) {
+        formAceptar.addEventListener('submit', function(e) {
+            const form = this;
+            
+            // Eliminar inputs de recargos anteriores si existen
+            form.querySelectorAll('input[name^="recargo_seleccionable"]').forEach(function(input) {
+                input.remove();
+            });
+            
+            // Agregar recargos seleccionables actuales
+            document.querySelectorAll('.recargo-seleccionable-select').forEach(function(select) {
+                const destinoId = select.getAttribute('data-destino-id');
+                const recargoId = select.value;
+                if (destinoId && recargoId && recargoId !== '') {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'recargo_seleccionable[' + destinoId + ']';
+                    input.value = recargoId;
+                    form.appendChild(input);
+                }
+            });
+        });
     }
     </script>
 

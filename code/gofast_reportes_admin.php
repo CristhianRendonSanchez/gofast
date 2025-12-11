@@ -770,8 +770,8 @@ function gofast_reportes_admin_shortcode() {
 
                 <?php if ($es_admin): ?>
                     <div>
-                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Mensajero</label>
-                        <select name="mensajero_id" class="gofast-select-filtro" data-placeholder="Todos los mensajeros" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <label>Mensajero</label>
+                        <select name="mensajero_id" class="gofast-select-filtro" data-placeholder="Todos los mensajeros">
                             <option value="0">Todos</option>
                             <?php foreach ($mensajeros as $m): ?>
                                 <option value="<?= (int) $m->id; ?>"<?php selected($mensajero_id, $m->id); ?>>
@@ -791,17 +791,9 @@ function gofast_reportes_admin_shortcode() {
                     </select>
                 </div>
 
-                <div>
-                    <label>Buscar</label>
-                    <input type="text" name="q" placeholder="Cliente o teléfono" value="<?php echo esc_attr($buscar); ?>">
-                </div>
-
                 <div class="gofast-pedidos-filtros-actions">
                     <button type="submit" class="gofast-btn-mini">Filtrar</button>
                     <a href="<?php echo esc_url( get_permalink() ); ?>" class="gofast-btn-mini gofast-btn-outline">Limpiar</a>
-                    <a href="<?php echo esc_url( add_query_arg(['export' => 'csv'], get_permalink()) ); ?>" class="gofast-btn-mini" style="background:#4CAF50;color:#fff;">
-                        📥 Exportar CSV
-                    </a>
                 </div>
             </div>
         </form>
@@ -1791,21 +1783,44 @@ add_shortcode('gofast_reportes_admin', 'gofast_reportes_admin_shortcode');
     .gofast-pedidos-filtros-row {
         flex-direction: column !important;
         gap: 12px !important;
+        align-items: stretch !important;
     }
     
     .gofast-pedidos-filtros-row > div {
         width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    .gofast-pedidos-filtros label {
+        margin-bottom: 4px !important;
+    }
+    
+    .gofast-pedidos-filtros input,
+    .gofast-pedidos-filtros select {
+        height: 46px !important;
+        font-size: 16px !important;
+    }
+    
+    .gofast-pedidos-filtros .gofast-select-filtro + .select2-container .select2-selection--single {
+        height: 46px !important;
+    }
+    
+    .gofast-pedidos-filtros .gofast-select-filtro + .select2-container .select2-selection__rendered {
+        line-height: 46px !important;
     }
     
     .gofast-pedidos-filtros-actions {
         flex-direction: column !important;
         width: 100% !important;
+        gap: 8px !important;
     }
     
     .gofast-pedidos-filtros-actions button,
     .gofast-pedidos-filtros-actions a {
         width: 100% !important;
         text-align: center !important;
+        height: 46px !important;
     }
     
     /* Ajustar encabezado en móvil */

@@ -1400,28 +1400,164 @@
   }
   
   .gofast-pedidos-filtros-row > div {
-    min-width: 160px;
+    min-width: 140px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    max-width: 200px;
+    justify-content: flex-end;
+  }
+  
+  /* Botones de acción - ancho fijo */
+  .gofast-pedidos-filtros-actions {
+    min-width: auto;
+    max-width: none;
+    flex: 0 0 auto;
   }
   
   .gofast-pedidos-filtros label {
     font-size: 13px;
     font-weight: 600;
     display: block;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
+    color: #000;
+    line-height: 1.2;
   }
   
   .gofast-pedidos-filtros input,
   .gofast-pedidos-filtros select {
     width: 100%;
-    padding: 8px 10px;
+    padding: 10px 12px;
     border-radius: var(--radius-s);
     border: 1px solid var(--gofast-gray-400);
     font-size: 14px;
+    height: 42px;
+    box-sizing: border-box;
+    background: #fff;
+    color: #000;
+  }
+  
+  .gofast-pedidos-filtros input[type="date"],
+  .gofast-pedidos-filtros input[type="text"] {
+    height: 42px;
+    padding: 10px 12px;
+  }
+  
+  /* Select2 en filtros - contenedor principal */
+  .gofast-pedidos-filtros-row > div {
+    position: relative;
+  }
+  
+  .gofast-pedidos-filtros .gofast-select-filtro {
+    position: absolute;
+    visibility: hidden;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  .gofast-pedidos-filtros .gofast-select-filtro + .select2-container {
+    width: 100% !important;
+    position: relative !important;
+    z-index: 1 !important;
+    display: block !important;
+    margin: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  
+  .gofast-pedidos-filtros .gofast-select-filtro + .select2-container .select2-selection--single {
+    height: 42px !important;
+    padding: 0 !important;
+    padding-left: 12px !important;
+    padding-right: 30px !important;
+    display: flex !important;
+    align-items: center !important;
+    border: 1px solid var(--gofast-gray-400) !important;
+    border-radius: var(--radius-s) !important;
+    background: #fff !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    line-height: 42px !important;
+  }
+  
+  .gofast-pedidos-filtros .gofast-select-filtro + .select2-container .select2-selection__rendered {
+    line-height: 42px !important;
+    padding: 0 !important;
+    height: 42px !important;
+    display: flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+  }
+  
+  /* Asegurar que el span dentro del rendered esté centrado */
+  .gofast-pedidos-filtros .gofast-select-filtro + .select2-container .select2-selection__rendered span {
+    line-height: 42px !important;
+    display: inline-block !important;
+  }
+  
+  /* Asegurar que el dropdown no afecte el layout */
+  .gofast-pedidos-filtros .select2-dropdown {
+    position: absolute !important;
+    z-index: 998 !important;
+    margin-top: 4px !important;
+  }
+  
+  /* Asegurar que el contenedor del Select2 no cause problemas de layout */
+  .gofast-pedidos-filtros-row > div .select2-container {
+    margin: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Asegurar que todos los campos tengan la misma altura base y alineación */
+  .gofast-pedidos-filtros-row > div > *:not(label) {
+    min-height: 42px;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Asegurar que el Select2 tenga exactamente la misma altura que los demás campos */
+  .gofast-pedidos-filtros-row > div .select2-container--default {
+    height: 42px !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  
+  /* Asegurar que el div contenedor del Select2 tenga la misma alineación */
+  .gofast-pedidos-filtros-row > div {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  
+  /* Asegurar que el Select2 esté alineado con los demás campos */
+  .gofast-pedidos-filtros-row > div .select2-container {
+    flex: 1 1 auto !important;
+    align-self: stretch !important;
+    margin-top: 0 !important;
   }
   
   .gofast-pedidos-filtros-actions {
     display: flex;
     gap: 6px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  
+  .gofast-pedidos-filtros-actions button,
+  .gofast-pedidos-filtros-actions a {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    box-sizing: border-box;
+    white-space: nowrap;
   }
   
   .gofast-table-wrap,
@@ -1896,6 +2032,11 @@
     margin-top: 0 !important;
     top: 50% !important;
     transform: translateY(-50%) !important;
+  }
+  
+  /* Ocultar botón de clear en todos los Select2 para evitar problemas de padding */
+  .select2-selection__clear {
+    display: none !important;
   }
   
   /* Estilos unificados para Select2 en filtros (mis-pedidos.php) - igual que en cotizador */
