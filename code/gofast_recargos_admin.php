@@ -15,6 +15,25 @@ function gofast_recargos_admin_shortcode() {
 
     $mensaje = '';
 
+    // Verificar si el tipo 'por_volumen_peso' está disponible en la base de datos
+    $tipos_disponibles = $wpdb->get_col("SHOW COLUMNS FROM {$tabla_recargos} WHERE Field = 'tipo'");
+    $tipo_enum = '';
+    if (!empty($tipos_disponibles)) {
+        // Extraer el enum de la definición de la columna
+        $columna_info = $wpdb->get_row("SHOW COLUMNS FROM {$tabla_recargos} WHERE Field = 'tipo'");
+        if ($columna_info && !empty($columna_info->Type)) {
+            $tipo_enum = $columna_info->Type;
+        }
+    }
+    
+    // Si el tipo no está disponible, mostrar advertencia
+    if (!empty($tipo_enum) && strpos($tipo_enum, 'por_volumen_peso') === false) {
+        $mensaje = "<div style='background:#fff3cd;border-left:4px solid #ffc107;padding:16px;border-radius:8px;margin-bottom:20px;'>";
+        $mensaje .= "⚠️ <strong>Advertencia:</strong> El tipo de recargo 'por_volumen_peso' no está disponible en la base de datos. ";
+        $mensaje .= "Por favor ejecuta el script SQL: <code>db/recargos_alter_volumen_peso.sql</code>";
+        $mensaje .= "</div>";
+    }
+
     /* ==========================================================
        0. Validar usuario admin (usuarios_gofast.rol = 'admin')
     ========================================================== */
@@ -39,37 +58,103 @@ function gofast_recargos_admin_shortcode() {
     ========================================================== */
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-        if (
-            empty($_POST['gofast_recargos_nonce']) ||
-            !wp_verify_nonce($_POST['gofast_recargos_nonce'], 'gofast_recargos_admin')
-        ) {
-            return "<div class='gofast-box'>🔒 Error de seguridad al guardar cambios.</div>";
+        // Debug: verificar nonce
+        $nonce_valido = false;
+        $nonce_recibido = isset($_POST['gofast_recargos_nonce']) ? $_POST['gofast_recargos_nonce'] : '';
+        
+        if (!empty($nonce_recibido)) {
+            $nonce_valido = wp_verify_nonce($nonce_recibido, 'gofast_recargos_admin');
+        }
+        
+        // Debug temporal: mostrar información sobre qué botón se presionó
+        $boton_presionado = '';
+        if (!empty($_POST['gofast_crear_fijo'])) {
+            $boton_presionado = 'gofast_crear_fijo';
+        } elseif (!empty($_POST['gofast_crear_variable'])) {
+            $boton_presionado = 'gofast_crear_variable';
+        } elseif (!empty($_POST['gofast_crear_volumen_peso'])) {
+            $boton_presionado = 'gofast_crear_volumen_peso';
+        }
+        
+        if (!$nonce_valido) {
+            $mensaje = "<div class='gofast-box' style='background:#f8d7da;border-left:4px solid #dc3545;padding:16px;border-radius:8px;'>";
+            $mensaje .= "🔒 <strong>Error de seguridad:</strong> El nonce no es válido. ";
+            $mensaje .= "Por favor, recarga la página e intenta de nuevo.";
+            $mensaje .= "<br><small style='color:#666;'>";
+            $mensaje .= "Nonce recibido: " . (!empty($nonce_recibido) ? 'Sí (' . substr($nonce_recibido, 0, 10) . '...)' : 'No') . " | ";
+            $mensaje .= "Botón presionado: " . ($boton_presionado ?: 'Ninguno');
+            $mensaje .= "</small>";
+            $mensaje .= "</div>";
+        } elseif ($boton_presionado && empty($mensaje)) {
+            // Si hay un botón presionado pero no hay mensaje, algo está mal
+            $mensaje = "<div class='gofast-box' style='background:#fff3cd;border-left:4px solid #ffc107;padding:16px;border-radius:8px;'>";
+            $mensaje .= "⚠️ <strong>Debug:</strong> Botón detectado: " . esc_html($boton_presionado) . " pero no se procesó. ";
+            $mensaje .= "Nonce válido: " . ($nonce_valido ? 'Sí' : 'No');
+            $mensaje .= "</div>";
         }
 
         /* ----------------------------------------------
            A) Crear nuevo recargo FIJO
         ---------------------------------------------- */
         if (!empty($_POST['gofast_crear_fijo'])) {
+            if (!$nonce_valido) {
+                // El mensaje de error ya se estableció arriba
+            } else {
 
             $nombre     = sanitize_text_field($_POST['nuevo_fijo_nombre'] ?? '');
             $valor_fijo = (int) ($_POST['nuevo_fijo_valor'] ?? 0);
             $activo     = !empty($_POST['nuevo_fijo_activo']) ? 1 : 0;
 
             if ($nombre !== '' && $valor_fijo > 0) {
+                // Generar slug único
+                $slug_base = sanitize_title($nombre);
+                if (empty($slug_base)) {
+                    $slug_base = 'recargo-' . time();
+                }
+                $slug = $slug_base;
+                $contador = 1;
+                while ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$tabla_recargos} WHERE slug = %s", $slug)) > 0) {
+                    $slug = $slug_base . '-' . $contador;
+                    $contador++;
+                }
+
+                // Asegurar que el slug no esté vacío y tenga máximo 50 caracteres
+                $slug = substr($slug, 0, 50);
+                if (empty($slug)) {
+                    $slug = 'recargo-' . time();
+                }
+
                 $ok = $wpdb->insert($tabla_recargos, [
+                    'slug'       => $slug,
                     'nombre'     => $nombre,
                     'tipo'       => 'fijo',
                     'valor_fijo' => $valor_fijo,
                     'activo'     => $activo,
+                ], [
+                    '%s', // slug
+                    '%s', // nombre
+                    '%s', // tipo
+                    '%d', // valor_fijo
+                    '%d'  // activo
                 ]);
 
                 if ($ok !== false) {
-                    $mensaje = "✅ Recargo fijo creado correctamente.";
+                    $mensaje = "✅ Recargo fijo creado correctamente (ID: " . $wpdb->insert_id . ").";
                 } else {
-                    $mensaje = "❌ Error al crear recargo fijo: " . esc_html($wpdb->last_error);
+                    $error_msg = $wpdb->last_error ?: 'Error desconocido al insertar en la base de datos';
+                    $mensaje = "❌ Error al crear recargo fijo: " . esc_html($error_msg);
+                    $mensaje .= "<br><small style='color:#666;'>";
+                    $mensaje .= "Slug: " . esc_html($slug) . " | ";
+                    $mensaje .= "Nombre: " . esc_html($nombre) . " | ";
+                    $mensaje .= "Valor: " . esc_html($valor_fijo);
+                    $mensaje .= "</small>";
+                    if (defined('WP_DEBUG') && WP_DEBUG && !empty($wpdb->last_query)) {
+                        $mensaje .= "<br><small style='color:#999;font-size:11px;'>SQL: " . esc_html($wpdb->last_query) . "</small>";
+                    }
                 }
             } else {
                 $mensaje = "⚠️ Debes indicar nombre y valor fijo mayor a 0.";
+            }
             }
         }
 
@@ -77,6 +162,9 @@ function gofast_recargos_admin_shortcode() {
            B) Crear nuevo recargo POR VALOR + rangos
         ---------------------------------------------- */
         if (!empty($_POST['gofast_crear_variable'])) {
+            if (!$nonce_valido) {
+                // El mensaje de error ya se estableció arriba
+            } else {
 
             $nombre = sanitize_text_field($_POST['nuevo_var_nombre'] ?? '');
             $activo = !empty($_POST['nuevo_var_activo']) ? 1 : 0;
@@ -88,11 +176,36 @@ function gofast_recargos_admin_shortcode() {
             if ($nombre === '') {
                 $mensaje = "⚠️ Debes indicar un nombre para el recargo variable.";
             } else {
+                // Generar slug único
+                $slug_base = sanitize_title($nombre);
+                if (empty($slug_base)) {
+                    $slug_base = 'recargo-' . time();
+                }
+                $slug = $slug_base;
+                $contador = 1;
+                while ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$tabla_recargos} WHERE slug = %s", $slug)) > 0) {
+                    $slug = $slug_base . '-' . $contador;
+                    $contador++;
+                }
+
+                // Asegurar que el slug no esté vacío y tenga máximo 50 caracteres
+                $slug = substr($slug, 0, 50);
+                if (empty($slug)) {
+                    $slug = 'recargo-' . time();
+                }
+
                 $ok = $wpdb->insert($tabla_recargos, [
+                    'slug'       => $slug,
                     'nombre'     => $nombre,
                     'tipo'       => 'por_valor',
                     'valor_fijo' => 0,
                     'activo'     => $activo,
+                ], [
+                    '%s', // slug
+                    '%s', // nombre
+                    '%s', // tipo
+                    '%d', // valor_fijo
+                    '%d'  // activo
                 ]);
 
                 if ($ok === false) {
@@ -123,6 +236,88 @@ function gofast_recargos_admin_shortcode() {
 
                     $mensaje = "✅ Recargo por valor creado correctamente.";
                 }
+            }
+            }
+        }
+
+        /* ----------------------------------------------
+           B2) Crear nuevo recargo FIJO por volumen y peso
+        ---------------------------------------------- */
+        if (!empty($_POST['gofast_crear_volumen_peso'])) {
+            if (!$nonce_valido) {
+                // El mensaje de error ya se estableció arriba
+            } else {
+
+            $nombre     = sanitize_text_field($_POST['nuevo_vp_nombre'] ?? '');
+            $valor_fijo = (int) ($_POST['nuevo_vp_valor'] ?? 0);
+            $activo     = !empty($_POST['nuevo_vp_activo']) ? 1 : 0;
+
+            if ($nombre !== '' && $valor_fijo > 0) {
+                // Generar slug único
+                $slug_base = sanitize_title($nombre);
+                if (empty($slug_base)) {
+                    // Si sanitize_title devuelve vacío, usar un slug basado en timestamp
+                    $slug_base = 'recargo-' . time();
+                }
+                $slug = $slug_base;
+                $contador = 1;
+                while ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$tabla_recargos} WHERE slug = %s", $slug)) > 0) {
+                    $slug = $slug_base . '-' . $contador;
+                    $contador++;
+                }
+
+                // Asegurar que el slug no esté vacío y tenga máximo 50 caracteres
+                $slug = substr($slug, 0, 50);
+                if (empty($slug)) {
+                    $slug = 'recargo-' . time();
+                }
+
+                // Verificar que el tipo esté disponible en el enum ANTES de insertar
+                $tipos_disponibles = $wpdb->get_row("SHOW COLUMNS FROM {$tabla_recargos} WHERE Field = 'tipo'");
+                $tipo_disponible = false;
+                if ($tipos_disponibles && !empty($tipos_disponibles->Type)) {
+                    $tipo_disponible = (strpos($tipos_disponibles->Type, 'por_volumen_peso') !== false);
+                }
+                
+                if (!$tipo_disponible) {
+                    $mensaje = "❌ <strong>Error:</strong> El tipo 'por_volumen_peso' no está disponible en la base de datos. ";
+                    $mensaje .= "Por favor ejecuta el script SQL: <code>db/recargos_alter_volumen_peso.sql</code>";
+                } else {
+                    $ok = $wpdb->insert($tabla_recargos, [
+                        'slug'       => $slug,
+                        'nombre'     => $nombre,
+                        'tipo'       => 'por_volumen_peso',
+                        'valor_fijo' => $valor_fijo,
+                        'activo'     => $activo,
+                    ], [
+                        '%s', // slug
+                        '%s', // nombre
+                        '%s', // tipo
+                        '%d', // valor_fijo
+                        '%d'  // activo
+                    ]);
+
+                    if ($ok !== false) {
+                        $mensaje = "✅ Recargo fijo seleccionable creado correctamente (ID: " . $wpdb->insert_id . ").";
+                    } else {
+                        $error_msg = $wpdb->last_error ?: 'Error desconocido al insertar en la base de datos';
+                        $mensaje = "❌ Error al crear recargo: " . esc_html($error_msg);
+                        // Siempre mostrar información adicional para debugging
+                        $mensaje .= "<br><small style='color:#666;'>";
+                        $mensaje .= "Slug: " . esc_html($slug) . " | ";
+                        $mensaje .= "Tipo: por_volumen_peso | ";
+                        $mensaje .= "Valor: " . esc_html($valor_fijo);
+                        $mensaje .= "</small>";
+                        
+                        // Si WP_DEBUG está activo, mostrar más detalles
+                        if (defined('WP_DEBUG') && WP_DEBUG && !empty($wpdb->last_query)) {
+                            $mensaje .= "<br><small style='color:#999;font-size:11px;'>SQL: " . esc_html($wpdb->last_query) . "</small>";
+                        }
+                    }
+                }
+            } else {
+                $mensaje = "⚠️ Debes indicar nombre y valor fijo mayor a 0.";
+            }
             }
         }
 
@@ -170,7 +365,7 @@ function gofast_recargos_admin_shortcode() {
                         'nombre' => $nombre,
                     ];
 
-                    if ($tipo === 'fijo') {
+                    if ($tipo === 'fijo' || $tipo === 'por_volumen_peso') {
                         $update_data['valor_fijo'] = $valor_fijo;
                     }
 
@@ -252,17 +447,21 @@ function gofast_recargos_admin_shortcode() {
 
     $recargos_fijos    = [];
     $recargos_var      = [];
+    $recargos_vp       = [];
     $rangos_por_recargo = [];
 
     if ($recargos) {
         foreach ($recargos as $r) {
             if ($r->tipo === 'por_valor') {
                 $recargos_var[] = $r;
+            } elseif ($r->tipo === 'por_volumen_peso') {
+                $recargos_vp[] = $r;
             } else {
                 $recargos_fijos[] = $r;
             }
         }
 
+        // Cargar rangos para recargos por valor
         if (!empty($recargos_var)) {
             $ids = implode(',', array_map('intval', wp_list_pluck($recargos_var, 'id')));
             $rangos = $wpdb->get_results("
@@ -291,7 +490,7 @@ function gofast_recargos_admin_shortcode() {
 
     <?php if ($mensaje): ?>
         <div class="gofast-box" style="margin-bottom:15px;">
-            <?= esc_html($mensaje); ?>
+            <?= $mensaje; ?>
         </div>
     <?php endif; ?>
 
@@ -381,6 +580,40 @@ function gofast_recargos_admin_shortcode() {
         </div>
 
         <!-- =====================================================
+             B2) CREAR NUEVO RECARGO FIJO POR VOLUMEN Y PESO
+        ====================================================== -->
+        <div class="gofast-box" style="margin-bottom:24px;">
+            <h3 style="margin-top:0;">➕ Nuevo recargo fijo (seleccionable en cotización)</h3>
+            <p style="font-size:13px;color:#666;margin:8px 0 16px;">
+                Estos recargos son fijos y se pueden seleccionar manualmente durante la cotización. 
+                Útiles para recargos por volumen, peso, o cualquier otro concepto.
+            </p>
+
+            <div class="gofast-recargo-nuevo">
+                <div>
+                    <label>Nombre del recargo</label>
+                    <input type="text" name="nuevo_vp_nombre" placeholder="Ej: Recargo por paquete grande" />
+                </div>
+                <div>
+                    <label>Valor fijo (COP)</label>
+                    <input type="number" name="nuevo_vp_valor" placeholder="Ej: 5000" min="0" />
+                </div>
+                <div style="display:flex;align-items:flex-end;">
+                    <label class="gofast-switch">
+                        <input type="checkbox" name="nuevo_vp_activo" value="1" checked>
+                        <span class="gofast-switch-slider"></span>
+                        <span class="gofast-switch-label">Activo</span>
+                    </label>
+                </div>
+                <div style="display:flex;align-items:flex-end;">
+                    <button type="submit" name="gofast_crear_volumen_peso" class="gofast-small-btn">
+                        💾 Crear recargo fijo
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- =====================================================
              C) EDITAR RECARGOS EXISTENTES
         ====================================================== -->
 
@@ -440,7 +673,7 @@ function gofast_recargos_admin_shortcode() {
         </div>
 
         <!-- 2) Recargos POR VALOR -->
-        <div class="gofast-box">
+        <div class="gofast-box" style="margin-bottom:24px;">
             <h3 style="margin-top:0;">🔧 Recargos por valor</h3>
 
             <?php if (empty($recargos_var)): ?>
@@ -558,6 +791,64 @@ function gofast_recargos_admin_shortcode() {
             <?php endif; ?>
         </div>
 
+        <!-- 3) Recargos FIJOS seleccionables (por volumen y peso) -->
+        <div class="gofast-box">
+            <h3 style="margin-top:0;">🔧 Recargos fijos seleccionables</h3>
+            <p style="font-size:13px;color:#666;margin:8px 0 16px;">
+                Estos recargos aparecen como opciones en los cotizadores para que el admin/mensajero los seleccione manualmente.
+            </p>
+
+            <?php if (empty($recargos_vp)): ?>
+                <p style="margin:0;">No hay recargos fijos seleccionables creados.</p>
+            <?php else: ?>
+                <table class="gofast-recargos-table">
+                    <thead>
+                        <tr>
+                            <th>Estado</th>
+                            <th>Nombre</th>
+                            <th>Valor fijo (COP)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($recargos_vp as $r): ?>
+                        <tr class="<?= $r->activo ? 'gofast-row-active' : 'gofast-row-inactive'; ?>">
+                            <td>
+                                <label class="gofast-switch">
+                                    <input type="checkbox"
+                                           name="recargos[<?= esc_attr($r->id); ?>][activo]"
+                                           value="1"
+                                           <?= $r->activo ? 'checked' : ''; ?>>
+                                    <span class="gofast-switch-slider"></span>
+                                    <span class="gofast-switch-label">Activo</span>
+                                </label>
+                                <br>
+                                <button type="button"
+                                        class="gofast-small-btn gofast-chip-danger gofast-delete-recargo"
+                                        data-recargo-id="<?= esc_attr($r->id); ?>">
+                                    🗑 Eliminar
+                                </button>
+                                <input type="hidden"
+                                       name="recargos[<?= esc_attr($r->id); ?>][tipo]"
+                                       value="por_volumen_peso">
+                            </td>
+                            <td>
+                                <input type="text"
+                                       name="recargos[<?= esc_attr($r->id); ?>][nombre]"
+                                       value="<?= esc_attr($r->nombre); ?>">
+                            </td>
+                            <td>
+                                <input type="number"
+                                       name="recargos[<?= esc_attr($r->id); ?>][valor_fijo]"
+                                       value="<?= esc_attr($r->valor_fijo); ?>"
+                                       min="0">
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+
         <div style="margin-top:18px;text-align:right;">
             <button type="submit"
                     name="gofast_guardar_recargos"
@@ -573,6 +864,26 @@ function gofast_recargos_admin_shortcode() {
 <script>
 document.addEventListener('DOMContentLoaded', function(){
 
+    // Proteger contra errores de toggleOtro si se ejecuta desde otro archivo
+    if (typeof window.toggleOtro === 'undefined') {
+        window.toggleOtro = function() {
+            // Función vacía si no existe el elemento
+            return;
+        };
+    } else if (typeof window.toggleOtro === 'function') {
+        const originalToggleOtro = window.toggleOtro;
+        window.toggleOtro = function() {
+            try {
+                const tipoOtroWrapper = document.getElementById('tipo_otro_wrapper');
+                if (tipoOtroWrapper) {
+                    return originalToggleOtro();
+                }
+            } catch (e) {
+                // Silenciar error si no existe el elemento
+            }
+        };
+    }
+
     // Duplicar fila de rangos para "nuevo recargo por valor"
     const nuevoVarBody = document.getElementById('gofast-nuevo-var-rangos');
     const btnAddNuevoVar = document.getElementById('btn-add-nuevo-var-rango');
@@ -586,7 +897,8 @@ document.addEventListener('DOMContentLoaded', function(){
         });
     }
 
-    // Función global para agregar rango en recargos existentes
+
+    // Función global para agregar rango en recargos existentes (por valor)
     window.gofastAgregarRangoExistente = function(recargoId){
         const filas = document.querySelectorAll(
             '.gofast-rango-nuevo[data-recargo-id="'+recargoId+'"]'
@@ -597,6 +909,7 @@ document.addEventListener('DOMContentLoaded', function(){
         clone.querySelectorAll('input').forEach(i => i.value = '');
         ref.parentNode.appendChild(clone);
     };
+
 
     // Eliminar recargo completo
     document.querySelectorAll('.gofast-delete-recargo').forEach(function(btn){
@@ -667,6 +980,24 @@ document.addEventListener('DOMContentLoaded', function(){
             form.submit();
         });
     });
+
+    // Prevenir errores de setTimeout que puedan ejecutar toggleOtro
+    const originalSetTimeout = window.setTimeout;
+    window.setTimeout = function(func, delay) {
+        if (typeof func === 'function') {
+            const funcStr = func.toString();
+            if (funcStr.includes('toggleOtro')) {
+                return originalSetTimeout(function() {
+                    try {
+                        func();
+                    } catch (e) {
+                        // Silenciar error si toggleOtro no encuentra elementos
+                    }
+                }, delay);
+            }
+        }
+        return originalSetTimeout(func, delay);
+    };
 });
 </script>
 
