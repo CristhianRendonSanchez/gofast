@@ -278,6 +278,7 @@ function gofast_pedidos_shortcode() {
     
     // Filtros adicionales solo para admin
     $filtro_mensajero = isset($_GET['filtro_mensajero']) ? (int) $_GET['filtro_mensajero'] : 0;
+    $filtro_sin_mensajero = isset($_GET['filtro_sin_mensajero']) ? sanitize_text_field($_GET['filtro_sin_mensajero']) : '';
     $filtro_origen = isset($_GET['filtro_origen']) ? (int) $_GET['filtro_origen'] : 0;
     $filtro_destino = isset($_GET['filtro_destino']) ? (int) $_GET['filtro_destino'] : 0;
     $filtro_negocio = isset($_GET['filtro_negocio']) ? (int) $_GET['filtro_negocio'] : 0;
@@ -349,7 +350,11 @@ function gofast_pedidos_shortcode() {
     
     // Filtros adicionales solo para admin
     if ($rol === 'admin') {
-        if ($filtro_mensajero > 0) {
+        // Filtro por pedidos sin mensajero asignado (tiene prioridad sobre filtro_mensajero)
+        if ($filtro_sin_mensajero === 'si') {
+            $where .= " AND (mensajero_id IS NULL OR mensajero_id = 0)";
+        } elseif ($filtro_mensajero > 0) {
+            // Filtro por mensajero específico (solo si no se está filtrando por "sin mensajero")
             $where   .= " AND mensajero_id = %d";
             $params[] = $filtro_mensajero;
         }
@@ -490,7 +495,7 @@ function gofast_pedidos_shortcode() {
         <form method="get" class="gofast-filtros-form">
             <!-- Mantener otros parámetros GET si existen -->
             <?php foreach ($_GET as $key => $value): ?>
-                <?php if (!in_array($key, ['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'pg'])): ?>
+                <?php if (!in_array($key, ['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_sin_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'pg'])): ?>
                     <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                 <?php endif; ?>
             <?php endforeach; ?>
@@ -543,6 +548,14 @@ function gofast_pedidos_shortcode() {
                                     <?php echo esc_html($m->nombre); ?>
                                 </option>
                             <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Sin Mensajero</label>
+                        <select name="filtro_sin_mensajero" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                            <option value="">Todos</option>
+                            <option value="si"<?php selected($filtro_sin_mensajero, 'si'); ?>>Solo sin asignar</option>
                         </select>
                     </div>
 
@@ -610,7 +623,7 @@ function gofast_pedidos_shortcode() {
                 </button>
                 <?php
                 // Construir URL sin los parámetros de filtro
-                $clean_url = remove_query_arg(['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'pg']);
+                $clean_url = remove_query_arg(['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_sin_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'pg']);
                 if (empty($clean_url) || $clean_url === home_url('/')) {
                     $clean_url = get_permalink();
                 }
