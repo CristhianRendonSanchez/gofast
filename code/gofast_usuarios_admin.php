@@ -52,24 +52,32 @@ function gofast_usuarios_admin_shortcode() {
            A) Crear nuevo usuario (COPIA EXACTA DE AUTH)
         ---------------------------------------------- */
         // Verificar que sea el botón de CREAR, no el de GUARDAR
-        // Simplificar: solo verificar que exista gofast_crear_usuario
         if (!empty($_POST['gofast_crear_usuario'])) {
             
-            // Log para confirmar que se detectó el botón correcto
-            error_log("GOFAST ADMIN - ✅ Botón CREAR USUARIO detectado correctamente");
-            error_log("GOFAST ADMIN - gofast_crear_usuario: " . ($_POST['gofast_crear_usuario'] ?? 'NO'));
-            error_log("GOFAST ADMIN - gofast_guardar_usuarios: " . ($_POST['gofast_guardar_usuarios'] ?? 'NO'));
+            // Verificar nonce de seguridad
+            if (
+                empty($_POST['gofast_usuarios_nonce']) ||
+                !wp_verify_nonce($_POST['gofast_usuarios_nonce'], 'gofast_usuarios_admin')
+            ) {
+                $mensaje = "🔒 Error de seguridad al crear usuario.";
+                error_log("GOFAST ADMIN - Error: nonce no válido o faltante");
+            } else {
             
-            // Obtener datos del POST
-            $nombre    = trim($_POST['nuevo_nombre'] ?? '');
-            $telefono  = trim($_POST['nuevo_telefono'] ?? '');
-            $email     = trim($_POST['nuevo_email'] ?? '');
-            $password  = $_POST['nuevo_password'] ?? '';
-            $rol       = sanitize_text_field($_POST['nuevo_rol'] ?? 'cliente');
-            $activo    = !empty($_POST['nuevo_activo']) ? 1 : 0;
-            
-            // Log inicial para debugging
-            error_log("GOFAST ADMIN - Intentando crear usuario. POST recibido: " . print_r($_POST, true));
+                // Log para confirmar que se detectó el botón correcto
+                error_log("GOFAST ADMIN - ✅ Botón CREAR USUARIO detectado correctamente");
+                error_log("GOFAST ADMIN - gofast_crear_usuario: " . ($_POST['gofast_crear_usuario'] ?? 'NO'));
+                error_log("GOFAST ADMIN - gofast_guardar_usuarios: " . ($_POST['gofast_guardar_usuarios'] ?? 'NO'));
+                
+                // Obtener datos del POST
+                $nombre    = trim($_POST['nuevo_nombre'] ?? '');
+                $telefono  = trim($_POST['nuevo_telefono'] ?? '');
+                $email     = trim($_POST['nuevo_email'] ?? '');
+                $password  = $_POST['nuevo_password'] ?? '';
+                $rol       = sanitize_text_field($_POST['nuevo_rol'] ?? 'cliente');
+                $activo    = !empty($_POST['nuevo_activo']) ? 1 : 0;
+                
+                // Log inicial para debugging
+                error_log("GOFAST ADMIN - Intentando crear usuario. POST recibido: " . print_r($_POST, true));
             
             // Validaciones (igual que auth)
             if ($nombre === '' || $telefono === '' || $email === '' || $password === '') {
@@ -182,6 +190,7 @@ function gofast_usuarios_admin_shortcode() {
                     }
                 }
             }
+            } // Cierre del else del nonce
         }
 
         /* ----------------------------------------------
@@ -242,14 +251,32 @@ function gofast_usuarios_admin_shortcode() {
                     }
                 }
 
-                // Eliminar usuarios
-                if (!empty($_POST['eliminar_usuario']) && is_array($_POST['eliminar_usuario'])) {
-                    foreach ($_POST['eliminar_usuario'] as $user_id => $flag) {
+                // Desactivar/Activar usuarios
+                if (!empty($_POST['desactivar_usuario']) && is_array($_POST['desactivar_usuario'])) {
+                    foreach ($_POST['desactivar_usuario'] as $user_id => $flag) {
                         if ($flag != '1') continue;
                         $user_id = (int) $user_id;
                         if ($user_id > 0 && $user_id !== (int) $_SESSION['gofast_user_id']) {
-                            // No permitir auto-eliminarse
-                            $wpdb->update($tabla, ['activo' => 0], ['id' => $user_id]);
+                            // Verificar estado actual del usuario
+                            $usuario_actual = $wpdb->get_row($wpdb->prepare("SELECT activo FROM $tabla WHERE id = %d", $user_id));
+                            if ($usuario_actual) {
+                                $nuevo_estado = $usuario_actual->activo ? 0 : 1;
+                                $wpdb->update($tabla, ['activo' => $nuevo_estado], ['id' => $user_id], ['%d'], ['%d']);
+                                $mensaje = $nuevo_estado ? "✅ Usuario activado correctamente." : "✅ Usuario desactivado correctamente.";
+                            }
+                        }
+                    }
+                }
+
+                // Borrar usuarios permanentemente
+                if (!empty($_POST['borrar_usuario']) && is_array($_POST['borrar_usuario'])) {
+                    foreach ($_POST['borrar_usuario'] as $user_id => $flag) {
+                        if ($flag != '1') continue;
+                        $user_id = (int) $user_id;
+                        if ($user_id > 0 && $user_id !== (int) $_SESSION['gofast_user_id']) {
+                            // No permitir auto-borrarse
+                            $wpdb->delete($tabla, ['id' => $user_id], ['%d']);
+                            $mensaje = "✅ Usuario borrado permanentemente.";
                         }
                     }
                 }
@@ -406,7 +433,7 @@ function gofast_usuarios_admin_shortcode() {
     <!-- =====================================================
          A) CREAR NUEVO USUARIO (FORMULARIO SEPARADO)
     ====================================================== -->
-    <form method="post" action="" style="margin-bottom:20px;">
+    <form method="post" action="<?php echo esc_url( get_permalink() ); ?>" style="margin-bottom:20px;">
         <?php wp_nonce_field('gofast_usuarios_admin', 'gofast_usuarios_nonce'); ?>
         <div class="gofast-box">
             <h3 style="margin-top:0;">➕ Nuevo usuario</h3>
@@ -444,7 +471,7 @@ function gofast_usuarios_admin_shortcode() {
                     </label>
                 </div>
                 <div style="display:flex;align-items:flex-end;">
-                    <button type="submit" name="gofast_crear_usuario" class="gofast-small-btn">
+                    <button type="submit" name="gofast_crear_usuario" value="1" class="gofast-small-btn">
                         💾 Crear usuario
                     </button>
                 </div>
@@ -502,8 +529,10 @@ function gofast_usuarios_admin_shortcode() {
                 <p>No se encontraron usuarios con los filtros seleccionados.</p>
             <?php else: ?>
 
-                <div class="gofast-table-wrap">
-                    <table class="gofast-table">
+                <!-- Vista Desktop: Tabla -->
+                <div class="gofast-usuarios-table-wrapper gofast-usuarios-desktop">
+                    <div class="gofast-table-wrap">
+                        <table class="gofast-table gofast-usuarios-table">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -558,21 +587,39 @@ function gofast_usuarios_admin_shortcode() {
                                         <span class="gofast-switch-label">Activo</span>
                                     </label>
                                 </td>
-                                <td><?= esc_html( gofast_date_format($u->fecha_registro, 'Y-m-d') ); ?></td>
-                                <td>
-                                    <div style="display:flex;flex-direction:column;gap:4px;">
+                                <td class="gofast-td-fecha"><?= esc_html( gofast_date_format($u->fecha_registro, 'Y-m-d') ); ?></td>
+                                <td class="gofast-td-acciones">
+                                    <div class="gofast-acciones-usuario">
                                         <input type="password"
                                                name="usuarios[<?= esc_attr($u->id); ?>][password]"
                                                placeholder="Nueva contraseña (opcional)"
-                                               style="width:100%;padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+                                               class="gofast-input-password">
                                         <?php if (!$es_yo): ?>
-                                            <button type="button"
-                                                    class="gofast-small-btn gofast-chip-danger gofast-delete-usuario"
-                                                    data-usuario-id="<?= esc_attr($u->id); ?>">
-                                                🗑️ Desactivar
-                                            </button>
+                                            <div class="gofast-botones-accion">
+                                                <?php if ($u->activo): ?>
+                                                    <button type="button"
+                                                            class="gofast-btn-accion gofast-btn-desactivar"
+                                                            data-usuario-id="<?= esc_attr($u->id); ?>"
+                                                            data-usuario-nombre="<?= esc_attr($u->nombre); ?>">
+                                                        ⏸️ Desactivar
+                                                    </button>
+                                                <?php else: ?>
+                                                    <button type="button"
+                                                            class="gofast-btn-accion gofast-btn-activar"
+                                                            data-usuario-id="<?= esc_attr($u->id); ?>"
+                                                            data-usuario-nombre="<?= esc_attr($u->nombre); ?>">
+                                                        ▶️ Activar
+                                                    </button>
+                                                <?php endif; ?>
+                                                <button type="button"
+                                                        class="gofast-btn-accion gofast-btn-borrar"
+                                                        data-usuario-id="<?= esc_attr($u->id); ?>"
+                                                        data-usuario-nombre="<?= esc_attr($u->nombre); ?>">
+                                                    🗑️ Borrar
+                                                </button>
+                                            </div>
                                         <?php else: ?>
-                                            <span style="font-size:11px;color:#666;">(Tú)</span>
+                                            <span class="gofast-tu-usuario">(Tú)</span>
                                         <?php endif; ?>
                                     </div>
                                 </td>
@@ -580,6 +627,138 @@ function gofast_usuarios_admin_shortcode() {
                         <?php endforeach; ?>
                         </tbody>
                     </table>
+                    </div>
+                </div>
+
+                <!-- Vista Móvil: Cards -->
+                <div class="gofast-usuarios-cards gofast-usuarios-mobile">
+                    <?php foreach ($usuarios as $u): 
+                        $es_yo = ((int) $u->id === (int) $_SESSION['gofast_user_id']);
+                        $rol_badge = '';
+                        $rol_color = '#6c757d';
+                        switch(strtolower($u->rol)) {
+                            case 'admin':
+                                $rol_badge = '👑 Admin';
+                                $rol_color = '#dc3545';
+                                break;
+                            case 'mensajero':
+                                $rol_badge = '🚚 Mensajero';
+                                $rol_color = '#007bff';
+                                break;
+                            case 'cliente':
+                                $rol_badge = '👤 Cliente';
+                                $rol_color = '#28a745';
+                                break;
+                        }
+                    ?>
+                        <div class="gofast-usuario-card" style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid <?= $u->activo ? '#28a745' : '#dc3545'; ?>;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                                <div>
+                                    <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
+                                        ID: #<?= (int) $u->id; ?>
+                                    </div>
+                                    <div style="font-size: 11px; color: #999;">
+                                        <?= esc_html( gofast_date_format($u->fecha_registro, 'Y-m-d') ); ?>
+                                    </div>
+                                </div>
+                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                                    <span style="font-size: 11px; padding: 4px 8px; background: <?= $rol_color ?>; color: #fff; border-radius: 4px; font-weight: 600;">
+                                        <?= $rol_badge ?>
+                                    </span>
+                                    <span style="font-size: 11px; padding: 4px 8px; background: <?= $u->activo ? '#28a745' : '#dc3545'; ?>; color: #fff; border-radius: 4px; font-weight: 600;">
+                                        <?= $u->activo ? '✅ Activo' : '❌ Inactivo'; ?>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Nombre:</div>
+                                <input type="text"
+                                       name="usuarios[<?= esc_attr($u->id); ?>][nombre]"
+                                       value="<?= esc_attr($u->nombre); ?>"
+                                       style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px;font-weight:600;">
+                            </div>
+
+                            <div style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Email:</div>
+                                <input type="email"
+                                       name="usuarios[<?= esc_attr($u->id); ?>][email]"
+                                       value="<?= esc_attr($u->email); ?>"
+                                       style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px;">
+                            </div>
+
+                            <div style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Teléfono:</div>
+                                <input type="text"
+                                       name="usuarios[<?= esc_attr($u->id); ?>][telefono]"
+                                       value="<?= esc_attr($u->telefono); ?>"
+                                       style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px;">
+                            </div>
+
+                            <div style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Rol:</div>
+                                <select name="usuarios[<?= esc_attr($u->id); ?>][rol]"
+                                        style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px;">
+                                    <option value="cliente"<?php selected($u->rol, 'cliente'); ?>>Cliente</option>
+                                    <option value="mensajero"<?php selected($u->rol, 'mensajero'); ?>>Mensajero</option>
+                                    <option value="admin"<?php selected($u->rol, 'admin'); ?>>Admin</option>
+                                </select>
+                            </div>
+
+                            <div style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                <div style="font-size: 13px; color: #666; margin-bottom: 8px;">Estado:</div>
+                                <label class="gofast-switch" style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox"
+                                           name="usuarios[<?= esc_attr($u->id); ?>][activo]"
+                                           value="1"
+                                           <?= $u->activo ? 'checked' : ''; ?>>
+                                    <span class="gofast-switch-slider"></span>
+                                    <span class="gofast-switch-label" style="font-size: 14px;">Activo</span>
+                                </label>
+                            </div>
+
+                            <div style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Nueva contraseña (opcional):</div>
+                                <input type="password"
+                                       name="usuarios[<?= esc_attr($u->id); ?>][password]"
+                                       placeholder="Dejar vacío para mantener la actual"
+                                       style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px;">
+                            </div>
+
+                            <?php if (!$es_yo): ?>
+                                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                                    <?php if ($u->activo): ?>
+                                        <button type="button"
+                                                class="gofast-btn-accion gofast-btn-desactivar"
+                                                data-usuario-id="<?= esc_attr($u->id); ?>"
+                                                data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
+                                                style="width: 100%; padding: 10px; background: #ffc107; color: #000; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                                            ⏸️ Desactivar
+                                        </button>
+                                    <?php else: ?>
+                                        <button type="button"
+                                                class="gofast-btn-accion gofast-btn-activar"
+                                                data-usuario-id="<?= esc_attr($u->id); ?>"
+                                                data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
+                                                style="width: 100%; padding: 10px; background: #28a745; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                                            ▶️ Activar
+                                        </button>
+                                    <?php endif; ?>
+                                    <button type="button"
+                                            class="gofast-btn-accion gofast-btn-borrar"
+                                            data-usuario-id="<?= esc_attr($u->id); ?>"
+                                            data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
+                                            style="width: 100%; padding: 10px; background: #dc3545; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                                        🗑️ Borrar Permanentemente
+                                    </button>
+                                </div>
+                            <?php else: ?>
+                                <div style="padding: 10px; background: #e7f3ff; border-radius: 6px; text-align: center; font-size: 14px; color: #0066cc; font-weight: 600;">
+                                    👤 (Tu usuario)
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
 
                 <?php if ($total_paginas > 1): ?>
@@ -630,24 +809,67 @@ document.addEventListener('DOMContentLoaded', function(){
         }
     }
     
-    // Eliminar usuario
-    document.querySelectorAll('.gofast-delete-usuario').forEach(function(btn){
+    // Desactivar/Activar usuario
+    document.querySelectorAll('.gofast-btn-desactivar, .gofast-btn-activar').forEach(function(btn){
         btn.addEventListener('click', function(){
             const id = btn.getAttribute('data-usuario-id');
+            const nombre = btn.getAttribute('data-usuario-nombre') || 'este usuario';
+            const accion = btn.classList.contains('gofast-btn-desactivar') ? 'desactivar' : 'activar';
             if (!id) return;
 
-            if (!confirm('¿Seguro que quieres desactivar este usuario?')) {
+            if (!confirm('¿Seguro que quieres ' + accion + ' a ' + nombre + '?')) {
                 return;
             }
 
             const form = btn.closest('form');
             if (!form) return;
 
-            let input = form.querySelector('input[name="eliminar_usuario['+id+']"]');
+            let input = form.querySelector('input[name="desactivar_usuario['+id+']"]');
             if (!input) {
                 input = document.createElement('input');
                 input.type = 'hidden';
-                input.name = 'eliminar_usuario['+id+']';
+                input.name = 'desactivar_usuario['+id+']';
+                input.value = '1';
+                form.appendChild(input);
+            }
+
+            let flag = form.querySelector('input[name="gofast_guardar_usuarios"]');
+            if (!flag) {
+                flag = document.createElement('input');
+                flag.type = 'hidden';
+                flag.name = 'gofast_guardar_usuarios';
+                flag.value = '1';
+                form.appendChild(flag);
+            }
+
+            form.submit();
+        });
+    });
+
+    // Borrar usuario permanentemente
+    document.querySelectorAll('.gofast-btn-borrar').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            const id = btn.getAttribute('data-usuario-id');
+            const nombre = btn.getAttribute('data-usuario-nombre') || 'este usuario';
+            if (!id) return;
+
+            if (!confirm('⚠️ ¿Estás SEGURO que quieres BORRAR PERMANENTEMENTE a ' + nombre + '?\n\nEsta acción NO se puede deshacer.')) {
+                return;
+            }
+
+            // Confirmación doble
+            if (!confirm('⚠️ ÚLTIMA CONFIRMACIÓN:\n\n¿Realmente quieres eliminar permanentemente a ' + nombre + '?\n\nEsta acción es IRREVERSIBLE.')) {
+                return;
+            }
+
+            const form = btn.closest('form');
+            if (!form) return;
+
+            let input = form.querySelector('input[name="borrar_usuario['+id+']"]');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'borrar_usuario['+id+']';
                 input.value = '1';
                 form.appendChild(input);
             }
@@ -666,6 +888,256 @@ document.addEventListener('DOMContentLoaded', function(){
     });
 });
 </script>
+
+<style>
+/* =====================================================
+   ESTILOS PARA TABLA Y CARDS
+   ====================================================== */
+.gofast-usuarios-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+}
+
+.gofast-usuarios-table-wrapper .gofast-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.gofast-usuarios-table-wrapper .gofast-usuarios-table {
+    min-width: 1000px;
+    width: 100%;
+}
+
+/* Vista Desktop: Mostrar tabla, ocultar cards */
+.gofast-usuarios-desktop {
+    display: block;
+}
+
+.gofast-usuarios-mobile {
+    display: none;
+}
+
+.gofast-usuarios-cards {
+    width: 100%;
+    max-width: 100%;
+}
+
+.gofast-usuario-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.gofast-usuario-card * {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* =====================================================
+   ESTILOS RESPONSIVE PARA MÓVIL
+   ====================================================== */
+@media (max-width: 768px) {
+    .gofast-home {
+        padding: 10px;
+    }
+    
+    .gofast-box {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    /* Ocultar tabla en móvil, mostrar cards */
+    .gofast-usuarios-desktop {
+        display: none !important;
+    }
+    
+    .gofast-usuarios-mobile {
+        display: block !important;
+    }
+    
+    .gofast-usuarios-cards {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    .gofast-usuario-card {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Formulario de crear usuario responsive */
+    .gofast-recargo-nuevo {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Filtros responsive */
+    .gofast-pedidos-filtros-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .gofast-pedidos-filtros-row > div {
+        width: 100%;
+    }
+    
+    .gofast-pedidos-filtros-actions {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .gofast-pedidos-filtros-actions button,
+    .gofast-pedidos-filtros-actions a {
+        flex: 1;
+    }
+    
+    /* Botón guardar cambios */
+    .gofast-btn-request {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+    }
+    
+    /* Paginación responsive */
+    .gofast-pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .gofast-page-link {
+        min-width: 36px;
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    /* Header responsive */
+    .gofast-home > div:first-child {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .gofast-home > div:first-child > a {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 22px !important;
+    }
+    
+    h3 {
+        font-size: 18px !important;
+    }
+}
+
+/* Desktop: Mostrar tabla, ocultar cards */
+@media (min-width: 769px) {
+    .gofast-usuarios-desktop {
+        display: block !important;
+    }
+    
+    .gofast-usuarios-mobile {
+        display: none !important;
+    }
+}
+
+/* Estilos para botones de acción */
+.gofast-acciones-usuario {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 150px;
+}
+
+.gofast-input-password {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.gofast-botones-accion {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gofast-btn-accion {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.gofast-btn-desactivar {
+    background: #ffc107;
+    color: #000;
+}
+
+.gofast-btn-desactivar:hover {
+    background: #e0a800;
+}
+
+.gofast-btn-activar {
+    background: #28a745;
+    color: #fff;
+}
+
+.gofast-btn-activar:hover {
+    background: #218838;
+}
+
+.gofast-btn-borrar {
+    background: #dc3545;
+    color: #fff;
+}
+
+.gofast-btn-borrar:hover {
+    background: #c82333;
+}
+
+.gofast-tu-usuario {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    padding: 8px 0;
+}
+
+/* Mejorar visibilidad de la tabla */
+.gofast-table {
+    font-size: 14px;
+}
+
+.gofast-table th {
+    font-weight: 600;
+    padding: 12px 8px;
+    background: #f8f9fa;
+}
+
+.gofast-table td {
+    padding: 10px 8px;
+    vertical-align: middle;
+}
+
+.gofast-row-inactive {
+    opacity: 0.6;
+    background: #f8f9fa;
+}
+
+.gofast-row-active {
+    background: #fff;
+}
+</style>
 
 <?php
     return ob_get_clean();
