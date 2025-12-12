@@ -73,6 +73,10 @@ function gofast_auth_shortcode() {
         </form>
 
         <p class="gofast-auth-footer">
+            <a href="<?= esc_url(home_url('/recuperar-password')) ?>" class="gofast-forgot-link">¿Olvidaste tu contraseña?</a>
+        </p>
+
+        <p class="gofast-auth-footer">
             ¿No tienes cuenta?
             <a href="<?= esc_url(home_url('/auth/?registro=1')) ?>">Regístrate aquí</a>
         </p>
@@ -303,6 +307,11 @@ input[type="password"]{
 .gofast-auth-footer a{
     color:#0057ff;
     font-weight:600;
+}
+.gofast-forgot-link{
+    display:block;
+    margin-bottom:8px;
+    font-size:14px;
 }
 </style>
 
