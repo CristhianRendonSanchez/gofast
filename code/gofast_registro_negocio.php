@@ -808,6 +808,11 @@ document.addEventListener('DOMContentLoaded', function(){
     ];
 
     function toggleOtro() {
+        // Validar que los elementos existan antes de acceder a sus propiedades
+        if (!wrapperOtro || !inputOtro) {
+            return; // Salir silenciosamente si los elementos no existen
+        }
+
         const valor = tipoSelect ? tipoSelect.value.trim() : "";
 
         if (valor === "") {
@@ -832,9 +837,14 @@ document.addEventListener('DOMContentLoaded', function(){
         inputOtro.required = false;
     }
 
-    jQuery('#tipo_negocio').on('select2:select', toggleOtro);
+    // Exponer la función globalmente de forma segura
+    window.toggleOtro = toggleOtro;
 
-    setTimeout(toggleOtro, 200);
+    // Solo registrar event listener y setTimeout si los elementos existen
+    if (tipoSelect && wrapperOtro && inputOtro) {
+        jQuery('#tipo_negocio').on('select2:select', toggleOtro);
+        setTimeout(toggleOtro, 200);
+    }
 
     // Observar cambios en el menú móvil para ajustar z-index
     const observer = new MutationObserver(function(mutations) {

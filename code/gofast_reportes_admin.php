@@ -412,6 +412,89 @@ function gofast_reportes_admin_shortcode() {
     
     $pedidos_hoy = $wpdb->get_results($sql_pedidos_hoy);
 
+    /* ==========================================================
+       6.1. Compras del Día Actual
+    ========================================================== */
+    $where_compras_hoy = "1=1";
+    $params_compras_hoy = [];
+    
+    // Aplicar filtros de mensajero
+    if (!$es_admin) {
+        $where_compras_hoy .= " AND mensajero_id = %d";
+        $params_compras_hoy[] = $usuario->id;
+    } elseif ($mensajero_id > 0) {
+        $where_compras_hoy .= " AND mensajero_id = %d";
+        $params_compras_hoy[] = $mensajero_id;
+    }
+    
+    // Solo compras del día actual
+    $where_compras_hoy .= " AND DATE(fecha_creacion) = %s";
+    $params_compras_hoy[] = $fecha_hoy;
+    
+    // Excluir canceladas
+    $where_compras_hoy .= " AND estado != 'cancelada'";
+    
+    // Contar total de compras del día
+    if (!empty($params_compras_hoy)) {
+        $sql_count_compras_hoy = $wpdb->prepare(
+            "SELECT COUNT(*) as total
+             FROM $tabla_compras
+             WHERE $where_compras_hoy",
+            $params_compras_hoy
+        );
+    } else {
+        $sql_count_compras_hoy = "SELECT COUNT(*) as total
+             FROM $tabla_compras
+             WHERE $where_compras_hoy";
+    }
+    
+    $total_compras_hoy = (int) ($wpdb->get_var($sql_count_compras_hoy) ?? 0);
+    $pg_compras_hoy = isset($_GET['pg_compras_hoy']) ? max(1, (int) $_GET['pg_compras_hoy']) : 1;
+    $total_paginas_compras_hoy = max(1, (int) ceil($total_compras_hoy / $por_pagina));
+    $offset_compras_hoy = ($pg_compras_hoy - 1) * $por_pagina;
+    
+    // Obtener compras del día actual (con paginación)
+    $params_compras_hoy_limit = $params_compras_hoy;
+    $params_compras_hoy_limit[] = $por_pagina;
+    $params_compras_hoy_limit[] = $offset_compras_hoy;
+    
+    if (!empty($params_compras_hoy)) {
+        $sql_compras_hoy = $wpdb->prepare(
+            "SELECT c.*, 
+                    m.nombre as mensajero_nombre,
+                    m.telefono as mensajero_telefono,
+                    u.nombre as creador_nombre,
+                    b.nombre as barrio_nombre
+             FROM $tabla_compras c
+             LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
+             LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
+             LEFT JOIN barrios b ON c.barrio_id = b.id
+             WHERE $where_compras_hoy
+             ORDER BY c.fecha_creacion DESC
+             LIMIT %d OFFSET %d",
+            $params_compras_hoy_limit
+        );
+    } else {
+        $sql_compras_hoy = $wpdb->prepare(
+            "SELECT c.*, 
+                    m.nombre as mensajero_nombre,
+                    m.telefono as mensajero_telefono,
+                    u.nombre as creador_nombre,
+                    b.nombre as barrio_nombre
+             FROM $tabla_compras c
+             LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
+             LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
+             LEFT JOIN barrios b ON c.barrio_id = b.id
+             WHERE $where_compras_hoy
+             ORDER BY c.fecha_creacion DESC
+             LIMIT %d OFFSET %d",
+            $por_pagina,
+            $offset_compras_hoy
+        );
+    }
+    
+    $compras_hoy = $wpdb->get_results($sql_compras_hoy);
+
     // Top mensajeros (solo para admin) - con paginación
     $top_mensajeros = [];
     $total_mensajeros = 0;
@@ -943,6 +1026,105 @@ function gofast_reportes_admin_shortcode() {
         <div class="gofast-box" style="margin-bottom:20px;">
             <h3 style="margin-top:0;">📅 Pedidos del Día Actual (<?= gofast_date_format($fecha_hoy, 'd/m/Y'); ?>)</h3>
             <p>No hay pedidos registrados para el día de hoy.</p>
+        </div>
+    <?php endif; ?>
+
+    <!-- =====================================================
+         B3) COMPRAS DEL DÍA ACTUAL
+    ====================================================== -->
+    <?php if (!empty($compras_hoy) || $total_compras_hoy > 0): ?>
+        <div class="gofast-box" style="margin-bottom:20px;">
+            <h3 style="margin-top:0;">
+                🛒 Compras del Día Actual (<?= gofast_date_format($fecha_hoy, 'd/m/Y'); ?>)
+                <span style="font-size:14px;color:#666;font-weight:normal;">
+                    (<?= number_format($total_compras_hoy); ?> compra(s) total(es))
+                </span>
+            </h3>
+            <div style="margin-bottom:10px;padding:8px;background:#f0f7ff;border-left:3px solid #2196F3;border-radius:4px;font-size:12px;color:#1976D2;">
+                💡 <strong>En móvil:</strong> Desliza horizontalmente para ver todas las columnas
+            </div>
+            <div class="gofast-table-wrap" style="width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;display:block;">
+                <table class="gofast-table" style="min-width:800px;width:100%;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Hora</th>
+                            <?php if ($es_admin): ?>
+                                <th>Mensajero</th>
+                                <th>Creado por</th>
+                            <?php endif; ?>
+                            <th>Valor</th>
+                            <th>Destino</th>
+                            <th>Estado</th>
+                            <th>Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($compras_hoy as $compra): ?>
+                            <tr>
+                                <td>#<?= (int) $compra->id; ?></td>
+                                <td><?= esc_html( gofast_date_format($compra->fecha_creacion, 'H:i') ); ?></td>
+                                <?php if ($es_admin): ?>
+                                    <td>
+                                        <?= esc_html($compra->mensajero_nombre ?: 'N/A'); ?>
+                                        <?php if ($compra->mensajero_telefono): ?>
+                                            <br><small style="color:#666;"><?= esc_html($compra->mensajero_telefono); ?></small>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= esc_html($compra->creador_nombre ?: 'N/A'); ?></td>
+                                <?php endif; ?>
+                                <td><strong>$<?= number_format($compra->valor, 0, ',', '.'); ?></strong></td>
+                                <td><?= esc_html($compra->barrio_nombre ?: 'N/A'); ?></td>
+                                <td>
+                                    <?php
+                                    $estado_compra = $compra->estado;
+                                    $estado_colors = [
+                                        'pendiente' => '#fff3cd',
+                                        'en_proceso' => '#cfe2ff',
+                                        'completada' => '#d4edda',
+                                        'cancelada' => '#f8d7da'
+                                    ];
+                                    $estado_labels = [
+                                        'pendiente' => 'Pendiente',
+                                        'en_proceso' => 'En Proceso',
+                                        'completada' => 'Completada',
+                                        'cancelada' => 'Cancelada'
+                                    ];
+                                    $color = $estado_colors[$estado_compra] ?? '#f8f9fa';
+                                    $label = $estado_labels[$estado_compra] ?? $estado_compra;
+                                    ?>
+                                    <span style="display:inline-block;padding:4px 10px;border-radius:4px;background:<?= $color; ?>;font-size:12px;font-weight:600;">
+                                        <?= esc_html($label); ?>
+                                    </span>
+                                </td>
+                                <td><?= esc_html($compra->observaciones ?: '—'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            
+            <?php if ($total_paginas_compras_hoy > 1): ?>
+                <div class="gofast-pagination" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                    <?php
+                    $base_url_compras_hoy = get_permalink();
+                    $query_args_compras_hoy = $_GET;
+                    for ($i = 1; $i <= $total_paginas_compras_hoy; $i++):
+                        $query_args_compras_hoy['pg_compras_hoy'] = $i;
+                        $url_compras_hoy = esc_url( add_query_arg($query_args_compras_hoy, $base_url_compras_hoy) );
+                        $active_compras_hoy = ($i === $pg_compras_hoy) ? 'gofast-page-current' : '';
+                        ?>
+                        <a href="<?php echo $url_compras_hoy; ?>" class="gofast-page-link <?php echo $active_compras_hoy; ?>" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;background:#fff;<?php echo $active_compras_hoy ? 'background:var(--gofast-yellow);font-weight:700;' : ''; ?>">
+                            <?php echo $i; ?>
+                        </a>
+                    <?php endfor; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php else: ?>
+        <div class="gofast-box" style="margin-bottom:20px;">
+            <h3 style="margin-top:0;">🛒 Compras del Día Actual (<?= gofast_date_format($fecha_hoy, 'd/m/Y'); ?>)</h3>
+            <p>No hay compras registradas para el día de hoy.</p>
         </div>
     <?php endif; ?>
 

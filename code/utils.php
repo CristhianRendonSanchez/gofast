@@ -101,9 +101,69 @@ if (!function_exists('gofast_clean_whatsapp')) {
     }
 }
 
+// Protección global para toggleOtro - se ejecuta inmediatamente
+add_action('wp_head', function() {
+?>
+<script>
+// Protección global para toggleOtro - previene errores en páginas donde los elementos no existen
+// Se ejecuta inmediatamente para proteger antes de que otros scripts se carguen
+(function() {
+    // Crear una función segura por defecto
+    if (typeof window.toggleOtro === 'undefined') {
+        window.toggleOtro = function() {
+            // Función vacía segura - no hacer nada si los elementos no existen
+            return;
+        };
+    }
+    
+    // Interceptar setTimeout para proteger llamadas a toggleOtro
+    const originalSetTimeout = window.setTimeout;
+    window.setTimeout = function(func, delay) {
+        if (typeof func === 'function') {
+            const funcStr = func.toString();
+            if (funcStr.includes('toggleOtro')) {
+                // Verificar si los elementos existen antes de ejecutar
+                const tipoSelect = document.getElementById("tipo_negocio");
+                const wrapperOtro = document.getElementById("tipo_otro_wrapper");
+                const inputOtro = document.getElementById("tipo_otro");
+                if (!tipoSelect || !wrapperOtro || !inputOtro) {
+                    // No ejecutar si los elementos no existen
+                    return null;
+                }
+            }
+        }
+        return originalSetTimeout.apply(this, arguments);
+    };
+})();
+</script>
+<?php
+}, 1);
+
 add_action('wp_footer', function() {
 ?>
 <script>
+// Proteger toggleOtro nuevamente en el footer por si se redefine después
+(function() {
+    if (typeof window.toggleOtro === 'function') {
+        const originalToggleOtro = window.toggleOtro;
+        window.toggleOtro = function() {
+            try {
+                const tipoSelect = document.getElementById("tipo_negocio");
+                const wrapperOtro = document.getElementById("tipo_otro_wrapper");
+                const inputOtro = document.getElementById("tipo_otro");
+                
+                // Solo ejecutar si todos los elementos existen
+                if (tipoSelect && wrapperOtro && inputOtro) {
+                    return originalToggleOtro.apply(this, arguments);
+                }
+            } catch(e) {
+                // Silenciar cualquier error
+                return;
+            }
+        };
+    }
+})();
+
 document.addEventListener("input", function(e) {
     if (e.target.classList.contains("gofast-money")) {
         let raw = e.target.value.replace(/[^\d]/g, "");

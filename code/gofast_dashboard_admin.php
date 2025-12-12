@@ -35,12 +35,12 @@ function gofast_dashboard_admin_shortcode() {
     /* ==========================================================
        1. Estadísticas rápidas
     ========================================================== */
-    // Total de destinos (suma de todos los destinos en JSON)
+    // Total de destinos (suma de todos los destinos en JSON) - igual que gofast_home.php
     $total_destinos = (int) ($wpdb->get_var(
         "SELECT SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))) FROM servicios_gofast"
     ) ?? 0);
     
-    // Total compras (excluyendo canceladas)
+    // Total compras (excluyendo canceladas) - igual que gofast_home.php
     $total_compras = (int) $wpdb->get_var("SELECT COUNT(*) FROM compras_gofast WHERE estado != 'cancelada'");
     
     // Usuarios
@@ -48,22 +48,22 @@ function gofast_dashboard_admin_shortcode() {
     $total_clientes = (int) $wpdb->get_var("SELECT COUNT(*) FROM usuarios_gofast WHERE rol = 'cliente' AND activo = 1");
     $total_mensajeros = (int) $wpdb->get_var("SELECT COUNT(*) FROM usuarios_gofast WHERE rol = 'mensajero' AND activo = 1");
     
-    // Ingresos totales (servicios no cancelados + compras no canceladas)
+    // Ingresos totales (servicios no cancelados + compras no canceladas) - igual que gofast_home.php
     $ingresos_servicios = (float) ($wpdb->get_var("SELECT SUM(total) FROM servicios_gofast WHERE tracking_estado != 'cancelado'") ?? 0);
     $ingresos_compras = (float) ($wpdb->get_var("SELECT SUM(valor) FROM compras_gofast WHERE estado != 'cancelada'") ?? 0);
     $total_ingresos = $ingresos_servicios + $ingresos_compras;
     
-    // Destinos hoy
+    // Destinos hoy (excluyendo cancelados, igual que reportes por día)
     $destinos_hoy = (int) ($wpdb->get_var(
         $wpdb->prepare(
             "SELECT SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))) 
              FROM servicios_gofast 
-             WHERE DATE(fecha) = %s",
+             WHERE DATE(fecha) = %s AND tracking_estado != 'cancelado'",
             gofast_current_time('Y-m-d')
         )
     ) ?? 0);
     
-    // Ingresos de hoy (servicios + compras del día actual)
+    // Ingresos de hoy (servicios + compras del día actual) - igual que reportes
     $ingresos_servicios_hoy = (float) ($wpdb->get_var(
         $wpdb->prepare(
             "SELECT SUM(total) FROM servicios_gofast 
@@ -75,7 +75,7 @@ function gofast_dashboard_admin_shortcode() {
     $ingresos_compras_hoy = (float) ($wpdb->get_var(
         $wpdb->prepare(
             "SELECT SUM(valor) FROM compras_gofast 
-             WHERE DATE(fecha) = %s AND estado != 'cancelada'",
+             WHERE DATE(fecha_creacion) = %s AND estado != 'cancelada'",
             gofast_current_time('Y-m-d')
         )
     ) ?? 0);
@@ -84,6 +84,7 @@ function gofast_dashboard_admin_shortcode() {
     $comision_hoy = $ingresos_hoy * 0.20;
     
     // Comisión del mes actual (del primer día al último día del mes) - zona horaria Colombia
+    // Igual que reportes: usar fecha >= y fecha <= con formato datetime
     $fecha_actual = gofast_current_time('Y-m-d');
     $timezone = new DateTimeZone('America/Bogota');
     $datetime = new DateTime($fecha_actual, $timezone);
@@ -102,7 +103,7 @@ function gofast_dashboard_admin_shortcode() {
     $ingresos_compras_mes = (float) ($wpdb->get_var(
         $wpdb->prepare(
             "SELECT SUM(valor) FROM compras_gofast 
-             WHERE fecha >= %s AND fecha <= %s AND estado != 'cancelada'",
+             WHERE fecha_creacion >= %s AND fecha_creacion <= %s AND estado != 'cancelada'",
             $primer_dia_mes . ' 00:00:00',
             $ultimo_dia_mes . ' 23:59:59'
         )

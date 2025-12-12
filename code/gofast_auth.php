@@ -43,6 +43,10 @@ function gofast_auth_shortcode() {
         <form method="post" action="" id="gofast-login-form">
             <!-- Campo hidden para indicar si aceptó cookies -->
             <input type="hidden" name="gofast_cookies_accepted" id="gofast-cookies-accepted" value="0">
+            <!-- Campo hidden para identificar formulario de login -->
+            <input type="hidden" name="gofast_login_form" value="1">
+            <!-- Campo honeypot anti-bot (debe estar vacío) -->
+            <input type="text" name="gofast_extra_field" value="" style="display:none !important;" autocomplete="off" tabindex="-1">
             
             <label>Email o WhatsApp</label>
             <input type="text" name="user" required>
@@ -81,6 +85,8 @@ function gofast_auth_shortcode() {
         <form method="post" action="" id="gofast-registro-form">
             <!-- Campo hidden para indicar si aceptó cookies -->
             <input type="hidden" name="gofast_cookies_accepted" id="gofast-cookies-accepted-reg" value="0">
+            <!-- Campo honeypot anti-bot (debe estar vacío) -->
+            <input type="text" name="gofast_extra_field" value="" style="display:none !important;" autocomplete="off" tabindex="-1">
 
             <label>Nombre completo</label>
             <input type="text" name="nombre" required>

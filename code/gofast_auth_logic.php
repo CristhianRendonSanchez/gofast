@@ -60,6 +60,19 @@ function gofast_handle_auth_requests() {
     }
 
     /*********************************************
+     * 🛡️ VALIDACIÓN HONEYPOT ANTI-BOT
+     *********************************************/
+    // Si el campo honeypot viene con contenido, es un BOT
+    if (isset($_POST['gofast_extra_field']) && !empty($_POST['gofast_extra_field'])) {
+        // Registrar intento de bot si está en modo debug
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GOFAST AUTH - Bot detectado por honeypot. IP: ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        }
+        status_header(403);
+        exit('Acceso no autorizado');
+    }
+
+    /*********************************************
      * LOGIN
      *********************************************/
     if (isset($_POST['gofast_login'])) {
@@ -96,6 +109,9 @@ function gofast_handle_auth_requests() {
             empty($usuario->password_hash) ||
             !password_verify($password, $usuario->password_hash)
         ) {
+            // 🛡️ Incrementar contador de intentos fallidos
+            gofast_increment_login_attempts();
+            
             $_SESSION['gofast_auth_error'] = 'Usuario o contraseña incorrectos.';
             wp_redirect(home_url('/auth'));
             exit;
@@ -104,6 +120,11 @@ function gofast_handle_auth_requests() {
         // Guardar sesión normal
         $_SESSION['gofast_user_id']  = (int) $usuario->id;
         $_SESSION['gofast_user_rol'] = strtolower($usuario->rol ?: 'cliente');
+
+        // 🛡️ Resetear rate limiting en login exitoso
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $key = 'gofast_login_attempts_' . md5($ip);
+        delete_transient($key);
 
         /*********************************************
          * 🔥 COOKIE PERSISTENTE (30 DÍAS)
@@ -305,6 +326,56 @@ function gofast_create_persistent_cookie($user_id, $tabla = 'usuarios_gofast') {
     }
     
     return true;
+}
+
+/**
+ * 🛡️ Rate limiting por IP para prevenir ataques de fuerza bruta
+ * Limita a 5 intentos fallidos en 10 minutos por IP
+ */
+function gofast_login_rate_limit() {
+    // Solo aplicar a peticiones POST con formulario de login
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_POST['gofast_login_form'])) {
+        return;
+    }
+
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $key = 'gofast_login_attempts_' . md5($ip);
+
+    $data = get_transient($key);
+    if (!$data) {
+        $data = ['count' => 0, 'blocked' => false];
+    }
+
+    // Si ya está bloqueado, cortamos
+    if (!empty($data['blocked'])) {
+        status_header(429);
+        exit('Demasiados intentos. Inténtalo más tarde.');
+    }
+}
+add_action('init', 'gofast_login_rate_limit', 4); // Prioridad 4 para ejecutar antes de gofast_handle_auth_requests
+
+/**
+ * Incrementar contador de intentos fallidos de login
+ */
+function gofast_increment_login_attempts() {
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $key = 'gofast_login_attempts_' . md5($ip);
+
+    $data = get_transient($key);
+    if (!$data) {
+        $data = ['count' => 0, 'blocked' => false];
+    }
+
+    // Incrementar intentos
+    $data['count']++;
+
+    // Máx 5 intentos en 10 minutos
+    if ($data['count'] > 5) {
+        $data['blocked'] = true;
+    }
+
+    // Guardar por 10 minutos
+    set_transient($key, $data, 10 * MINUTE_IN_SECONDS);
 }
 
 add_action('init', 'gofast_handle_auth_requests', 5);
