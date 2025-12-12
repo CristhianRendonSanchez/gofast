@@ -176,7 +176,7 @@ add_shortcode("gofast_confirmacion", function() {
         $direccion_recogida = $origen_data['direccion'];
     }
     
-    // Construir mensaje según el formato solicitado
+    // Construir mensaje según el formato solicitado (sin codificar, JavaScript lo codificará)
     if ($es_intermunicipal) {
         // Mensaje para servicios intermunicipales
         $destino_nombre = '';
@@ -191,8 +191,7 @@ add_shortcode("gofast_confirmacion", function() {
         
         $destino_display_inter = $dir_destino_inter ?: ($barrio_destino_inter ?: 'No especificado');
         
-        $mensaje = urlencode(
-            "🚚 Hola! He solicitado un servicio INTERMUNICIPAL en GoFast.\n\n" .
+        $mensaje = "🚚 Hola! He solicitado un servicio INTERMUNICIPAL en GoFast.\n\n" .
             "📦 Servicio: #$id\n" .
             "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n" .
             ($barrio_origen_nombre ? "🏙 Barrio: $barrio_origen_nombre\n" : "") .
@@ -203,22 +202,21 @@ add_shortcode("gofast_confirmacion", function() {
             "🚫 IMPORTANTE:\n" .
             "Si ya no necesitas el servicio, recuerda cancelarlo antes de que el mensajero llegue al punto de recogida. En caso contrario, se aplicará un recargo por desplazamiento.\n\n" .
             "📍 Destino: $destino_display_inter\n" .
-            ($barrio_destino_inter && $barrio_destino_inter !== $dir_destino_inter && $dir_destino_inter ? "🏙 Barrio: $barrio_destino_inter\n" : "")
-        );
+            ($barrio_destino_inter && $barrio_destino_inter !== $dir_destino_inter && $dir_destino_inter ? "🏙 Barrio: $barrio_destino_inter\n" : "");
     } else {
         // Mensaje para servicios normales (múltiples destinos posibles)
-        $mensaje_texto = "🚀 Hola! He solicitado un servicio en GoFast.\n\n";
-        $mensaje_texto .= "📦 Servicio: #$id\n";
-        $mensaje_texto .= "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n";
+        $mensaje = "🚀 Hola! He solicitado un servicio en GoFast.\n\n";
+        $mensaje .= "📦 Servicio: #$id\n";
+        $mensaje .= "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n";
         if ($barrio_origen_nombre) {
-            $mensaje_texto .= "🏙 Barrio: $barrio_origen_nombre\n";
+            $mensaje .= "🏙 Barrio: $barrio_origen_nombre\n";
         }
-        $mensaje_texto .= "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n";
-        $mensaje_texto .= "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n";
-        $mensaje_texto .= "💲 Monto a pagar:\n";
-        $mensaje_texto .= "💰 Costo del envío: $" . number_format($pedido->total, 0, ',', '.') . "\n\n";
-        $mensaje_texto .= "🚫 IMPORTANTE:\n";
-        $mensaje_texto .= "Si ya no necesitas el servicio, recuerda cancelarlo antes de que el mensajero llegue al punto de recogida. En caso contrario, se aplicará un recargo por desplazamiento.\n\n";
+        $mensaje .= "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n";
+        $mensaje .= "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n";
+        $mensaje .= "💲 Monto a pagar:\n";
+        $mensaje .= "💰 Costo del envío: $" . number_format($pedido->total, 0, ',', '.') . "\n\n";
+        $mensaje .= "🚫 IMPORTANTE:\n";
+        $mensaje .= "Si ya no necesitas el servicio, recuerda cancelarlo antes de que el mensajero llegue al punto de recogida. En caso contrario, se aplicará un recargo por desplazamiento.\n\n";
         
         // Agregar información de cada destino
         if (!empty($destinos)) {
@@ -227,16 +225,16 @@ add_shortcode("gofast_confirmacion", function() {
                 $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
                 
                 if ($idx > 0) {
-                    $mensaje_texto .= "\n";
+                    $mensaje .= "\n";
                 }
                 
                 // Destino: usar dirección si existe, sino el barrio
                 $destino_display = $dir_destino ?: ($barrio_destino ?: 'No especificado');
-                $mensaje_texto .= "📍 Destino: $destino_display\n";
+                $mensaje .= "📍 Destino: $destino_display\n";
                 
                 // Barrio: solo mostrar si es diferente de la dirección
                 if ($barrio_destino && $barrio_destino !== $dir_destino && $dir_destino) {
-                    $mensaje_texto .= "🏙 Barrio: $barrio_destino\n";
+                    $mensaje .= "🏙 Barrio: $barrio_destino\n";
                 } elseif ($barrio_destino && !$dir_destino) {
                     // Si solo hay barrio, no duplicar en Destino y Barrio
                     // Ya está en Destino, así que no lo repetimos
@@ -247,10 +245,8 @@ add_shortcode("gofast_confirmacion", function() {
             }
         } else {
             // Si no hay destinos en el JSON, usar datos básicos
-            $mensaje_texto .= "📍 Destino: No especificado\n";
+            $mensaje .= "📍 Destino: No especificado\n";
         }
-        
-        $mensaje = urlencode($mensaje_texto);
     }
 
     /* ==========================================================
@@ -445,12 +441,15 @@ add_shortcode("gofast_confirmacion", function() {
 document.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("btnWhatsApp");
     const phone = "<?= $telefono_empresa ?>";
-    const msg = "<?= $mensaje ?>";
+    const msg = <?= json_encode($mensaje, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
+    // Codificar el mensaje correctamente para WhatsApp (maneja emojis Unicode)
+    const msgEncoded = encodeURIComponent(msg);
+
     const url = isMobile
-        ? `https://wa.me/${phone}?text=${msg}`
-        : `https://web.whatsapp.com/send?phone=${phone}&text=${msg}`;
+        ? `https://wa.me/${phone}?text=${msgEncoded}`
+        : `https://web.whatsapp.com/send?phone=${phone}&text=${msgEncoded}`;
 
     if (btn) {
         btn.href = url;

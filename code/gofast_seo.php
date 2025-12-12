@@ -26,9 +26,9 @@ function gofast_add_seo_meta_tags() {
     $current_url = home_url(add_query_arg(array(), $wp->request));
     
     // Configuración SEO por defecto
-    $default_title = 'GoFast - Mensajería Express en Tulúa | Envíos Rápidos y Seguros';
-    $default_description = 'GoFast es tu servicio de mensajería express en Tulúa y alrededores. Envíos rápidos, seguros y confiables. Cotiza tu domicilio en segundos y confirma por WhatsApp.';
-    $default_keywords = 'mensajería express, domicilios tulúa, envíos rápidos, mensajero tulúa, delivery tulúa, envíos intermunicipales, gofast, mensajería valle del cauca';
+    $default_title = 'GoFast - Mensajería Express en Tuluá | Envíos Rápidos y Seguros';
+    $default_description = 'GoFast es tu servicio de mensajería express en Tuluá y alrededores. Envíos rápidos, seguros y confiables. Cotiza tu domicilio en segundos y confirma por WhatsApp.';
+    $default_keywords = 'mensajería express, domicilios Tuluá, envíos rápidos, mensajero Tuluá, delivery Tuluá, envíos intermunicipales, gofast, mensajería valle del cauca';
     
     // Imagen por defecto (logo de GoFast)
     $default_image = 'https://gofastdomicilios.com/wp-content/uploads/2025/11/GoFast.png';
@@ -42,8 +42,8 @@ function gofast_add_seo_meta_tags() {
     
     // Detectar tipo de página
     if (is_front_page() || is_home()) {
-        $page_title = 'GoFast - Mensajería Express en Tulúa | Envíos Rápidos y Seguros';
-        $page_description = 'GoFast es tu servicio de mensajería express en Tulúa y alrededores. Envíos rápidos, seguros y confiables. Cotiza tu domicilio en segundos y confirma por WhatsApp.';
+        $page_title = 'GoFast - Mensajería Express en Tuluá | Envíos Rápidos y Seguros';
+        $page_description = 'GoFast es tu servicio de mensajería express en Tuluá y alrededores. Envíos rápidos, seguros y confiables. Cotiza tu domicilio en segundos y confirma por WhatsApp.';
         $page_type = 'website';
     } elseif (is_page()) {
         $page_obj = get_queried_object();
@@ -55,32 +55,32 @@ function gofast_add_seo_meta_tags() {
         switch ($page_slug) {
             case 'cotizar':
                 $page_title = 'Cotizar Envío - GoFast Mensajería Express';
-                $page_description = 'Cotiza tu envío en segundos. Ingresa origen y destino, obtén el precio al instante. Servicio de mensajería express en Tulúa.';
-                $page_keywords = 'cotizar envío, calcular costo envío, tarifas mensajería tulúa, precio domicilio';
+                $page_description = 'Cotiza tu envío en segundos. Ingresa origen y destino, obtén el precio al instante. Servicio de mensajería express en Tuluá.';
+                $page_keywords = 'cotizar envío, calcular costo envío, tarifas mensajería Tuluá, precio domicilio';
                 break;
                 
             case 'cotizar-intermunicipal':
-                $page_title = 'Envíos Intermunicipales - GoFast | Desde Tulúa a Otros Municipios';
-                $page_description = 'Envía paquetes desde Tulúa a otros municipios cercanos. Envíos intermunicipales rápidos y seguros. Pago anticipado requerido.';
-                $page_keywords = 'envíos intermunicipales, mensajería intermunicipal, envíos desde tulúa, delivery intermunicipal';
+                $page_title = 'Envíos Intermunicipales - GoFast | Desde Tuluá a Otros Municipios';
+                $page_description = 'Envía paquetes desde Tuluá a otros municipios cercanos. Envíos intermunicipales rápidos y seguros. Pago anticipado requerido.';
+                $page_keywords = 'envíos intermunicipales, mensajería intermunicipal, envíos desde Tuluá, delivery intermunicipal';
                 break;
                 
             case 'sobre-nosotros':
                 $page_title = 'Sobre Nosotros - GoFast Mensajería Express';
-                $page_description = 'Conoce más sobre GoFast, tu servicio de mensajería express en Tulúa. Nuestro equipo, políticas y compromiso con la calidad.';
-                $page_keywords = 'sobre gofast, quiénes somos, mensajería tulúa, empresa mensajería';
+                $page_description = 'Conoce más sobre GoFast, tu servicio de mensajería express en Tuluá. Nuestro equipo, políticas y compromiso con la calidad.';
+                $page_keywords = 'sobre gofast, quiénes somos, mensajería Tuluá, empresa mensajería';
                 break;
                 
             case 'trabaja-con-nosotros':
                 $page_title = 'Trabaja con Nosotros - Únete al Equipo GoFast';
-                $page_description = '¿Tienes moto y papeles al día? Únete a nuestra red de mensajeros GoFast y genera ingresos adicionales haciendo domicilios en Tulúa.';
-                $page_keywords = 'trabajar como mensajero, empleo mensajero tulúa, ser mensajero, trabajo mensajería';
+                $page_description = '¿Tienes moto y papeles al día? Únete a nuestra red de mensajeros GoFast y genera ingresos adicionales haciendo domicilios en Tuluá.';
+                $page_keywords = 'trabajar como mensajero, empleo mensajero Tuluá, ser mensajero, trabajo mensajería';
                 break;
                 
             case 'app-movil':
                 $page_title = 'App Móvil GoFast - Descarga Nuestra Aplicación';
                 $page_description = 'Descarga la app móvil de GoFast y gestiona tus envíos desde tu celular. Disponible para Android e iOS.';
-                $page_keywords = 'app gofast, aplicación mensajería, app delivery tulúa, descargar app';
+                $page_keywords = 'app gofast, aplicación mensajería, app delivery Tuluá, descargar app';
                 break;
         }
     }
@@ -122,9 +122,9 @@ function gofast_add_seo_meta_tags() {
     // Language
     echo '<meta http-equiv="content-language" content="es-CO">' . "\n";
     
-    // Geo tags (Tulúa, Valle del Cauca, Colombia)
+    // Geo tags (Tuluá, Valle del Cauca, Colombia)
     echo '<meta name="geo.region" content="CO-VAC">' . "\n";
-    echo '<meta name="geo.placename" content="Tulúa">' . "\n";
+    echo '<meta name="geo.placename" content="Tuluá">' . "\n";
     echo '<meta name="geo.position" content="4.0847;-76.1953">' . "\n";
     echo '<meta name="ICBM" content="4.0847, -76.1953">' . "\n";
     
@@ -204,8 +204,8 @@ function gofast_add_seo_meta_tags() {
         "priceRange": "$$",
         "address": {
             "@type": "PostalAddress",
-            "streetAddress": "Tulúa",
-            "addressLocality": "Tulúa",
+            "streetAddress": "Tuluá",
+            "addressLocality": "Tuluá",
             "addressRegion": "Valle del Cauca",
             "postalCode": "763000",
             "addressCountry": "CO"
@@ -237,11 +237,11 @@ function gofast_add_seo_meta_tags() {
         "description": "<?php echo esc_js($default_description); ?>",
         "serviceArea": {
             "@type": "City",
-            "name": "Tulúa"
+            "name": "Tuluá"
         },
         "areaServed": {
             "@type": "City",
-            "name": "Tulúa"
+            "name": "Tuluá"
         },
         "hasOfferCatalog": {
             "@type": "OfferCatalog",
@@ -260,7 +260,7 @@ function gofast_add_seo_meta_tags() {
                     "itemOffered": {
                         "@type": "Service",
                         "name": "Envíos Intermunicipales",
-                        "description": "Envíos desde Tulúa a otros municipios"
+                        "description": "Envíos desde Tuluá a otros municipios"
                     }
                 },
                 {

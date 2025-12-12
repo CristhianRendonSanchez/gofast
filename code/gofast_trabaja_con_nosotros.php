@@ -115,7 +115,7 @@ function gofast_trabaja_con_nosotros_shortcode() {
                     $whatsapp_limpio = preg_replace('/[^0-9]/', '', $whatsapp);
                     
                     // Mensaje para WhatsApp
-                    $mensaje_whatsapp = urlencode("Hola! Soy *" . $nombre . "* y acabo de completar mi solicitud de trabajo en GO FAST mensajería express. Mi WhatsApp es: *" . $whatsapp_limpio . "*. Estoy interesado en la vacante de mensajería. ¿Podrían contactarme?");
+                    $mensaje_whatsapp = rawurlencode("Hola! Soy *" . $nombre . "* y acabo de completar mi solicitud de trabajo en GO FAST mensajería express. Mi WhatsApp es: *" . $whatsapp_limpio . "*. Estoy interesado en la vacante de mensajería. ¿Podrían contactarme?");
                     
                     // Redirigir a WhatsApp (CAMBIAR ESTE NÚMERO POR EL NÚMERO REAL DE GO FAST)
                     $whatsapp_gofast = "573001234567"; // TODO: Cambiar por el número real de WhatsApp de GO FAST
@@ -165,7 +165,7 @@ function gofast_trabaja_con_nosotros_shortcode() {
     <div class="gofast-box" style="margin-bottom: 24px;">
         <h1 style="margin-top: 0; margin-bottom: 12px; color: #000;">📦 Trabaja con Nosotros</h1>
         <p style="margin: 0; color: #666; font-size: 15px; line-height: 1.6;">
-            Somos una agencia de mensajería en convenio con diferentes establecimientos públicos, comerciales, empresas y emprendedores de la ciudad de Tulúa.
+            Somos una agencia de mensajería en convenio con diferentes establecimientos públicos, comerciales, empresas y emprendedores de la ciudad de Tuluá.
         </p>
     </div>
 

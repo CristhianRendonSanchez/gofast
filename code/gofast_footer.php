@@ -45,7 +45,7 @@ function gofast_footer_content() {
                      alt="GoFast Mensajería Express" 
                      class="gofast-footer-logo">
                 <p class="gofast-footer-text">
-                    GoFast Mensajería express en Tulúa y alrededores. Rápido, seguro y confiable.
+                    GoFast Mensajería express en Tuluá y alrededores. Rápido, seguro y confiable.
                 </p>
             </div>
 
@@ -90,7 +90,7 @@ function gofast_footer_content() {
                         </a>
                     </li>
                     <li>
-                        📍 Tulúa, Valle del Cauca
+                        📍 Tuluá, Valle del Cauca
                     </li>
                     <li>
                         ⏰ Atención: Lunes a Domingo

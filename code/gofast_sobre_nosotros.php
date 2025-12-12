@@ -44,7 +44,7 @@ function gofast_sobre_nosotros_shortcode() {
             <div style="color: #333; line-height: 1.8; font-size: 16px;">
                 <p style="margin-bottom: 16px;">
                     <strong>GoFast</strong> es una plataforma de mensajería express que conecta a clientes, negocios y mensajeros 
-                    en la ciudad de Tulúa y sus alrededores. Nuestra misión es facilitar el envío de paquetes, documentos 
+                    en la ciudad de Tuluá y sus alrededores. Nuestra misión es facilitar el envío de paquetes, documentos 
                     y productos de manera rápida, segura y confiable.
                 </p>
                 <p style="margin-bottom: 16px;">
@@ -156,7 +156,7 @@ function gofast_sobre_nosotros_shortcode() {
                         <strong>Cobertura:</strong>
                     </p>
                     <ul style="margin: 0 0 12px 20px; padding: 0;">
-                        <li>Ciudad de Tulúa y zonas aledañas</li>
+                        <li>Ciudad de Tuluá y zonas aledañas</li>
                         <li>Rutas intermunicipales según disponibilidad</li>
                     </ul>
                     <p style="margin: 0;">

@@ -275,7 +275,7 @@ function gofast_admin_solicitudes_trabajo_shortcode() {
                         <button type="submit" class="gofast-btn-mini" style="background: var(--gofast-yellow); color: #000;">
                             💾 Guardar Cambios
                         </button>
-                        <a href="https://wa.me/<?= esc_attr(preg_replace('/[^0-9]/', '', $solicitud->whatsapp)) ?>?text=<?= urlencode('Hola ' . $solicitud->nombre . ', hemos revisado tu solicitud de trabajo en GO FAST mensajería express. ¿Podrías contactarnos para continuar con el proceso?') ?>" 
+                        <a href="https://wa.me/<?= esc_attr(preg_replace('/[^0-9]/', '', $solicitud->whatsapp)) ?>?text=<?= rawurlencode('Hola ' . $solicitud->nombre . ', hemos revisado tu solicitud de trabajo en GO FAST mensajería express. ¿Podrías contactarnos para continuar con el proceso?') ?>" 
                            target="_blank" 
                            class="gofast-btn-request" 
                            style="background: #25D366; color: #fff; text-decoration: none; padding: 14px 24px; font-size: 16px; display: inline-block;">
