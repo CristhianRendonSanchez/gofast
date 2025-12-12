@@ -52,7 +52,6 @@ function gofast_reportes_admin_shortcode() {
     $pg_pedidos = isset($_GET['pg_pedidos']) ? max(1, (int) $_GET['pg_pedidos']) : 1;
     $pg_mensajeros = isset($_GET['pg_mensajeros']) ? max(1, (int) $_GET['pg_mensajeros']) : 1;
     $pg_dias = isset($_GET['pg_dias']) ? max(1, (int) $_GET['pg_dias']) : 1;
-    $pg_compras = isset($_GET['pg_compras']) ? max(1, (int) $_GET['pg_compras']) : 1;
 
     if ($desde && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) $desde = '';
     if ($hasta && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) $hasta = '';
@@ -696,55 +695,6 @@ function gofast_reportes_admin_shortcode() {
         );
     }
     
-    /* ==========================================================
-       3.1. Resumen de Compras (con paginación)
-    ========================================================== */
-    // Contar total de compras
-    $total_compras_count = (int) ($wpdb->get_var($sql_total_compras) ?? 0);
-    $total_paginas_compras = max(1, (int) ceil($total_compras_count / $por_pagina));
-    $offset_compras = ($pg_compras - 1) * $por_pagina;
-    
-    // Obtener compras con paginación
-    $params_compras_limit = $params_compras;
-    $params_compras_limit[] = $por_pagina;
-    $params_compras_limit[] = $offset_compras;
-    
-    if (!empty($params_compras)) {
-        $sql_compras_lista = $wpdb->prepare(
-            "SELECT c.*, 
-                    m.nombre as mensajero_nombre,
-                    m.telefono as mensajero_telefono,
-                    u.nombre as creador_nombre,
-                    b.nombre as barrio_nombre
-             FROM $tabla_compras c
-             LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
-             LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
-             LEFT JOIN barrios b ON c.barrio_id = b.id
-             WHERE $where_compras
-             ORDER BY c.fecha_creacion DESC
-             LIMIT %d OFFSET %d",
-            $params_compras_limit
-        );
-    } else {
-        $sql_compras_lista = $wpdb->prepare(
-            "SELECT c.*, 
-                    m.nombre as mensajero_nombre,
-                    m.telefono as mensajero_telefono,
-                    u.nombre as creador_nombre,
-                    b.nombre as barrio_nombre
-             FROM $tabla_compras c
-             LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
-             LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
-             LEFT JOIN barrios b ON c.barrio_id = b.id
-             WHERE $where_compras
-             ORDER BY c.fecha_creacion DESC
-             LIMIT %d OFFSET %d",
-            $por_pagina,
-            $offset_compras
-        );
-    }
-    
-    $compras_lista = $wpdb->get_results($sql_compras_lista);
 
     /* ==========================================================
        4. Exportar a CSV
@@ -1176,107 +1126,6 @@ function gofast_reportes_admin_shortcode() {
                     <?php endfor; ?>
                 </div>
             <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
-    
-
-    <!-- =====================================================
-         E) RESUMEN DE COMPRAS
-    ====================================================== -->
-    <?php if (!empty($compras_lista) || $total_compras_count > 0): ?>
-        <div class="gofast-box" style="margin-bottom:20px;">
-            <h3 style="margin-top:0;">
-                🛒 Resumen de Compras
-                <span style="font-size:14px;color:#666;font-weight:normal;">
-                    (<?= number_format($total_compras_count); ?> compra(s) total(es))
-                </span>
-            </h3>
-            <div style="margin-bottom:10px;padding:8px;background:#f0f7ff;border-left:3px solid #2196F3;border-radius:4px;font-size:12px;color:#1976D2;">
-                💡 <strong>En móvil:</strong> Desliza horizontalmente para ver todas las columnas
-            </div>
-            <div class="gofast-table-wrap" style="width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;display:block;">
-                <table class="gofast-table" style="min-width:800px;width:100%;">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Fecha</th>
-                            <?php if ($es_admin): ?>
-                                <th>Mensajero</th>
-                                <th>Creado por</th>
-                            <?php endif; ?>
-                            <th>Valor</th>
-                            <th>Destino</th>
-                            <th>Estado</th>
-                            <th>Observaciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($compras_lista as $compra): ?>
-                            <tr>
-                                <td>#<?= (int) $compra->id; ?></td>
-                                <td><?= esc_html( gofast_date_format($compra->fecha_creacion, 'd/m/Y H:i') ); ?></td>
-                                <?php if ($es_admin): ?>
-                                    <td>
-                                        <?= esc_html($compra->mensajero_nombre ?: 'N/A'); ?>
-                                        <?php if ($compra->mensajero_telefono): ?>
-                                            <br><small style="color:#666;"><?= esc_html($compra->mensajero_telefono); ?></small>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= esc_html($compra->creador_nombre ?: 'N/A'); ?></td>
-                                <?php endif; ?>
-                                <td><strong>$<?= number_format($compra->valor, 0, ',', '.'); ?></strong></td>
-                                <td><?= esc_html($compra->barrio_nombre ?: 'N/A'); ?></td>
-                                <td>
-                                    <?php
-                                    $estado_compra = $compra->estado;
-                                    $estado_colors = [
-                                        'pendiente' => '#fff3cd',
-                                        'en_proceso' => '#cfe2ff',
-                                        'completada' => '#d4edda',
-                                        'cancelada' => '#f8d7da'
-                                    ];
-                                    $estado_labels = [
-                                        'pendiente' => 'Pendiente',
-                                        'en_proceso' => 'En Proceso',
-                                        'completada' => 'Completada',
-                                        'cancelada' => 'Cancelada'
-                                    ];
-                                    $color = $estado_colors[$estado_compra] ?? '#f8f9fa';
-                                    $label = $estado_labels[$estado_compra] ?? $estado_compra;
-                                    ?>
-                                    <span style="display:inline-block;padding:4px 10px;border-radius:4px;background:<?= $color; ?>;font-size:12px;font-weight:600;">
-                                        <?= esc_html($label); ?>
-                                    </span>
-                                </td>
-                                <td><?= esc_html($compra->observaciones ?: '—'); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            
-            <?php if ($total_paginas_compras > 1): ?>
-                <div class="gofast-pagination" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
-                    <?php
-                    $base_url_compras = get_permalink();
-                    $query_args_compras = $_GET;
-                    for ($i = 1; $i <= $total_paginas_compras; $i++):
-                        $query_args_compras['pg_compras'] = $i;
-                        $url_compras = esc_url( add_query_arg($query_args_compras, $base_url_compras) );
-                        $active_compras = ($i === $pg_compras) ? 'gofast-page-current' : '';
-                        ?>
-                        <a href="<?php echo $url_compras; ?>" class="gofast-page-link <?php echo $active_compras; ?>" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;background:#fff;<?php echo $active_compras ? 'background:var(--gofast-yellow);font-weight:700;' : ''; ?>">
-                            <?php echo $i; ?>
-                        </a>
-                    <?php endfor; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php else: ?>
-        <div class="gofast-box" style="margin-bottom:20px;">
-            <h3 style="margin-top:0;">🛒 Resumen de Compras</h3>
-            <p>No hay compras registradas con los filtros seleccionados.</p>
         </div>
     <?php endif; ?>
 
