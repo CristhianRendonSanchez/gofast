@@ -77,6 +77,159 @@
     display: inline-block;
   }
   
+  /********************************************
+   * FOOTER GENERATEPRESS (OCULTAR)
+   ********************************************/
+  .site-footer,
+  .site-info,
+  .footer-widgets,
+  .inside-footer,
+  .footer-bar,
+  .footer-bar .inside-footer {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+  
+/********************************************
+ * GOFAST — FOOTER (MISMO ESTILO QUE MENÚ)
+ ********************************************/
+.gofast-footer {
+  background: #000;
+  border-top: 1px solid #222;
+  padding: 40px 0 20px;
+  margin-top: 60px;
+}
+
+.gofast-footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.gofast-footer-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+.gofast-footer-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.gofast-footer-logo {
+  max-width: 100%;
+  height: auto;
+  width: auto;
+  max-height: 80px;
+  margin-bottom: 16px;
+  object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .gofast-footer-logo {
+    max-height: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .gofast-footer-logo {
+    max-height: 50px;
+  }
+}
+
+.gofast-footer-title {
+  margin: 0 0 16px 0;
+  color: var(--gofast-yellow);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.gofast-footer-text {
+  margin: 0 0 16px 0;
+  color: #999;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.gofast-footer-social {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gofast-footer-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gofast-footer-links li {
+  margin-bottom: 8px;
+}
+
+.gofast-footer-links a {
+  color: #999;
+  font-size: 14px;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.gofast-footer-links a:hover {
+  color: var(--gofast-yellow);
+}
+
+.gofast-footer-contact {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #999;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.gofast-footer-contact li {
+  margin-bottom: 8px;
+}
+
+.gofast-footer-contact a {
+  color: #999;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.gofast-footer-contact a:hover {
+  color: var(--gofast-yellow);
+}
+
+.gofast-footer-bottom {
+  border-top: 1px solid #222;
+  padding-top: 24px;
+  margin-top: 24px;
+}
+
+.gofast-footer-copyright {
+  color: #666;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .gofast-footer-content {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  
+  .gofast-footer-copyright {
+    text-align: center;
+  }
+}
+  
 /********************************************
  * GOFAST — BARRA SUPERIOR (SALUDO Y REDES)
  ********************************************/

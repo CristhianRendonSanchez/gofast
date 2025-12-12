@@ -208,6 +208,9 @@ PÁGINAS A CREAR EN WORDPRESS:
 11. /admin-reportes           → [gofast_reportes_admin]
 12. /transferencias           → [gofast_transferencias]
 13. /compras                  → [gofast_compras]
+14. /sobre-nosotros           → [gofast_sobre_nosotros]
+15. /app-movil                → [gofast_app_movil]
+16. Footer                    → (automático, no requiere página)
 
 
 ================================================================================
@@ -292,6 +295,53 @@ PÁGINAS A CREAR EN WORDPRESS:
         * Cambiar estado de las compras (pendiente → en_proceso → completada/cancelada)
         * Estadísticas de compras
         * Filtros por fecha, valor y estado
+
+================================================================================
+  PÁGINAS INFORMATIVAS (NUEVAS)
+================================================================================
+
+14. SOBRE NOSOTROS
+    ──────────────────────────────────────────────────────────────────────────
+    SLUG SUGERIDO:  /sobre-nosotros
+    SHORTCODE:      [gofast_sobre_nosotros]
+    DESCRIPCIÓN:    Página informativa sobre la empresa
+    ACCESO:         Público
+    ARCHIVO:        gofast_sobre_nosotros.php
+    CONTENIDO:      
+      - Quiénes somos
+      - Nuestro equipo
+      - Políticas (protección de datos, envío, cancelación, responsabilidad)
+
+
+15. APP MÓVIL
+    ──────────────────────────────────────────────────────────────────────────
+    SLUG SUGERIDO:  /app-movil
+    SHORTCODE:      [gofast_app_movil]
+    DESCRIPCIÓN:    Página para descargar la aplicación móvil
+    ACCESO:         Público
+    ARCHIVO:        gofast_app_movil.php
+    CONTENIDO:      
+      - Información sobre la app
+      - Beneficios
+      - Enlaces de descarga (Android/iOS)
+      - QR code para descarga
+      - Requisitos del dispositivo
+
+
+16. FOOTER / PIE DE PÁGINA
+    ──────────────────────────────────────────────────────────────────────────
+    SHORTCODE:      (se ejecuta automáticamente)
+    DESCRIPCIÓN:    Pie de página con enlaces, redes sociales y créditos
+    ACCESO:         Público (se muestra en todas las páginas)
+    ARCHIVO:        gofast_footer.php
+    HOOK:           add_action('wp_footer', 'gofast_footer_content', 999)
+    CONTENIDO:      
+      - Información de la empresa
+      - Enlaces rápidos
+      - Redes sociales
+      - Información de contacto
+      - Créditos del desarrollador (sutil)
+    NOTA:           NO requiere shortcode, se muestra automáticamente
 
 ================================================================================
   FIN DEL DOCUMENTO

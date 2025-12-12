@@ -319,11 +319,10 @@ function gofast_mensajero_cotizar_shortcode() {
             $negocio_id = isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0;
             $destinos = array_map('intval', (array) ($_POST['destino'] ?? []));
             
-            // Eliminar duplicados y valores vacíos/cero
+            // Eliminar solo valores vacíos/cero (permitir duplicados)
             $destinos = array_filter($destinos, function($id) {
                 return $id > 0;
             });
-            $destinos = array_unique($destinos);
             $destinos = array_values($destinos); // Reindexar array
             
             // Guardar recargos seleccionables si vienen en el POST
@@ -360,15 +359,15 @@ function gofast_mensajero_cotizar_shortcode() {
             // Volver al paso 1
             unset($_SESSION['gofast_mensajero_cotizacion']);
         } else {
-            // Eliminar duplicados antes de mostrar resumen
-            $destinos_unicos = array_values(array_unique(array_filter($cotizacion['destinos'], function($id) {
+            // Filtrar solo valores vacíos/cero (permitir duplicados)
+            $destinos_filtrados = array_values(array_filter($cotizacion['destinos'], function($id) {
                 return $id > 0;
-            })));
-            $cotizacion['destinos'] = $destinos_unicos;
+            }));
+            $cotizacion['destinos'] = $destinos_filtrados;
             $_SESSION['gofast_mensajero_cotizacion'] = $cotizacion;
             
             // Mostrar resumen editable
-            return gofast_mensajero_mostrar_resumen($cotizacion['origen'], $destinos_unicos);
+            return gofast_mensajero_mostrar_resumen($cotizacion['origen'], $destinos_filtrados);
         }
     }
 
@@ -1189,11 +1188,9 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
                 <select id="nuevo-destino-select" class="gofast-select" style="margin-top:8px;">
                     <option value="">Seleccionar barrio...</option>
                     <?php foreach ($barrios_all as $b): ?>
-                        <?php if (!in_array($b->id, array_column($detalle_envios, 'id'))): ?>
-                            <option value="<?= esc_attr($b->id) ?>" data-nombre="<?= esc_attr($b->nombre) ?>">
-                                <?= esc_html($b->nombre) ?>
-                            </option>
-                        <?php endif; ?>
+                        <option value="<?= esc_attr($b->id) ?>" data-nombre="<?= esc_attr($b->nombre) ?>">
+                            <?= esc_html($b->nombre) ?>
+                        </option>
                     <?php endforeach; ?>
                 </select>
                 <button type="button" id="btn-agregar-destino-resumen" class="gofast-btn-mini" style="margin-top:8px;width:100%;">
@@ -1324,17 +1321,6 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
                     return;
                 }
                 
-                // Verificar duplicados - convertir a números para comparación
-                const destinosActuales = obtenerDestinosActuales().map(id => parseInt(id));
-                if (destinosActuales.includes(destinoId)) {
-                    alert('Este destino ya está en el resumen');
-                    select.value = '';
-                    if (window.jQuery && jQuery.fn.select2) {
-                        jQuery(select).val(null).trigger('change');
-                    }
-                    return;
-                }
-                
                 // Agregar destino (recargar para calcular correctamente)
                 agregarDestinoResumen(destinoId);
             });
@@ -1353,20 +1339,6 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
     }
 
     function agregarDestinoResumen(destinoId) {
-        // Verificar nuevamente antes de agregar (por si acaso)
-        const destinosActuales = obtenerDestinosActuales().map(id => parseInt(id));
-        if (destinosActuales.includes(destinoId)) {
-            alert('Este destino ya está en el resumen');
-            const select = document.getElementById('nuevo-destino-select');
-            if (select) {
-                select.value = '';
-                if (window.jQuery && jQuery.fn.select2) {
-                    jQuery(select).val(null).trigger('change');
-                }
-            }
-            return;
-        }
-        
         // Recargar página con nuevo destino agregado (más confiable para recargos variables)
         const form = document.createElement('form');
         form.method = 'POST';
@@ -1381,9 +1353,9 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
             form.appendChild(inputOrigen);
         }
         
-        // Agregar todos los destinos actuales (sin duplicados)
-        const destinosUnicos = [...new Set(destinosActuales)];
-        destinosUnicos.forEach(function(id) {
+        // Agregar todos los destinos actuales
+        const destinosActuales = obtenerDestinosActuales();
+        destinosActuales.forEach(function(id) {
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = 'destino[]';
@@ -1391,14 +1363,12 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
             form.appendChild(input);
         });
         
-        // Agregar el nuevo destino solo si no está ya en la lista
-        if (!destinosUnicos.includes(destinoId)) {
-            const nuevoDestinoInput = document.createElement('input');
-            nuevoDestinoInput.type = 'hidden';
-            nuevoDestinoInput.name = 'destino[]';
-            nuevoDestinoInput.value = destinoId;
-            form.appendChild(nuevoDestinoInput);
-        }
+        // Agregar el nuevo destino
+        const nuevoDestinoInput = document.createElement('input');
+        nuevoDestinoInput.type = 'hidden';
+        nuevoDestinoInput.name = 'destino[]';
+        nuevoDestinoInput.value = destinoId.toString();
+        form.appendChild(nuevoDestinoInput);
         
         // Agregar recargos seleccionables actuales para preservarlos
         document.querySelectorAll('.recargo-seleccionable-select').forEach(function(select) {
@@ -1426,11 +1396,9 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
     function obtenerDestinosActuales() {
         const items = document.querySelectorAll('.gofast-destino-resumen-item[data-destino-id]');
         const ids = [];
-        const idsSet = new Set(); // Usar Set para evitar duplicados más eficientemente
         items.forEach(function(item) {
             const id = item.getAttribute('data-destino-id');
-            if (id && id !== 'null' && id !== 'undefined' && !idsSet.has(id)) {
-                idsSet.add(id);
+            if (id && id !== 'null' && id !== 'undefined') {
                 ids.push(id);
             }
         });
