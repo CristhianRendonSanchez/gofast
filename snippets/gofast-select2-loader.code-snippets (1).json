@@ -1,17 +1,1 @@
-function gofast_enqueue_select2() {
-    // Select2 CSS
-    wp_enqueue_style(
-        'select2-css',
-        'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css'
-    );
-
-    // Select2 JS
-    wp_enqueue_script(
-        'select2-js',
-        'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
-        array('jquery'),
-        null,
-        true
-    );
-}
-add_action('wp_enqueue_scripts', 'gofast_enqueue_select2');
+{"generator":"Code Snippets v3.9.3","date_created":"2025-12-12 19:47","snippets":[{"id":6,"name":"GoFast Select2 Loader","code":"function gofast_enqueue_select2() {\n    \/\/ Select2 CSS\n    wp_enqueue_style(\n        'select2-css',\n        'https:\/\/cdn.jsdelivr.net\/npm\/select2@4.1.0-rc.0\/dist\/css\/select2.min.css'\n    );\n\n    \/\/ Select2 JS\n    wp_enqueue_script(\n        'select2-js',\n        'https:\/\/cdn.jsdelivr.net\/npm\/select2@4.1.0-rc.0\/dist\/js\/select2.min.js',\n        array('jquery'),\n        null,\n        true\n    );\n}\nadd_action('wp_enqueue_scripts', 'gofast_enqueue_select2');\n","active":true,"modified":"2025-11-21 23:57:06","revision":"1"}]}
