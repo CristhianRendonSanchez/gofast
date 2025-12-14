@@ -65,7 +65,8 @@ function gofast_home_shortcode() {
     if ($rol === 'mensajero') {
         $url_cotizar_principal = $url_mensajero_cotizar;
     } elseif ($rol === 'admin') {
-        $url_cotizar_principal = $url_admin_cotizar;
+        // Admin usa cotización normal del cliente en el botón principal
+        $url_cotizar_principal = $url_cotizar;
     } else {
         // visitante o cliente
         $url_cotizar_principal = $url_cotizar;
@@ -418,7 +419,7 @@ function gofast_home_shortcode() {
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo $url_cotizar_principal; ?>" class="gofast-home-panel-link">
+                        <a href="<?php echo $url_admin_cotizar; ?>" class="gofast-home-panel-link">
                             <span class="gofast-home-panel-icon">🚚</span>
                             <span class="gofast-home-panel-text">
                                 <strong>Crear Servicio</strong>
