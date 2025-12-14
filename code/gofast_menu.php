@@ -138,6 +138,12 @@ function gofast_menu_topbar() {
                     <a href="<?php echo esc_url( home_url('/mensajero-cotizar') ); ?>" class="gofast-tab">
                         🚚 Crear servicio
                     </a>
+                    <a href="<?php echo esc_url( home_url('/compras') ); ?>" class="gofast-tab">
+                        🛒 Compras
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/transferencias') ); ?>" class="gofast-tab">
+                        💰 Transferencias
+                    </a>
                     <a href="<?php echo esc_url( home_url('/admin-reportes') ); ?>" class="gofast-tab">
                         📊 Reportes
                     </a>
@@ -152,6 +158,12 @@ function gofast_menu_topbar() {
                     </a>
                     <a href="<?php echo esc_url( home_url('/mis-pedidos') ); ?>" class="gofast-tab">
                         📦 Pedidos
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/compras') ); ?>" class="gofast-tab">
+                        🛒 Compras
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/transferencias') ); ?>" class="gofast-tab">
+                        💰 Transferencias
                     </a>
                     <a href="<?php echo esc_url( home_url('/admin-reportes') ); ?>" class="gofast-tab">
                         📊 Reportes
