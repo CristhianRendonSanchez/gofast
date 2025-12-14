@@ -44,6 +44,7 @@ function gofast_reportes_admin_shortcode() {
     $desde = isset($_GET['desde']) ? sanitize_text_field($_GET['desde']) : '';
     $hasta = isset($_GET['hasta']) ? sanitize_text_field($_GET['hasta']) : '';
     $mensajero_id = isset($_GET['mensajero_id']) ? (int) $_GET['mensajero_id'] : 0;
+    $negocio_id = isset($_GET['negocio_id']) ? (int) $_GET['negocio_id'] : 0;
     $buscar = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
     $tipo_servicio = isset($_GET['tipo_servicio']) ? sanitize_text_field($_GET['tipo_servicio']) : 'todos';
     
@@ -109,6 +110,12 @@ function gofast_reportes_admin_shortcode() {
         $params[] = '%(Intermunicipal)%';
     }
     // Si es 'todos', no se aplica filtro
+
+    // Filtro por negocio (solo admin)
+    if ($es_admin && $negocio_id > 0) {
+        $where .= " AND JSON_EXTRACT(destinos, '$.origen.negocio_id') = %d";
+        $params[] = $negocio_id;
+    }
 
     /* ==========================================================
        2. Estadísticas de Servicios
@@ -194,6 +201,12 @@ function gofast_reportes_admin_shortcode() {
         $params_sin_asignar[] = '%(Intermunicipal)%';
     }
     
+    // Aplicar filtro de negocio también a pedidos sin asignar (solo admin)
+    if ($es_admin && $negocio_id > 0) {
+        $where_sin_asignar .= " AND JSON_EXTRACT(destinos, '$.origen.negocio_id') = %d";
+        $params_sin_asignar[] = $negocio_id;
+    }
+    
     // Condición principal: sin mensajero asignado
     $where_sin_asignar .= " AND mensajero_id IS NULL";
     
@@ -215,63 +228,70 @@ function gofast_reportes_admin_shortcode() {
     /* ==========================================================
        3. Estadísticas de Compras
     ========================================================== */
-    $tabla_compras = 'compras_gofast';
-    $where_compras = "1=1";
-    $params_compras = [];
+    // Si se filtra por negocio, NO incluir compras (los negocios no tienen compras)
+    $total_compras = 0;
+    $ingresos_compras = 0;
     
-    // Aplicar filtros de mensajero
-    if (!$es_admin) {
-        $where_compras .= " AND mensajero_id = %d";
-        $params_compras[] = $usuario->id;
-    } elseif ($mensajero_id > 0) {
-        $where_compras .= " AND mensajero_id = %d";
-        $params_compras[] = $mensajero_id;
+    if (!($es_admin && $negocio_id > 0)) {
+        // Solo calcular compras si NO se está filtrando por negocio
+        $tabla_compras = 'compras_gofast';
+        $where_compras = "1=1";
+        $params_compras = [];
+        
+        // Aplicar filtros de mensajero
+        if (!$es_admin) {
+            $where_compras .= " AND mensajero_id = %d";
+            $params_compras[] = $usuario->id;
+        } elseif ($mensajero_id > 0) {
+            $where_compras .= " AND mensajero_id = %d";
+            $params_compras[] = $mensajero_id;
+        }
+        
+        // Aplicar filtros de fecha
+        if ($desde !== '') {
+            $where_compras .= " AND fecha_creacion >= %s";
+            $params_compras[] = $desde . ' 00:00:00';
+        }
+        if ($hasta !== '') {
+            $where_compras .= " AND fecha_creacion <= %s";
+            $params_compras[] = $hasta . ' 23:59:59';
+        }
+        
+        // Excluir canceladas
+        $where_compras .= " AND estado != 'cancelada'";
+        
+        // Contar total de compras
+        if (!empty($params_compras)) {
+            $sql_total_compras = $wpdb->prepare(
+                "SELECT COUNT(*) as total_compras
+                 FROM $tabla_compras 
+                 WHERE $where_compras",
+                $params_compras
+            );
+        } else {
+            $sql_total_compras = "SELECT COUNT(*) as total_compras
+                 FROM $tabla_compras 
+                 WHERE $where_compras";
+        }
+        
+        $total_compras = (int) ($wpdb->get_var($sql_total_compras) ?? 0);
+        
+        // Ingresos de compras (excluyendo canceladas)
+        if (!empty($params_compras)) {
+            $sql_ingresos_compras = $wpdb->prepare(
+                "SELECT SUM(valor) as total_ingresos_compras
+                 FROM $tabla_compras 
+                 WHERE $where_compras",
+                $params_compras
+            );
+        } else {
+            $sql_ingresos_compras = "SELECT SUM(valor) as total_ingresos_compras
+                 FROM $tabla_compras 
+                 WHERE $where_compras";
+        }
+        
+        $ingresos_compras = (float) ($wpdb->get_var($sql_ingresos_compras) ?? 0);
     }
-    
-    // Aplicar filtros de fecha
-    if ($desde !== '') {
-        $where_compras .= " AND fecha_creacion >= %s";
-        $params_compras[] = $desde . ' 00:00:00';
-    }
-    if ($hasta !== '') {
-        $where_compras .= " AND fecha_creacion <= %s";
-        $params_compras[] = $hasta . ' 23:59:59';
-    }
-    
-    // Excluir canceladas
-    $where_compras .= " AND estado != 'cancelada'";
-    
-    // Contar total de compras
-    if (!empty($params_compras)) {
-        $sql_total_compras = $wpdb->prepare(
-            "SELECT COUNT(*) as total_compras
-             FROM $tabla_compras 
-             WHERE $where_compras",
-            $params_compras
-        );
-    } else {
-        $sql_total_compras = "SELECT COUNT(*) as total_compras
-             FROM $tabla_compras 
-             WHERE $where_compras";
-    }
-    
-    $total_compras = (int) ($wpdb->get_var($sql_total_compras) ?? 0);
-    
-    // Ingresos de compras (excluyendo canceladas)
-    if (!empty($params_compras)) {
-        $sql_ingresos_compras = $wpdb->prepare(
-            "SELECT SUM(valor) as total_ingresos_compras
-             FROM $tabla_compras 
-             WHERE $where_compras",
-            $params_compras
-        );
-    } else {
-        $sql_ingresos_compras = "SELECT SUM(valor) as total_ingresos_compras
-             FROM $tabla_compras 
-             WHERE $where_compras";
-    }
-    
-    $ingresos_compras = (float) ($wpdb->get_var($sql_ingresos_compras) ?? 0);
     
     // Ingresos totales (servicios + compras, excluyendo cancelados)
     $total_ingresos = $ingresos_servicios + $ingresos_compras;
@@ -349,6 +369,12 @@ function gofast_reportes_admin_shortcode() {
         $params_pedidos_hoy[] = $mensajero_id;
     }
     
+    // Aplicar filtro de negocio si existe
+    if ($es_admin && $negocio_id > 0) {
+        $where_pedidos_hoy .= " AND JSON_EXTRACT(destinos, '$.origen.negocio_id') = %d";
+        $params_pedidos_hoy[] = $negocio_id;
+    }
+    
     // Solo pedidos del día actual
     $where_pedidos_hoy .= " AND DATE(fecha) = %s";
     $params_pedidos_hoy[] = $fecha_hoy;
@@ -414,85 +440,92 @@ function gofast_reportes_admin_shortcode() {
     /* ==========================================================
        6.1. Compras del Día Actual
     ========================================================== */
-    $where_compras_hoy = "1=1";
-    $params_compras_hoy = [];
+    // Si se filtra por negocio, NO mostrar compras (los negocios no tienen compras)
+    $total_compras_hoy = 0;
+    $compras_hoy = [];
+    $total_paginas_compras_hoy = 0;
     
-    // Aplicar filtros de mensajero
-    if (!$es_admin) {
-        $where_compras_hoy .= " AND mensajero_id = %d";
-        $params_compras_hoy[] = $usuario->id;
-    } elseif ($mensajero_id > 0) {
-        $where_compras_hoy .= " AND mensajero_id = %d";
-        $params_compras_hoy[] = $mensajero_id;
+    if (!($es_admin && $negocio_id > 0)) {
+        $where_compras_hoy = "1=1";
+        $params_compras_hoy = [];
+        
+        // Aplicar filtros de mensajero
+        if (!$es_admin) {
+            $where_compras_hoy .= " AND mensajero_id = %d";
+            $params_compras_hoy[] = $usuario->id;
+        } elseif ($mensajero_id > 0) {
+            $where_compras_hoy .= " AND mensajero_id = %d";
+            $params_compras_hoy[] = $mensajero_id;
+        }
+        
+        // Solo compras del día actual
+        $where_compras_hoy .= " AND DATE(fecha_creacion) = %s";
+        $params_compras_hoy[] = $fecha_hoy;
+        
+        // Excluir canceladas
+        $where_compras_hoy .= " AND estado != 'cancelada'";
+        
+        // Contar total de compras del día
+        if (!empty($params_compras_hoy)) {
+            $sql_count_compras_hoy = $wpdb->prepare(
+                "SELECT COUNT(*) as total
+                 FROM $tabla_compras
+                 WHERE $where_compras_hoy",
+                $params_compras_hoy
+            );
+        } else {
+            $sql_count_compras_hoy = "SELECT COUNT(*) as total
+                 FROM $tabla_compras
+                 WHERE $where_compras_hoy";
+        }
+        
+        $total_compras_hoy = (int) ($wpdb->get_var($sql_count_compras_hoy) ?? 0);
+        $pg_compras_hoy = isset($_GET['pg_compras_hoy']) ? max(1, (int) $_GET['pg_compras_hoy']) : 1;
+        $total_paginas_compras_hoy = max(1, (int) ceil($total_compras_hoy / $por_pagina));
+        $offset_compras_hoy = ($pg_compras_hoy - 1) * $por_pagina;
+        
+        // Obtener compras del día actual (con paginación)
+        $params_compras_hoy_limit = $params_compras_hoy;
+        $params_compras_hoy_limit[] = $por_pagina;
+        $params_compras_hoy_limit[] = $offset_compras_hoy;
+        
+        if (!empty($params_compras_hoy)) {
+            $sql_compras_hoy = $wpdb->prepare(
+                "SELECT c.*, 
+                        m.nombre as mensajero_nombre,
+                        m.telefono as mensajero_telefono,
+                        u.nombre as creador_nombre,
+                        b.nombre as barrio_nombre
+                 FROM $tabla_compras c
+                 LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
+                 LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
+                 LEFT JOIN barrios b ON c.barrio_id = b.id
+                 WHERE $where_compras_hoy
+                 ORDER BY c.fecha_creacion DESC
+                 LIMIT %d OFFSET %d",
+                $params_compras_hoy_limit
+            );
+        } else {
+            $sql_compras_hoy = $wpdb->prepare(
+                "SELECT c.*, 
+                        m.nombre as mensajero_nombre,
+                        m.telefono as mensajero_telefono,
+                        u.nombre as creador_nombre,
+                        b.nombre as barrio_nombre
+                 FROM $tabla_compras c
+                 LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
+                 LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
+                 LEFT JOIN barrios b ON c.barrio_id = b.id
+                 WHERE $where_compras_hoy
+                 ORDER BY c.fecha_creacion DESC
+                 LIMIT %d OFFSET %d",
+                $por_pagina,
+                $offset_compras_hoy
+            );
+        }
+        
+        $compras_hoy = $wpdb->get_results($sql_compras_hoy);
     }
-    
-    // Solo compras del día actual
-    $where_compras_hoy .= " AND DATE(fecha_creacion) = %s";
-    $params_compras_hoy[] = $fecha_hoy;
-    
-    // Excluir canceladas
-    $where_compras_hoy .= " AND estado != 'cancelada'";
-    
-    // Contar total de compras del día
-    if (!empty($params_compras_hoy)) {
-        $sql_count_compras_hoy = $wpdb->prepare(
-            "SELECT COUNT(*) as total
-             FROM $tabla_compras
-             WHERE $where_compras_hoy",
-            $params_compras_hoy
-        );
-    } else {
-        $sql_count_compras_hoy = "SELECT COUNT(*) as total
-             FROM $tabla_compras
-             WHERE $where_compras_hoy";
-    }
-    
-    $total_compras_hoy = (int) ($wpdb->get_var($sql_count_compras_hoy) ?? 0);
-    $pg_compras_hoy = isset($_GET['pg_compras_hoy']) ? max(1, (int) $_GET['pg_compras_hoy']) : 1;
-    $total_paginas_compras_hoy = max(1, (int) ceil($total_compras_hoy / $por_pagina));
-    $offset_compras_hoy = ($pg_compras_hoy - 1) * $por_pagina;
-    
-    // Obtener compras del día actual (con paginación)
-    $params_compras_hoy_limit = $params_compras_hoy;
-    $params_compras_hoy_limit[] = $por_pagina;
-    $params_compras_hoy_limit[] = $offset_compras_hoy;
-    
-    if (!empty($params_compras_hoy)) {
-        $sql_compras_hoy = $wpdb->prepare(
-            "SELECT c.*, 
-                    m.nombre as mensajero_nombre,
-                    m.telefono as mensajero_telefono,
-                    u.nombre as creador_nombre,
-                    b.nombre as barrio_nombre
-             FROM $tabla_compras c
-             LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
-             LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
-             LEFT JOIN barrios b ON c.barrio_id = b.id
-             WHERE $where_compras_hoy
-             ORDER BY c.fecha_creacion DESC
-             LIMIT %d OFFSET %d",
-            $params_compras_hoy_limit
-        );
-    } else {
-        $sql_compras_hoy = $wpdb->prepare(
-            "SELECT c.*, 
-                    m.nombre as mensajero_nombre,
-                    m.telefono as mensajero_telefono,
-                    u.nombre as creador_nombre,
-                    b.nombre as barrio_nombre
-             FROM $tabla_compras c
-             LEFT JOIN usuarios_gofast m ON c.mensajero_id = m.id
-             LEFT JOIN usuarios_gofast u ON c.creado_por = u.id
-             LEFT JOIN barrios b ON c.barrio_id = b.id
-             WHERE $where_compras_hoy
-             ORDER BY c.fecha_creacion DESC
-             LIMIT %d OFFSET %d",
-            $por_pagina,
-            $offset_compras_hoy
-        );
-    }
-    
-    $compras_hoy = $wpdb->get_results($sql_compras_hoy);
 
     // Top mensajeros (solo para admin) - con paginación
     $top_mensajeros = [];
@@ -559,25 +592,33 @@ function gofast_reportes_admin_shortcode() {
         $params_pedidos_dia[] = $mensajero_id;
     }
     
+    // Aplicar filtro de negocio si existe
+    if ($es_admin && $negocio_id > 0) {
+        $where_pedidos_dia .= " AND JSON_EXTRACT(destinos, '$.origen.negocio_id') = %d";
+        $params_pedidos_dia[] = $negocio_id;
+    }
+    
     $where_pedidos_dia .= " AND fecha >= %s AND fecha <= %s";
     $params_pedidos_dia[] = $fecha_desde_30dias . ' 00:00:00';
     $params_pedidos_dia[] = $fecha_hasta_hoy . ' 23:59:59';
     
-    // Construir WHERE para compras por día
+    // Construir WHERE para compras por día (solo si NO se filtra por negocio)
     $where_compras_dia = "1=1";
     $params_compras_dia = [];
     
-    if (!$es_admin) {
-        $where_compras_dia .= " AND mensajero_id = %d";
-        $params_compras_dia[] = $usuario->id;
-    } elseif ($mensajero_id > 0) {
-        $where_compras_dia .= " AND mensajero_id = %d";
-        $params_compras_dia[] = $mensajero_id;
+    if (!($es_admin && $negocio_id > 0)) {
+        if (!$es_admin) {
+            $where_compras_dia .= " AND mensajero_id = %d";
+            $params_compras_dia[] = $usuario->id;
+        } elseif ($mensajero_id > 0) {
+            $where_compras_dia .= " AND mensajero_id = %d";
+            $params_compras_dia[] = $mensajero_id;
+        }
+        
+        $where_compras_dia .= " AND fecha_creacion >= %s AND fecha_creacion <= %s AND estado != 'cancelada'";
+        $params_compras_dia[] = $fecha_desde_30dias . ' 00:00:00';
+        $params_compras_dia[] = $fecha_hasta_hoy . ' 23:59:59';
     }
-    
-    $where_compras_dia .= " AND fecha_creacion >= %s AND fecha_creacion <= %s AND estado != 'cancelada'";
-    $params_compras_dia[] = $fecha_desde_30dias . ' 00:00:00';
-    $params_compras_dia[] = $fecha_hasta_hoy . ' 23:59:59';
     
     // Contar total de días únicos para paginación
     if (!empty($params_pedidos_dia)) {
@@ -617,8 +658,9 @@ function gofast_reportes_admin_shortcode() {
             )
         );
         
-        // Consulta de compras por día (cantidad e ingresos)
-        if (!empty($params_compras_dia)) {
+        // Consulta de compras por día (cantidad e ingresos) - solo si NO se filtra por negocio
+        $compras_por_dia = [];
+        if (!($es_admin && $negocio_id > 0) && !empty($params_compras_dia)) {
             $compras_por_dia = $wpdb->get_results(
                 $wpdb->prepare(
                     "SELECT 
@@ -633,8 +675,6 @@ function gofast_reportes_admin_shortcode() {
                     $params_compras_dia
                 )
             );
-        } else {
-            $compras_por_dia = [];
         }
         
         // Combinar datos de servicios y compras por día
@@ -682,14 +722,23 @@ function gofast_reportes_admin_shortcode() {
     }
 
     /* ==========================================================
-       3. Lista de mensajeros para filtro (solo admin)
+       3. Lista de mensajeros y negocios para filtro (solo admin)
     ========================================================== */
     $mensajeros = [];
+    $negocios = [];
     if ($es_admin) {
         $mensajeros = $wpdb->get_results(
             "SELECT id, nombre 
              FROM usuarios_gofast
              WHERE rol = 'mensajero' AND activo = 1
+             ORDER BY nombre ASC
+            "
+        );
+        
+        $negocios = $wpdb->get_results(
+            "SELECT id, nombre, user_id
+             FROM negocios_gofast
+             WHERE activo = 1
              ORDER BY nombre ASC
             "
         );
@@ -813,6 +862,18 @@ function gofast_reportes_admin_shortcode() {
                             <?php endforeach; ?>
                         </select>
                     </div>
+
+                    <div>
+                        <label>Negocio</label>
+                        <select name="negocio_id" class="gofast-select-filtro" data-placeholder="Todos los negocios">
+                            <option value="0">Todos</option>
+                            <?php foreach ($negocios as $n): ?>
+                                <option value="<?= (int) $n->id; ?>"<?php selected($negocio_id, $n->id); ?>>
+                                    <?= esc_html($n->nombre); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 <?php endif; ?>
 
                 <div>
@@ -843,11 +904,13 @@ function gofast_reportes_admin_shortcode() {
             <div style="font-size:13px;color:#666;">Total Destinos</div>
         </div>
 
+        <?php if (!($es_admin && $negocio_id > 0)): ?>
         <div class="gofast-box" style="text-align:center;padding:20px;">
             <div style="font-size:32px;margin-bottom:8px;">🛒</div>
             <div style="font-size:28px;font-weight:700;color:#2196F3;margin-bottom:4px;"><?= number_format($total_compras); ?></div>
             <div style="font-size:13px;color:#666;">Total Compras</div>
         </div>
+        <?php endif; ?>
 
         <div class="gofast-box" style="text-align:center;padding:20px;">
             <div style="font-size:32px;margin-bottom:8px;">💰</div>
@@ -1144,7 +1207,9 @@ function gofast_reportes_admin_shortcode() {
                         <tr>
                             <th>Fecha</th>
                             <th>Cantidad de Destinos</th>
+                            <?php if (!($es_admin && $negocio_id > 0)): ?>
                             <th>Cantidad de Compras</th>
+                            <?php endif; ?>
                             <th>Ingresos</th>
                             <th>Comisión</th>
                         </tr>
@@ -1154,7 +1219,9 @@ function gofast_reportes_admin_shortcode() {
                             <tr>
                                 <td><?= esc_html( gofast_date_format($dia['dia'], 'd/m/Y') ); ?></td>
                                 <td><?= number_format($dia['cantidad_destinos']); ?></td>
+                                <?php if (!($es_admin && $negocio_id > 0)): ?>
                                 <td><?= number_format($dia['cantidad_compras']); ?></td>
+                                <?php endif; ?>
                                 <td>$<?= number_format($dia['ingresos'], 0, ',', '.'); ?></td>
                                 <td>$<?= number_format($dia['comision'], 0, ',', '.'); ?></td>
                             </tr>

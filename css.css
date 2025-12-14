@@ -2973,6 +2973,32 @@
       overflow-x: visible !important;
     }
     
+    /* Ajustes para sección Nuestro Equipo en móviles y tablets */
+    .gofast-home-section .gofast-box {
+      padding: 20px 16px !important;
+      box-sizing: border-box !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      overflow-x: hidden !important;
+    }
+    
+    /* Grid de Nuestro Equipo: una sola columna en móviles */
+    .gofast-equipo-grid {
+      grid-template-columns: 1fr !important;
+      gap: 20px !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    
+    /* Tarjetas del equipo: ancho completo en móviles */
+    .gofast-equipo-grid > div {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
+    }
+    
     /* Forzar que el body y html permitan overflow horizontal */
     body,
     html {
@@ -3146,6 +3172,32 @@
       width: 100% !important;
       text-align: center !important;
     }
+    
+    /* Ajustes para sección Nuestro Equipo en móviles */
+    .gofast-home-section .gofast-box {
+      padding: 20px 16px !important;
+      box-sizing: border-box !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      overflow-x: hidden !important;
+    }
+    
+    /* Grid de Nuestro Equipo: una sola columna en móviles */
+    .gofast-equipo-grid {
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    
+    /* Tarjetas del equipo: ancho completo en móviles */
+    .gofast-equipo-grid > div {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
+    }
   }
   
   @media (max-width: 360px) {
@@ -3164,6 +3216,11 @@
   
     .gofast-submit {
       font-size: 16px;
+    }
+    
+    /* Ajustes adicionales para sección Nuestro Equipo en móviles pequeños */
+    .gofast-home-section .gofast-box {
+      padding: 16px 12px !important;
     }
   }
 

@@ -42,10 +42,10 @@ function gofast_footer_content() {
             <!-- COLUMNA 1: INFORMACIÓN -->
             <div class="gofast-footer-col">
                 <img src="https://gofastdomicilios.com/wp-content/uploads/2025/11/GoFast.png" 
-                     alt="GoFast Mensajería Express" 
+                     alt="Go Fast Mensajería Express" 
                      class="gofast-footer-logo">
                 <p class="gofast-footer-text">
-                    GoFast Mensajería express en Tuluá y alrededores. Rápido, seguro y confiable.
+                    Go Fast Mensajería express en Tuluá y alrededores. Rápido, seguro y confiable.
                 </p>
             </div>
 
@@ -103,7 +103,7 @@ function gofast_footer_content() {
         <!-- LÍNEA SEPARADORA Y COPYRIGHT -->
         <div class="gofast-footer-bottom">
             <div class="gofast-footer-copyright">
-                © <?php echo date('Y'); ?> GoFast. Todos los derechos reservados.
+                © <?php echo date('Y'); ?> Go Fast. Todos los derechos reservados.
             </div>
         </div>
 

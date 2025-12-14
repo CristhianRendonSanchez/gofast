@@ -88,7 +88,7 @@ function gofast_menu_topbar() {
         <div class="gofast-menu-inner">
             <!-- LOGO -->
             <a href="<?php echo esc_url( home_url('/') ); ?>" class="gofast-logo" aria-label="Ir al inicio">
-                <img src="https://gofastdomicilios.com/wp-content/uploads/2025/11/GoFast.png" alt="GoFast Mensajería Express">
+                <img src="https://gofastdomicilios.com/wp-content/uploads/2025/11/GoFast.png" alt="Go Fast Mensajería Express">
             </a>
 
             <!-- BOTÓN HAMBURGUESA (solo móvil) -->

@@ -284,6 +284,7 @@ function gofast_pedidos_shortcode() {
     $filtro_negocio = isset($_GET['filtro_negocio']) ? (int) $_GET['filtro_negocio'] : 0;
     $filtro_asignado_por = isset($_GET['filtro_asignado_por']) ? sanitize_text_field($_GET['filtro_asignado_por']) : '';
     $filtro_intermunicipal = isset($_GET['filtro_intermunicipal']) ? sanitize_text_field($_GET['filtro_intermunicipal']) : '';
+    $filtro_recargos = isset($_GET['filtro_recargos']) ? sanitize_text_field($_GET['filtro_recargos']) : '';
 
     // Predefinir fecha al día actual si no hay filtros de fecha (para todos los usuarios)
     // Usar zona horaria de Colombia
@@ -400,6 +401,23 @@ function gofast_pedidos_shortcode() {
             $where .= " AND (JSON_EXTRACT(destinos, '$.tipo_servicio') IS NULL OR JSON_EXTRACT(destinos, '$.tipo_servicio') != 'intermunicipal') AND (direccion_origen IS NULL OR direccion_origen NOT LIKE %s)";
             $params[] = '%(Intermunicipal)%';
         }
+        
+        // Filtro por recargos (NO incluir 'monto' que es el precio base, solo recargos adicionales)
+        if ($filtro_recargos === 'si') {
+            // Servicios con recargos: buscar si el JSON contiene recargo_seleccionable_valor > 0 o recargo_total > 0
+            // NO incluir 'monto' porque es el precio base, no un recargo
+            $where .= " AND (
+                destinos REGEXP '\"recargo_seleccionable_valor\":[1-9][0-9]*' OR
+                destinos REGEXP '\"recargo_total\":[1-9][0-9]*'
+            )";
+        } elseif ($filtro_recargos === 'no') {
+            // Servicios sin recargos: verificar que no haya recargo_seleccionable_valor > 0 ni recargo_total > 0
+            // NO incluir 'monto' porque es el precio base, no un recargo
+            $where .= " AND (
+                (destinos NOT LIKE '%\"recargo_seleccionable_valor\":%' OR destinos NOT REGEXP '\"recargo_seleccionable_valor\":[1-9][0-9]*') AND
+                (destinos NOT LIKE '%\"recargo_total\":%' OR destinos NOT REGEXP '\"recargo_total\":[1-9][0-9]*')
+            )";
+        }
     }
 
     /****************************************
@@ -495,7 +513,7 @@ function gofast_pedidos_shortcode() {
         <form method="get" class="gofast-filtros-form">
             <!-- Mantener otros parámetros GET si existen -->
             <?php foreach ($_GET as $key => $value): ?>
-                <?php if (!in_array($key, ['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_sin_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'pg'])): ?>
+                <?php if (!in_array($key, ['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_sin_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'filtro_recargos', 'pg'])): ?>
                     <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                 <?php endif; ?>
             <?php endforeach; ?>
@@ -614,6 +632,15 @@ function gofast_pedidos_shortcode() {
                             <option value="no"<?php selected($filtro_intermunicipal, 'no'); ?>>No</option>
                         </select>
                     </div>
+
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Recargos</label>
+                        <select name="filtro_recargos" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                            <option value="">Todos</option>
+                            <option value="si"<?php selected($filtro_recargos, 'si'); ?>>Con recargos</option>
+                            <option value="no"<?php selected($filtro_recargos, 'no'); ?>>Sin recargos</option>
+                        </select>
+                    </div>
                 <?php endif; ?>
             </div>
             
@@ -623,7 +650,7 @@ function gofast_pedidos_shortcode() {
                 </button>
                 <?php
                 // Construir URL sin los parámetros de filtro
-                $clean_url = remove_query_arg(['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_sin_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'pg']);
+                $clean_url = remove_query_arg(['estado', 'q', 'desde', 'hasta', 'filtro_mensajero', 'filtro_sin_mensajero', 'filtro_origen', 'filtro_destino', 'filtro_negocio', 'filtro_asignado_por', 'filtro_intermunicipal', 'filtro_recargos', 'pg']);
                 if (empty($clean_url) || $clean_url === home_url('/')) {
                     $clean_url = get_permalink();
                 }
@@ -670,6 +697,7 @@ function gofast_pedidos_shortcode() {
                             <th>Destinos</th>
                             <th>Mensajero</th>
                             <th>Total</th>
+                            <th>Recargos</th>
                             <th>Estado</th>
                             <th>Ver</th>
                             <?php if ($rol === 'admin'): ?>
@@ -717,6 +745,40 @@ function gofast_pedidos_shortcode() {
                         }
                         if (!$es_intermunicipal && strpos($p->direccion_origen, '(Intermunicipal)') !== false) {
                             $es_intermunicipal = true;
+                        }
+
+                        // Detectar si tiene recargos (solo recargos adicionales, NO el monto base)
+                        // El campo 'monto' es el precio base del trayecto, NO es un recargo
+                        $tiene_recargos = false;
+                        $total_recargos = 0;
+                        if (!empty($p->destinos)) {
+                            $json_recargos = json_decode($p->destinos, true);
+                            if (is_array($json_recargos) && !empty($json_recargos['destinos']) && is_array($json_recargos['destinos'])) {
+                                foreach ($json_recargos['destinos'] as $dest) {
+                                    // Recargo seleccionable (por volumen/peso) - solo si existe y es > 0
+                                    $recargo_seleccionable = 0;
+                                    if (isset($dest['recargo_seleccionable_valor'])) {
+                                        $recargo_seleccionable = (int) $dest['recargo_seleccionable_valor'];
+                                        if ($recargo_seleccionable <= 0) $recargo_seleccionable = 0;
+                                    }
+                                    
+                                    // Recargos automáticos totales - solo si existe y es > 0
+                                    // NOTA: recargo_total puede estar guardado pero si es 0, no cuenta
+                                    $recargo_total_auto = 0;
+                                    if (isset($dest['recargo_total'])) {
+                                        $recargo_total_auto = (int) $dest['recargo_total'];
+                                        if ($recargo_total_auto <= 0) $recargo_total_auto = 0;
+                                    }
+                                    
+                                    // Sumar solo recargos (NO el monto base)
+                                    $recargo_destino = $recargo_seleccionable + $recargo_total_auto;
+                                    
+                                    if ($recargo_destino > 0) {
+                                        $tiene_recargos = true;
+                                        $total_recargos += $recargo_destino;
+                                    }
+                                }
+                            }
                         }
 
                         // Mensajero y quién lo asignó
@@ -833,6 +895,17 @@ function gofast_pedidos_shortcode() {
                             <!-- Total -->
                             <td>$<?php echo number_format($p->total, 0, ',', '.'); ?></td>
 
+                            <!-- Recargos -->
+                            <td>
+                                <?php if ($tiene_recargos): ?>
+                                    <span style="display:inline-block;background:#fff3cd;color:#856404;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;" title="Total de recargos: $<?php echo number_format($total_recargos, 0, ',', '.'); ?>">
+                                        💰 $<?php echo number_format($total_recargos, 0, ',', '.'); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span style="color:#999;font-size:12px;">—</span>
+                                <?php endif; ?>
+                            </td>
+
                             <!-- Estado -->
                             <td>
                                 <?php if ($rol === 'admin' || $rol === 'mensajero'): ?>
@@ -931,6 +1004,40 @@ function gofast_pedidos_shortcode() {
                     }
                     if (!$es_intermunicipal && strpos($p->direccion_origen, '(Intermunicipal)') !== false) {
                         $es_intermunicipal = true;
+                    }
+
+                    // Detectar si tiene recargos (solo recargos adicionales, NO el monto base)
+                    // El campo 'monto' es el precio base del trayecto, NO es un recargo
+                    $tiene_recargos = false;
+                    $total_recargos = 0;
+                    if (!empty($p->destinos)) {
+                        $json_recargos = json_decode($p->destinos, true);
+                        if (is_array($json_recargos) && !empty($json_recargos['destinos']) && is_array($json_recargos['destinos'])) {
+                            foreach ($json_recargos['destinos'] as $dest) {
+                                // Recargo seleccionable (por volumen/peso) - solo si existe y es > 0
+                                $recargo_seleccionable = 0;
+                                if (isset($dest['recargo_seleccionable_valor'])) {
+                                    $recargo_seleccionable = (int) $dest['recargo_seleccionable_valor'];
+                                    if ($recargo_seleccionable <= 0) $recargo_seleccionable = 0;
+                                }
+                                
+                                // Recargos automáticos totales - solo si existe y es > 0
+                                // NOTA: recargo_total puede estar guardado pero si es 0, no cuenta
+                                $recargo_total_auto = 0;
+                                if (isset($dest['recargo_total'])) {
+                                    $recargo_total_auto = (int) $dest['recargo_total'];
+                                    if ($recargo_total_auto <= 0) $recargo_total_auto = 0;
+                                }
+                                
+                                // Sumar solo recargos (NO el monto base)
+                                $recargo_destino = $recargo_seleccionable + $recargo_total_auto;
+                                
+                                if ($recargo_destino > 0) {
+                                    $tiene_recargos = true;
+                                    $total_recargos += $recargo_destino;
+                                }
+                            }
+                        }
                     }
 
                     // Mensajero y quién lo asignó
@@ -1037,6 +1144,13 @@ function gofast_pedidos_shortcode() {
                             <div style="font-size: 24px; font-weight: 700; color: #000;">
                                 $<?= number_format($p->total, 0, ',', '.') ?>
                             </div>
+                            <?php if ($tiene_recargos): ?>
+                                <div style="margin-top: 6px;">
+                                    <span style="display:inline-block;background:#fff3cd;color:#856404;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;" title="Total de recargos: $<?= number_format($total_recargos, 0, ',', '.'); ?>">
+                                        💰 Recargos: $<?= number_format($total_recargos, 0, ',', '.'); ?>
+                                    </span>
+                                </div>
+                            <?php endif; ?>
                         </div>
 
                         <div style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px;">

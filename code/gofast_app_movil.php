@@ -37,10 +37,10 @@ function gofast_app_movil_shortcode() {
         <div class="gofast-box" style="background: linear-gradient(135deg, var(--gofast-yellow) 0%, #e6b91d 100%); text-align: center; padding: 60px 24px;">
             <div style="font-size: 80px; margin-bottom: 24px;">📱</div>
             <h1 style="margin: 0 0 16px 0; color: #000; font-size: 36px; font-weight: 700;">
-                Descarga la App GoFast
+                Descarga la App Go Fast
             </h1>
             <p style="margin: 0; color: #000; font-size: 18px; opacity: 0.9; max-width: 600px; margin: 0 auto;">
-                Accede a todas las funcionalidades de GoFast desde tu dispositivo móvil. 
+                Accede a todas las funcionalidades de Go Fast desde tu dispositivo móvil. 
                 La app es una versión optimizada de nuestra plataforma web.
             </p>
         </div>
@@ -87,7 +87,7 @@ function gofast_app_movil_shortcode() {
                 <div style="background: #f8f9fa; padding: 32px; border-radius: 12px; min-width: 250px; border: 2px solid #e0e0e0; text-align: center;">
                     <div style="margin-bottom: 16px; display: flex; justify-content: center;">
                         <img src="https://gofastdomicilios.com/wp-content/uploads/2025/11/cropped-LOGO2-scaled-1.png" 
-                             alt="GoFast App" 
+                             alt="Go Fast App" 
                              style="width: 80px; height: 80px; object-fit: contain;">
                     </div>
                     <h3 style="margin: 0 0 16px 0; color: #000; font-size: 22px;">Android</h3>
@@ -164,7 +164,7 @@ function gofast_app_movil_shortcode() {
                         <li>Abre el archivo descargado desde las notificaciones</li>
                         <li>Toca <strong>Instalar</strong> cuando aparezca el diálogo</li>
                         <li>Espera a que termine la instalación</li>
-                        <li>¡Listo! Ya puedes abrir la app GoFast desde tu dispositivo</li>
+                        <li>¡Listo! Ya puedes abrir la app Go Fast desde tu dispositivo</li>
                     </ol>
                 </div>
             </div>

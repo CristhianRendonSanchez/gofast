@@ -134,7 +134,7 @@ function gofast_recuperar_password_shortcode() {
                     $reset_url = home_url('/recuperar-password?token=' . $token);
 
                 // Enviar email con formato HTML
-                $asunto = 'Recuperación de contraseña - GoFast';
+                $asunto = 'Recuperación de contraseña - Go Fast';
                 
                 // Email en HTML para mejor presentación
                 $mensaje_email_html = '
@@ -157,11 +157,11 @@ function gofast_recuperar_password_shortcode() {
 <body>
     <div class="container">
         <div class="header">
-            <h1 style="margin: 0; color: #000;">🚀 GoFast</h1>
+            <h1 style="margin: 0; color: #000;">🚀 Go Fast</h1>
         </div>
         <div class="content">
             <h2>¡Hola ' . esc_html($usuario->nombre) . '!</h2>
-            <p>Recibimos una solicitud para restablecer tu contraseña en GoFast.</p>
+            <p>Recibimos una solicitud para restablecer tu contraseña en Go Fast.</p>
             <p>Para crear una nueva contraseña, haz clic en el siguiente botón (el enlace es válido por 1 hora):</p>
             <div style="text-align: center;">
                 <a href="' . esc_url($reset_url) . '" class="button">Restablecer contraseña</a>
@@ -174,7 +174,7 @@ function gofast_recuperar_password_shortcode() {
                 <strong>⚠️ Importante:</strong> Si no solicitaste este cambio, puedes ignorar este correo. 
                 Tu contraseña permanecerá sin cambios.
             </div>
-            <p>¡Gracias por usar GoFast!</p>
+            <p>¡Gracias por usar Go Fast!</p>
         </div>
         <div class="footer">
             <p>Este es un correo automático, por favor no respondas a este mensaje.</p>

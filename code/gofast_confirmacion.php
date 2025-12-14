@@ -194,7 +194,6 @@ add_shortcode("gofast_confirmacion", function() {
         $mensaje = "🚚 Hola! He solicitado un servicio INTERMUNICIPAL en GoFast.\n\n" .
             "📦 Servicio: #$id\n" .
             "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n" .
-            ($barrio_origen_nombre ? "🏙 Barrio: $barrio_origen_nombre\n" : "") .
             "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n" .
             "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n" .
             "💲 Monto a pagar:\n" .
@@ -208,9 +207,6 @@ add_shortcode("gofast_confirmacion", function() {
         $mensaje = "🚀 Hola! He solicitado un servicio en GoFast.\n\n";
         $mensaje .= "📦 Servicio: #$id\n";
         $mensaje .= "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n";
-        if ($barrio_origen_nombre) {
-            $mensaje .= "🏙 Barrio: $barrio_origen_nombre\n";
-        }
         $mensaje .= "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n";
         $mensaje .= "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n";
         $mensaje .= "💲 Monto a pagar:\n";

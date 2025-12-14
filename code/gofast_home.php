@@ -78,8 +78,9 @@ function gofast_home_shortcode() {
     $top_mensajeros = [];
     $stats_admin = [];
 
-    // Top 5 mensajeros del día (basado en ingresos totales)
+    // Top mensajeros del día (basado en ingresos totales)
     // Usar subconsultas para evitar duplicación por JOIN entre servicios y compras
+    // Obtener todos los mensajeros (sin límite) para poder desplegar el resto
     if ($rol === 'mensajero' || $rol === 'admin') {
         $sql_top_mensajeros = $wpdb->prepare(
             "SELECT 
@@ -101,8 +102,7 @@ function gofast_home_shortcode() {
             FROM usuarios_gofast u
             WHERE u.rol = 'mensajero' AND u.activo = 1
             HAVING ingresos_totales > 0
-            ORDER BY ingresos_totales DESC
-            LIMIT 5",
+            ORDER BY ingresos_totales DESC",
             $fecha_hoy,
             $fecha_hoy
         );
@@ -130,60 +130,6 @@ function gofast_home_shortcode() {
     ?>
 
 <div class="gofast-home">
-
-    <!-- SECCIÓN: TOP 5 MENSAJEROS DEL DÍA - AL INICIO -->
-    <?php if (($rol === 'mensajero' || $rol === 'admin') && !empty($top_mensajeros)): ?>
-    <section class="gofast-home-section" style="margin-bottom:32px;">
-        <div class="gofast-box">
-            <h2 style="margin-top:0;">🏆 Top 5 Mensajeros del Día</h2>
-            <p class="gofast-home-text" style="margin-bottom:16px;">
-                Ranking de mensajeros según ingresos totales de hoy
-            </p>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-                <?php 
-                $posicion = 1;
-                foreach ($top_mensajeros as $mensajero): 
-                    $medalla = '';
-                    if ($posicion == 1) $medalla = '🥇';
-                    elseif ($posicion == 2) $medalla = '🥈';
-                    elseif ($posicion == 3) $medalla = '🥉';
-                    else $medalla = $posicion . '°';
-                ?>
-                    <div style="display:flex;align-items:center;<?php echo $rol === 'admin' ? 'justify-content:space-between;' : ''; ?>gap:12px;padding:12px;background:#f8f9fa;border-radius:8px;border-left:4px solid #F4C524;">
-                        <div style="display:flex;align-items:center;gap:12px;flex:1;">
-                            <div style="font-size:24px;font-weight:700;min-width:40px;text-align:center;">
-                                <?php echo $medalla; ?>
-                            </div>
-                            <div style="flex:1;">
-                                <div style="font-size:16px;font-weight:600;color:#1a1a1a;">
-                                    <?php echo esc_html($mensajero->nombre); ?>
-                                </div>
-                                <?php if ($rol === 'mensajero'): ?>
-                                <div style="font-size:13px;color:#666;margin-top:2px;">
-                                    Posición <?php echo $posicion; ?> de 5
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <?php if ($rol === 'admin'): ?>
-                        <div style="text-align:right;">
-                            <div style="font-size:18px;font-weight:700;color:#4CAF50;">
-                                $<?php echo number_format($mensajero->ingresos_totales, 0, ',', '.'); ?>
-                            </div>
-                            <div style="font-size:11px;color:#999;">
-                                Ingresos hoy
-                            </div>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                <?php 
-                    $posicion++;
-                endforeach; 
-                ?>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
 
     <!-- SECCIÓN: ESTADÍSTICAS ADMIN - AL INICIO -->
     <?php if ($rol === 'admin' && !empty($stats_admin)): ?>
@@ -224,14 +170,20 @@ function gofast_home_shortcode() {
             </h1>
 
             <p class="gofast-home-subtitle">
-                Cotiza tu domicilio en segundos, confirma por WhatsApp y un mensajero GoFast recoge tu pedido donde estés.
+                <?php if ($rol === 'mensajero'): ?>
+                    Crea servicios, agrega destinos y confirma por WhatsApp.
+                <?php elseif ($rol === 'admin'): ?>
+                    Cotiza, agrega destino, y confirma valor a cliente.
+                <?php else: ?>
+                    Cotiza tu domicilio en segundos, confirma por WhatsApp y un mensajero Go Fast recoge tu pedido donde estés.
+                <?php endif; ?>
             </p>
 
             <div class="gofast-home-hero-ctas">
                 <!-- Botón principal de cotizar - ULTRA VISIBLE -->
                 <a href="<?php echo $url_cotizar_principal; ?>" class="gofast-btn-hero-mega">
                     <span class="gofast-btn-hero-icon">🛵</span>
-                    <span class="gofast-btn-hero-text">Cotizar envío ahora</span>
+                    <span class="gofast-btn-hero-text"><?php echo $rol === 'mensajero' ? 'Crear servicio' : 'Cotizar envío ahora'; ?></span>
                     <span class="gofast-btn-hero-arrow">→</span>
                 </a>
 
@@ -244,7 +196,7 @@ function gofast_home_shortcode() {
                 <?php else: ?>
                     <div class="gofast-home-links">
                         <span>
-                            👋 Hola, <?php echo !empty($nombre_usuario) ? $nombre_usuario : 'bienvenido a GoFast'; ?>
+                            👋 Hola, <?php echo !empty($nombre_usuario) ? $nombre_usuario : 'bienvenido a Go Fast'; ?>
                         </span>
                         <span>·</span>
                         <a href="<?php echo $url_logout; ?>">Salir</a>
@@ -355,7 +307,7 @@ function gofast_home_shortcode() {
                 <?php elseif ($rol === 'mensajero'): ?>
 
                     <li>
-                        <a href="<?php echo $url_mensajero_cotizar; ?>" class="gofast-home-panel-link gofast-home-panel-primary">
+                        <a href="<?php echo $url_cotizar_principal; ?>" class="gofast-home-panel-link gofast-home-panel-primary">
                             <span class="gofast-home-panel-icon">🚚</span>
                             <span class="gofast-home-panel-text">
                                 <strong>Crear servicio</strong>
@@ -466,7 +418,7 @@ function gofast_home_shortcode() {
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo $url_admin_cotizar; ?>" class="gofast-home-panel-link">
+                        <a href="<?php echo $url_cotizar_principal; ?>" class="gofast-home-panel-link">
                             <span class="gofast-home-panel-icon">🚚</span>
                             <span class="gofast-home-panel-text">
                                 <strong>Crear Servicio</strong>
@@ -490,6 +442,110 @@ function gofast_home_shortcode() {
         </div>
 
     </section>
+
+    <!-- SECCIÓN: TOP MENSAJEROS DEL DÍA - DESPUÉS DE ACCESOS RÁPIDOS -->
+    <?php if (($rol === 'mensajero' || $rol === 'admin') && !empty($top_mensajeros)): 
+        $total_mensajeros = count($top_mensajeros);
+        $mostrar_inicial = 5;
+        $hay_mas = $total_mensajeros > $mostrar_inicial;
+    ?>
+    <section class="gofast-home-section" style="margin-bottom:32px;">
+        <div class="gofast-box">
+            <h2 style="margin-top:0;">🏆 Top Mensajeros del Día</h2>
+            <p class="gofast-home-text" style="margin-bottom:16px;">
+                Ranking de mensajeros según ingresos totales de hoy
+            </p>
+            <div id="gofast-top-mensajeros-list" style="display:flex;flex-direction:column;gap:8px;">
+                <?php 
+                $posicion = 1;
+                foreach ($top_mensajeros as $mensajero): 
+                    $medalla = '';
+                    if ($posicion == 1) $medalla = '🥇';
+                    elseif ($posicion == 2) $medalla = '🥈';
+                    elseif ($posicion == 3) $medalla = '🥉';
+                    else $medalla = $posicion . '°';
+                    
+                    $clase_oculta = ($posicion > $mostrar_inicial) ? 'gofast-mensajero-oculto' : '';
+                ?>
+                    <div class="gofast-mensajero-item <?php echo $clase_oculta; ?>" style="display:flex;align-items:center;<?php echo $rol === 'admin' ? 'justify-content:space-between;' : ''; ?>gap:12px;padding:12px;background:#f8f9fa;border-radius:8px;border-left:4px solid #F4C524;">
+                        <div style="display:flex;align-items:center;gap:12px;flex:1;">
+                            <div style="font-size:24px;font-weight:700;min-width:40px;text-align:center;">
+                                <?php echo $medalla; ?>
+                            </div>
+                            <div style="flex:1;">
+                                <div style="font-size:16px;font-weight:600;color:#1a1a1a;">
+                                    <?php echo esc_html($mensajero->nombre); ?>
+                                </div>
+                                <?php if ($rol === 'mensajero'): ?>
+                                <div style="font-size:13px;color:#666;margin-top:2px;">
+                                    Posición <?php echo $posicion; ?> de <?php echo $total_mensajeros; ?>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if ($rol === 'admin'): ?>
+                        <div style="text-align:right;">
+                            <div style="font-size:18px;font-weight:700;color:#4CAF50;">
+                                $<?php echo number_format($mensajero->ingresos_totales, 0, ',', '.'); ?>
+                            </div>
+                            <div style="font-size:11px;color:#999;">
+                                Ingresos hoy
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                <?php 
+                    $posicion++;
+                endforeach; 
+                ?>
+            </div>
+            <?php if ($hay_mas): ?>
+            <div style="text-align:center;margin-top:16px;">
+                <button id="gofast-toggle-mensajeros" class="gofast-btn-mini" style="cursor:pointer;border:none;background:#F4C524;color:#1a1a1a;padding:10px 20px;border-radius:6px;font-weight:600;">
+                    <span id="gofast-toggle-text">Ver todos (<?php echo $total_mensajeros; ?> mensajeros)</span>
+                    <span id="gofast-toggle-icon">▼</span>
+                </button>
+            </div>
+            <?php endif; ?>
+        </div>
+    </section>
+    <style>
+        .gofast-mensajero-oculto {
+            display: none !important;
+        }
+    </style>
+    <script>
+        (function() {
+            var toggleBtn = document.getElementById('gofast-toggle-mensajeros');
+            if (!toggleBtn) return;
+            
+            var itemsOcultos = document.querySelectorAll('.gofast-mensajero-oculto');
+            var toggleText = document.getElementById('gofast-toggle-text');
+            var toggleIcon = document.getElementById('gofast-toggle-icon');
+            var desplegado = false;
+            
+            toggleBtn.addEventListener('click', function() {
+                itemsOcultos.forEach(function(item) {
+                    if (desplegado) {
+                        item.classList.add('gofast-mensajero-oculto');
+                    } else {
+                        item.classList.remove('gofast-mensajero-oculto');
+                    }
+                });
+                
+                desplegado = !desplegado;
+                
+                if (desplegado) {
+                    toggleText.textContent = 'Ver menos (Top 5)';
+                    toggleIcon.textContent = '▲';
+                } else {
+                    toggleText.textContent = 'Ver todos (<?php echo $total_mensajeros; ?> mensajeros)';
+                    toggleIcon.textContent = '▼';
+                }
+            });
+        })();
+    </script>
+    <?php endif; ?>
 
     <!-- SECCIÓN: CÓMO FUNCIONA (NUEVA) -->
     <section class="gofast-home-section gofast-home-how">
@@ -562,7 +618,7 @@ function gofast_home_shortcode() {
 
     <!-- SECCIÓN: VENTAJAS -->
     <section class="gofast-home-section gofast-home-advantages">
-        <h2>¿Por qué elegir GoFast?</h2>
+        <h2>¿Por qué elegir Go Fast?</h2>
         <div class="gofast-home-grid gofast-home-advantages-grid">
             <div class="gofast-box gofast-home-advantage-card">
                 <div class="gofast-home-advantage-icon">⚡</div>
@@ -593,7 +649,7 @@ function gofast_home_shortcode() {
             <div>
                 <h2>Trabaja con nosotros</h2>
                 <p>
-                    ¿Tienes moto y papeles al día? Únete a nuestra red de mensajeros GoFast y genera ingresos
+                    ¿Tienes moto y papeles al día? Únete a nuestra red de mensajeros Go Fast y genera ingresos
                     adicionales haciendo domicilios en tu ciudad.
                 </p>
             </div>

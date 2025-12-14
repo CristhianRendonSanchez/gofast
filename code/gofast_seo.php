@@ -26,11 +26,11 @@ function gofast_add_seo_meta_tags() {
     $current_url = home_url(add_query_arg(array(), $wp->request));
     
     // Configuración SEO por defecto
-    $default_title = 'GoFast - Mensajería Express en Tuluá | Envíos Rápidos y Seguros';
-    $default_description = 'GoFast es tu servicio de mensajería express en Tuluá y alrededores. Envíos rápidos, seguros y confiables. Cotiza tu domicilio en segundos y confirma por WhatsApp.';
+    $default_title = 'Go Fast - Mensajería Express en Tuluá | Envíos Rápidos y Seguros';
+    $default_description = 'Go Fast es tu servicio de mensajería express en Tuluá y alrededores. Envíos rápidos, seguros y confiables. Cotiza tu domicilio en segundos y confirma por WhatsApp.';
     $default_keywords = 'mensajería express, domicilios Tuluá, envíos rápidos, mensajero Tuluá, delivery Tuluá, envíos intermunicipales, gofast, mensajería valle del cauca';
     
-    // Imagen por defecto (logo de GoFast)
+    // Imagen por defecto (logo de Go Fast)
     $default_image = 'https://gofastdomicilios.com/wp-content/uploads/2025/11/GoFast.png';
     
     // Detectar página actual y personalizar SEO
@@ -42,8 +42,8 @@ function gofast_add_seo_meta_tags() {
     
     // Detectar tipo de página
     if (is_front_page() || is_home()) {
-        $page_title = 'GoFast - Mensajería Express en Tuluá | Envíos Rápidos y Seguros';
-        $page_description = 'GoFast es tu servicio de mensajería express en Tuluá y alrededores. Envíos rápidos, seguros y confiables. Cotiza tu domicilio en segundos y confirma por WhatsApp.';
+        $page_title = 'Go Fast - Mensajería Express en Tuluá | Envíos Rápidos y Seguros';
+        $page_description = 'Go Fast es tu servicio de mensajería express en Tuluá y alrededores. Envíos rápidos, seguros y confiables. Cotiza tu domicilio en segundos y confirma por WhatsApp.';
         $page_type = 'website';
     } elseif (is_page()) {
         $page_obj = get_queried_object();
@@ -54,32 +54,32 @@ function gofast_add_seo_meta_tags() {
         
         switch ($page_slug) {
             case 'cotizar':
-                $page_title = 'Cotizar Envío - GoFast Mensajería Express';
+                $page_title = 'Cotizar Envío - Go Fast Mensajería Express';
                 $page_description = 'Cotiza tu envío en segundos. Ingresa origen y destino, obtén el precio al instante. Servicio de mensajería express en Tuluá.';
                 $page_keywords = 'cotizar envío, calcular costo envío, tarifas mensajería Tuluá, precio domicilio';
                 break;
                 
             case 'cotizar-intermunicipal':
-                $page_title = 'Envíos Intermunicipales - GoFast | Desde Tuluá a Otros Municipios';
+                $page_title = 'Envíos Intermunicipales - Go Fast | Desde Tuluá a Otros Municipios';
                 $page_description = 'Envía paquetes desde Tuluá a otros municipios cercanos. Envíos intermunicipales rápidos y seguros. Pago anticipado requerido.';
                 $page_keywords = 'envíos intermunicipales, mensajería intermunicipal, envíos desde Tuluá, delivery intermunicipal';
                 break;
                 
             case 'sobre-nosotros':
-                $page_title = 'Sobre Nosotros - GoFast Mensajería Express';
-                $page_description = 'Conoce más sobre GoFast, tu servicio de mensajería express en Tuluá. Nuestro equipo, políticas y compromiso con la calidad.';
+                $page_title = 'Sobre Nosotros - Go Fast Mensajería Express';
+                $page_description = 'Conoce más sobre Go Fast, tu servicio de mensajería express en Tuluá. Nuestro equipo, políticas y compromiso con la calidad.';
                 $page_keywords = 'sobre gofast, quiénes somos, mensajería Tuluá, empresa mensajería';
                 break;
                 
             case 'trabaja-con-nosotros':
-                $page_title = 'Trabaja con Nosotros - Únete al Equipo GoFast';
-                $page_description = '¿Tienes moto y papeles al día? Únete a nuestra red de mensajeros GoFast y genera ingresos adicionales haciendo domicilios en Tuluá.';
+                $page_title = 'Trabaja con Nosotros - Únete al Equipo Go Fast';
+                $page_description = '¿Tienes moto y papeles al día? Únete a nuestra red de mensajeros Go Fast y genera ingresos adicionales haciendo domicilios en Tuluá.';
                 $page_keywords = 'trabajar como mensajero, empleo mensajero Tuluá, ser mensajero, trabajo mensajería';
                 break;
                 
             case 'app-movil':
-                $page_title = 'App Móvil GoFast - Descarga Nuestra Aplicación';
-                $page_description = 'Descarga la app móvil de GoFast y gestiona tus envíos desde tu celular. Disponible para Android e iOS.';
+                $page_title = 'App Móvil Go Fast - Descarga Nuestra Aplicación';
+                $page_description = 'Descarga la app móvil de Go Fast y gestiona tus envíos desde tu celular. Disponible para Android e iOS.';
                 $page_keywords = 'app gofast, aplicación mensajería, app delivery Tuluá, descargar app';
                 break;
         }
@@ -103,7 +103,7 @@ function gofast_add_seo_meta_tags() {
     // ============================================
     // META TAGS BÁSICOS
     // ============================================
-    echo "\n<!-- GoFast SEO Meta Tags -->\n";
+    echo "\n<!-- Go Fast SEO Meta Tags -->\n";
     
     // Title (si no está ya definido por otro plugin)
     if (!defined('WPSEO_VERSION') && !function_exists('yoast_breadcrumb')) {
@@ -117,7 +117,7 @@ function gofast_add_seo_meta_tags() {
     echo '<meta name="keywords" content="' . $page_keywords . '">' . "\n";
     
     // Author
-    echo '<meta name="author" content="GoFast Mensajería Express">' . "\n";
+    echo '<meta name="author" content="Go Fast Mensajería Express">' . "\n";
     
     // Language
     echo '<meta http-equiv="content-language" content="es-CO">' . "\n";
@@ -196,7 +196,7 @@ function gofast_add_seo_meta_tags() {
     {
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
-        "name": "GoFast Mensajería Express",
+        "name": "Go Fast Mensajería Express",
         "image": "<?php echo esc_url($default_image); ?>",
         "@id": "<?php echo esc_url($site_url); ?>",
         "url": "<?php echo esc_url($site_url); ?>",
@@ -378,7 +378,7 @@ function gofast_add_seo_meta_tags() {
         }
     }
     
-    echo "\n<!-- End GoFast SEO Meta Tags -->\n";
+    echo "\n<!-- End Go Fast SEO Meta Tags -->\n";
 }
 add_action('wp_head', 'gofast_add_seo_meta_tags', 1);
 

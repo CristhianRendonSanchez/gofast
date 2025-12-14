@@ -397,7 +397,7 @@ function gofast_solicitar_intermunicipal_shortcode() {
                     <strong style="color: #004085;">💡 Recordatorio:</strong>
                     <p style="margin: 8px 0 0 0; color: #004085; font-size: 13px;">
                         Asegúrate de que el pedido este pago con anticipación antes de confirmar. 
-                        y pagarle al mensajero el valor del envío. Solo después de esto se despachará el pedido.
+                        y pagarle al mensajero el valor del envío.
                         <strong>Recuerda:</strong> Se debe anexar la ubicación en tiempo real del cliente que recibe el domicilio en el destino.
                     </p>
                 </div>

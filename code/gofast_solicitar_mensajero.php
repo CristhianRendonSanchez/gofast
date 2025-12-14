@@ -505,6 +505,12 @@ function gofast_resultado_cotizacion() {
                 </button>
             </div>
 
+            <div style="background:#d1ecf1;padding:12px;border-radius:8px;margin:16px 0;border-left:4px solid #0c5460;">
+                <small style="color:#0c5460;">
+                    <strong>💡 Recordatorio:</strong> Si tu envío requiere cuidado especial o debe transportarse en maleta o canasta, indícalo al solicitar tu servicio Go Fast.
+                </small>
+            </div>
+
         </div>
 
         <!-- ✅ COLUMNA DERECHA -->

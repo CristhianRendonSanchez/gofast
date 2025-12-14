@@ -43,7 +43,7 @@ function gofast_sobre_nosotros_shortcode() {
             </h1>
             <div style="color: #333; line-height: 1.8; font-size: 16px;">
                 <p style="margin-bottom: 16px;">
-                    <strong>GoFast</strong> es una plataforma de mensajería express que conecta a clientes, negocios y mensajeros 
+                    <strong>Go Fast</strong> es una plataforma de mensajería express que conecta a clientes, negocios y mensajeros 
                     en la ciudad de Tuluá y sus alrededores. Nuestra misión es facilitar el envío de paquetes, documentos 
                     y productos de manera rápida, segura y confiable.
                 </p>
@@ -65,7 +65,7 @@ function gofast_sobre_nosotros_shortcode() {
             <h2 style="margin-top: 0; margin-bottom: 24px; color: #000; font-size: 28px;">
                 👥 Nuestro Equipo
             </h2>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+            <div class="gofast-equipo-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
                 
                 <!-- Equipo 1 -->
                 <div style="background: #f8f9fa; padding: 24px; border-radius: 12px; text-align: center; border: 2px solid #f0f0f0;">
@@ -121,7 +121,7 @@ function gofast_sobre_nosotros_shortcode() {
                 </h3>
                 <div style="color: #333; line-height: 1.8; font-size: 15px;">
                     <p style="margin-bottom: 12px;">
-                        En <strong>GoFast</strong> nos comprometemos a proteger tu información personal. Los datos que nos proporcionas 
+                        En <strong>Go Fast</strong> nos comprometemos a proteger tu información personal. Los datos que nos proporcionas 
                         son utilizados exclusivamente para:
                     </p>
                     <ul style="margin: 0 0 12px 20px; padding: 0;">
@@ -148,8 +148,8 @@ function gofast_sobre_nosotros_shortcode() {
                         <strong>Tiempos de entrega:</strong>
                     </p>
                     <ul style="margin: 0 0 12px 20px; padding: 0;">
-                        <li>Envíos locales: 30 minutos a 2 horas (según distancia y disponibilidad)</li>
-                        <li>Envíos intermunicipales: 2 a 4 horas (según destino)</li>
+                        <li>Envíos locales: 20 minutos a 30 minutos (según distancia y disponibilidad)</li>
+                        <li>Envíos intermunicipales: 1 a 2 horas (según destino)</li>
                         <li>Los tiempos pueden variar por condiciones climáticas o tráfico</li>
                     </ul>
                     <p style="margin-bottom: 12px;">
@@ -161,7 +161,7 @@ function gofast_sobre_nosotros_shortcode() {
                     </ul>
                     <p style="margin: 0;">
                         <strong>Restricciones:</strong> No transportamos objetos peligrosos, ilegales, perecederos sin refrigeración 
-                        adecuada, o artículos que excedan las dimensiones permitidas.
+                        adecuada, mascotas o personas o artículos que excedan las dimensiones permitidas.
                     </p>
                 </div>
             </div>
@@ -194,7 +194,7 @@ function gofast_sobre_nosotros_shortcode() {
                 </h3>
                 <div style="color: #333; line-height: 1.8; font-size: 15px;">
                     <p style="margin-bottom: 12px;">
-                        <strong>GoFast</strong> se compromete a:
+                        <strong>Go Fast</strong> se compromete a:
                     </p>
                     <ul style="margin: 0 0 12px 20px; padding: 0;">
                         <li>Manejar tus paquetes con el mayor cuidado posible</li>

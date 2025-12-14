@@ -272,7 +272,7 @@ function gofast_trabaja_con_nosotros_shortcode() {
                 <textarea name="pregunta2" 
                           required 
                           rows="3"
-                          placeholder="Ej: Disponible de lunes a sábado de 8am a 6pm"
+                          placeholder="Ej: Disponible de lunes a Domingo de 8am a 6pm 0 de 2 pm a 11pm"
                           style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 15px; margin-bottom: 16px; box-sizing: border-box; resize: vertical; font-family: inherit;"><?= isset($_POST['pregunta2']) ? esc_textarea($_POST['pregunta2']) : '' ?></textarea>
 
                 <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #000; font-size: 14px;">

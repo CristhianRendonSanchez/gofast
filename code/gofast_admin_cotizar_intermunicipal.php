@@ -628,7 +628,7 @@ function gofast_admin_mostrar_resumen_intermunicipal($cotizacion) {
                     <strong style="color: #004085;">💡 Recordatorio:</strong>
                     <p style="margin: 8px 0 0 0; color: #004085; font-size: 13px;">
                         Asegúrate de que el pedido este pago con anticipación antes de confirmar. 
-                        y que el mensajero reciba el valor del envío antes de despachar el pedido. Solo después de esto se despachará el pedido.
+                        y que el mensajero reciba el valor del envío antes de despachar el pedido.
                         <strong>Recuerda:</strong> Se debe anexar la ubicación en tiempo real del cliente que recibe el domicilio en el destino.
                     </p>
                 </div>
