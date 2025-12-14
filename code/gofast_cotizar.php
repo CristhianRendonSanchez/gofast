@@ -148,7 +148,7 @@ function gofast_cotizar_shortcode() {
                                     data-negocio-id="<?= esc_attr($n->id) ?>"
                                     data-cliente-id="<?= esc_attr($n->user_id) ?>"
                                     <?= $isSelected ? 'selected' : '' ?>>
-                                🏪 <?= esc_html($n->nombre) ?> — <?= esc_html($barrio_nombre ?: 'Sin barrio') ?> (Cliente: <?= esc_html($n->cliente_nombre) ?>)
+                                🏪 <?= esc_html($n->nombre) ?> — <?= esc_html($barrio_nombre ?: 'Sin barrio') ?>
                             </option>
                         <?php 
                                 } else {
