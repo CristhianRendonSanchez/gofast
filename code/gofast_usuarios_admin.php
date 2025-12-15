@@ -194,10 +194,108 @@ function gofast_usuarios_admin_shortcode() {
         }
 
         /* ----------------------------------------------
-           B) Editar usuarios existentes (verificar nonce específico)
+           B) Actualizar usuario individual
+        ---------------------------------------------- */
+        if (!empty($_POST['gofast_actualizar_usuario']) && is_array($_POST['gofast_actualizar_usuario'])) {
+            $user_id_actualizar = key($_POST['gofast_actualizar_usuario']);
+            $user_id_actualizar = (int) $user_id_actualizar;
+            
+            if ($user_id_actualizar > 0) {
+                if (
+                    empty($_POST['gofast_usuarios_nonce']) ||
+                    !wp_verify_nonce($_POST['gofast_usuarios_nonce'], 'gofast_usuarios_admin')
+                ) {
+                    $mensaje = "🔒 Error de seguridad al actualizar usuario.";
+                } else {
+                    error_log("GOFAST ADMIN - Actualización individual. User ID: " . $user_id_actualizar);
+                    error_log("GOFAST ADMIN - POST['usuarios'] completo: " . print_r($_POST['usuarios'] ?? 'NO EXISTE', true));
+                    
+                    if (!empty($_POST['usuarios'][$user_id_actualizar]) && is_array($_POST['usuarios'][$user_id_actualizar])) {
+                        $data = $_POST['usuarios'][$user_id_actualizar];
+                        
+                        error_log("GOFAST ADMIN - Datos recibidos para usuario #{$user_id_actualizar}: " . print_r($data, true));
+                        
+                        $nombre   = sanitize_text_field($data['nombre'] ?? '');
+                        $telefono = sanitize_text_field($data['telefono'] ?? '');
+                        $email    = sanitize_email($data['email'] ?? '');
+                        $rol      = sanitize_text_field($data['rol'] ?? 'cliente');
+                        $activo   = !empty($data['activo']) ? 1 : 0;
+                        $password = $data['password'] ?? '';
+                        
+                        error_log("GOFAST ADMIN - Datos procesados - nombre: '{$nombre}', email: '{$email}', rol: '{$rol}', activo: {$activo}");
+
+                        if (!in_array($rol, ['cliente', 'mensajero', 'admin'], true)) {
+                            $mensaje = "⚠️ Rol no válido.";
+                        } else {
+                            // Obtener datos actuales para comparar
+                            $usuario_actual = $wpdb->get_row($wpdb->prepare("SELECT nombre, telefono, email, rol, activo FROM $tabla WHERE id = %d", $user_id_actualizar));
+                            
+                            if (!$usuario_actual) {
+                                $mensaje = "⚠️ Usuario no encontrado.";
+                            } else {
+                                // Verificar si hay cambios reales
+                                $hay_cambios = false;
+                                if ($usuario_actual->nombre !== $nombre ||
+                                    $usuario_actual->telefono !== $telefono ||
+                                    $usuario_actual->email !== $email ||
+                                    $usuario_actual->rol !== $rol ||
+                                    $usuario_actual->activo != $activo ||
+                                    $password !== '') {
+                                    $hay_cambios = true;
+                                }
+                                
+                                if (!$hay_cambios) {
+                                    $mensaje = "ℹ️ No se detectaron cambios en el usuario.";
+                                } else {
+                                    $update_data = [
+                                        'nombre'   => $nombre,
+                                        'telefono' => $telefono,
+                                        'email'    => $email,
+                                        'rol'      => $rol,
+                                        'activo'   => $activo
+                                    ];
+
+                                    if ($password !== '') {
+                                        $update_data['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+                                    }
+
+                                    $resultado = $wpdb->update(
+                                        $tabla,
+                                        $update_data,
+                                        ['id' => $user_id_actualizar],
+                                        $password !== '' ? ['%s','%s','%s','%s','%d','%s'] : ['%s','%s','%s','%s','%d'],
+                                        ['%d']
+                                    );
+
+                                    if ($resultado === false) {
+                                        $error_db = $wpdb->last_error;
+                                        $mensaje = "❌ Error al actualizar usuario: " . ($error_db ?: 'Error desconocido');
+                                    } else {
+                                        // Si resultado es 0 pero sabemos que hay cambios, puede ser un problema de comparación
+                                        // En este caso, consideramos que se actualizó correctamente
+                                        $mensaje = "✅ Usuario actualizado correctamente.";
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        error_log("GOFAST ADMIN - ⚠️ No se recibieron datos del usuario #{$user_id_actualizar}");
+                        error_log("GOFAST ADMIN - POST['usuarios'] existe: " . (isset($_POST['usuarios']) ? 'SÍ' : 'NO'));
+                        error_log("GOFAST ADMIN - POST['usuarios'] es array: " . (is_array($_POST['usuarios'] ?? null) ? 'SÍ' : 'NO'));
+                        if (isset($_POST['usuarios'])) {
+                            error_log("GOFAST ADMIN - Keys en POST['usuarios']: " . implode(', ', array_keys($_POST['usuarios'])));
+                        }
+                        $mensaje = "⚠️ No se recibieron datos del usuario.";
+                    }
+                }
+            }
+        }
+
+        /* ----------------------------------------------
+           C) Editar usuarios existentes (actualización masiva - verificar nonce específico)
         ---------------------------------------------- */
         // Verificar que sea el botón de GUARDAR, no el de CREAR
-        if (!empty($_POST['gofast_guardar_usuarios']) && empty($_POST['gofast_crear_usuario'])) {
+        if (!empty($_POST['gofast_guardar_usuarios']) && empty($_POST['gofast_crear_usuario']) && empty($_POST['gofast_actualizar_usuario'])) {
             
             // Log para confirmar que se detectó el botón correcto
             error_log("GOFAST ADMIN - ✅ Botón GUARDAR CAMBIOS detectado correctamente");
@@ -594,6 +692,13 @@ function gofast_usuarios_admin_shortcode() {
                                                name="usuarios[<?= esc_attr($u->id); ?>][password]"
                                                placeholder="Nueva contraseña (opcional)"
                                                class="gofast-input-password">
+                                        <button type="button"
+                                                class="gofast-btn-accion gofast-btn-actualizar"
+                                                data-usuario-id="<?= esc_attr($u->id); ?>"
+                                                data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
+                                                style="width:100%;margin-bottom:8px;">
+                                            💾 Actualizar
+                                        </button>
                                         <?php if (!$es_yo): ?>
                                             <div class="gofast-botones-accion">
                                                 <?php if ($u->activo): ?>
@@ -725,8 +830,15 @@ function gofast_usuarios_admin_shortcode() {
                                        style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px;">
                             </div>
 
-                            <?php if (!$es_yo): ?>
-                                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                                <button type="button"
+                                        class="gofast-btn-accion gofast-btn-actualizar"
+                                        data-usuario-id="<?= esc_attr($u->id); ?>"
+                                        data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
+                                        style="width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                                    💾 Actualizar Usuario
+                                </button>
+                                <?php if (!$es_yo): ?>
                                     <?php if ($u->activo): ?>
                                         <button type="button"
                                                 class="gofast-btn-accion gofast-btn-desactivar"
@@ -751,12 +863,12 @@ function gofast_usuarios_admin_shortcode() {
                                             style="width: 100%; padding: 10px; background: #dc3545; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
                                         🗑️ Borrar Permanentemente
                                     </button>
-                                </div>
-                            <?php else: ?>
-                                <div style="padding: 10px; background: #e7f3ff; border-radius: 6px; text-align: center; font-size: 14px; color: #0066cc; font-weight: 600;">
-                                    👤 (Tu usuario)
-                                </div>
-                            <?php endif; ?>
+                                <?php else: ?>
+                                    <div style="padding: 10px; background: #e7f3ff; border-radius: 6px; text-align: center; font-size: 14px; color: #0066cc; font-weight: 600;">
+                                        👤 (Tu usuario)
+                                    </div>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -779,16 +891,6 @@ function gofast_usuarios_admin_shortcode() {
                     </div>
                 <?php endif; ?>
 
-                <div style="margin-top:18px;text-align:right;">
-                    <button type="submit"
-                            name="gofast_guardar_usuarios"
-                            value="1"
-                            class="gofast-btn-request"
-                            style="max-width:260px;margin-left:auto;">
-                        💾 Guardar cambios
-                    </button>
-                </div>
-
             <?php endif; ?>
         </div>
     </form>
@@ -808,6 +910,91 @@ document.addEventListener('DOMContentLoaded', function(){
             console.log('toggleOtro error capturado:', e);
         }
     }
+    
+    // Manejar botón de actualizar usuario individual
+    document.querySelectorAll('.gofast-btn-actualizar').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const userId = btn.getAttribute('data-usuario-id');
+            if (!userId) {
+                alert('Error: No se encontró el ID del usuario');
+                return;
+            }
+            
+            const form = btn.closest('form');
+            if (!form) {
+                alert('Error: No se encontró el formulario');
+                return;
+            }
+            
+            // Verificar que el nonce esté presente
+            const nonceInput = form.querySelector('input[name="gofast_usuarios_nonce"]');
+            if (!nonceInput) {
+                alert('Error de seguridad: No se encontró el token de seguridad');
+                return;
+            }
+            
+            // Detectar qué vista está visible
+            const vistaDesktop = document.querySelector('.gofast-usuarios-desktop');
+            const vistaMobile = document.querySelector('.gofast-usuarios-mobile');
+            const desktopVisible = vistaDesktop && window.getComputedStyle(vistaDesktop).display !== 'none';
+            const mobileVisible = vistaMobile && window.getComputedStyle(vistaMobile).display !== 'none';
+            
+            // Cambiar nombres de campos de otros usuarios para que no se envíen
+            const todosLosInputs = form.querySelectorAll('input[name^="usuarios["], select[name^="usuarios["]');
+            todosLosInputs.forEach(function(input) {
+                const name = input.getAttribute('name') || '';
+                // Si el campo no pertenece al usuario que se está actualizando
+                if (name.includes('usuarios[') && !name.includes('usuarios[' + userId + ']')) {
+                    // Cambiar el nombre para que no se envíe
+                    if (!name.includes('_skip_')) {
+                        input.setAttribute('data-original-name', name);
+                        input.setAttribute('name', name.replace('usuarios[', 'usuarios_skip_['));
+                    }
+                }
+            });
+            
+            // También manejar la vista oculta: cambiar nombres de campos de la vista no visible
+            if (desktopVisible && vistaMobile) {
+                // Desktop visible, cambiar nombres de campos móvil
+                const camposMobile = vistaMobile.querySelectorAll('input[name^="usuarios["], select[name^="usuarios["]');
+                camposMobile.forEach(function(campo) {
+                    const name = campo.getAttribute('name') || '';
+                    if (name.includes('usuarios[') && !name.includes('_skip_')) {
+                        campo.setAttribute('data-original-name', name);
+                        campo.setAttribute('name', name.replace('usuarios[', 'usuarios_skip_['));
+                    }
+                });
+            } else if (mobileVisible && vistaDesktop) {
+                // Móvil visible, cambiar nombres de campos desktop
+                const camposDesktop = vistaDesktop.querySelectorAll('input[name^="usuarios["], select[name^="usuarios["]');
+                camposDesktop.forEach(function(campo) {
+                    const name = campo.getAttribute('name') || '';
+                    if (name.includes('usuarios[') && !name.includes('_skip_')) {
+                        campo.setAttribute('data-original-name', name);
+                        campo.setAttribute('name', name.replace('usuarios[', 'usuarios_skip_['));
+                    }
+                });
+            }
+            
+            // Agregar campo hidden para indicar que se actualiza solo este usuario
+            let inputActualizar = form.querySelector('input[name^="gofast_actualizar_usuario"]');
+            if (inputActualizar) {
+                inputActualizar.remove();
+            }
+            
+            inputActualizar = document.createElement('input');
+            inputActualizar.type = 'hidden';
+            inputActualizar.name = 'gofast_actualizar_usuario[' + userId + ']';
+            inputActualizar.value = '1';
+            form.appendChild(inputActualizar);
+            
+            // Enviar formulario
+            form.submit();
+        });
+    });
     
     // Desactivar/Activar usuario
     document.querySelectorAll('.gofast-btn-desactivar, .gofast-btn-activar').forEach(function(btn){
@@ -933,6 +1120,91 @@ document.addEventListener('DOMContentLoaded', function(){
 .gofast-usuario-card * {
     max-width: 100%;
     box-sizing: border-box;
+}
+
+/* =====================================================
+   ESTILOS PARA FILTROS EN DESKTOP
+   ====================================================== */
+.gofast-pedidos-filtros {
+    margin: 0;
+}
+
+.gofast-pedidos-filtros-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+    margin: 0;
+}
+
+.gofast-pedidos-filtros-row > div {
+    flex: 1;
+    min-width: 150px;
+}
+
+.gofast-pedidos-filtros-row label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 6px;
+}
+
+.gofast-pedidos-filtros-row select,
+.gofast-pedidos-filtros-row input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.gofast-pedidos-filtros-row select:focus,
+.gofast-pedidos-filtros-row input[type="text"]:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.gofast-pedidos-filtros-actions {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.gofast-pedidos-filtros-actions button,
+.gofast-pedidos-filtros-actions a {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.gofast-btn-mini {
+    background: #007bff;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+}
+
+.gofast-btn-mini:hover {
+    background: #0056b3;
+}
+
+.gofast-btn-outline {
+    background: #fff;
+    color: #6c757d;
+    border: 1px solid #ddd;
+}
+
+.gofast-btn-outline:hover {
+    background: #f8f9fa;
+    border-color: #adb5bd;
 }
 
 /* =====================================================
@@ -1079,6 +1351,15 @@ document.addEventListener('DOMContentLoaded', function(){
     white-space: nowrap;
 }
 
+.gofast-btn-actualizar {
+    background: #007bff;
+    color: #fff;
+}
+
+.gofast-btn-actualizar:hover {
+    background: #0056b3;
+}
+
 .gofast-btn-desactivar {
     background: #ffc107;
     color: #000;
@@ -1116,26 +1397,140 @@ document.addEventListener('DOMContentLoaded', function(){
 /* Mejorar visibilidad de la tabla */
 .gofast-table {
     font-size: 14px;
+    border-collapse: separate;
+    border-spacing: 0;
 }
 
 .gofast-table th {
     font-weight: 600;
-    padding: 12px 8px;
+    padding: 14px 12px;
     background: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    color: #495057;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .gofast-table td {
-    padding: 10px 8px;
+    padding: 12px;
     vertical-align: middle;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.gofast-table tbody tr:hover {
+    background: #f8f9fa;
+    transition: background 0.2s;
 }
 
 .gofast-row-inactive {
-    opacity: 0.6;
+    opacity: 0.7;
     background: #f8f9fa;
 }
 
 .gofast-row-active {
     background: #fff;
+}
+
+/* Estilos para campos editables en la tabla */
+.gofast-table input[type="text"],
+.gofast-table input[type="email"],
+.gofast-table input[type="password"],
+.gofast-table select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 13px;
+    transition: all 0.2s;
+    background: #fff;
+}
+
+.gofast-table input[type="text"]:focus,
+.gofast-table input[type="email"]:focus,
+.gofast-table input[type="password"]:focus,
+.gofast-table select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    background: #fff;
+}
+
+.gofast-table input[type="text"]:hover,
+.gofast-table input[type="email"]:hover,
+.gofast-table input[type="password"]:hover,
+.gofast-table select:hover {
+    border-color: #adb5bd;
+}
+
+/* Mejorar columna de acciones */
+.gofast-td-acciones {
+    min-width: 200px;
+}
+
+.gofast-td-fecha {
+    color: #6c757d;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+/* Estilos para formulario de crear usuario */
+.gofast-recargo-nuevo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    align-items: end;
+}
+
+.gofast-recargo-nuevo > div {
+    display: flex;
+    flex-direction: column;
+}
+
+.gofast-recargo-nuevo label {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 6px;
+}
+
+.gofast-recargo-nuevo input[type="text"],
+.gofast-recargo-nuevo input[type="email"],
+.gofast-recargo-nuevo input[type="password"],
+.gofast-recargo-nuevo select {
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.gofast-recargo-nuevo input[type="text"]:focus,
+.gofast-recargo-nuevo input[type="email"]:focus,
+.gofast-recargo-nuevo input[type="password"]:focus,
+.gofast-recargo-nuevo select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.gofast-small-btn {
+    padding: 10px 20px;
+    background: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: 100%;
+}
+
+.gofast-small-btn:hover {
+    background: #218838;
 }
 </style>
 
