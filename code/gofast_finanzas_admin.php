@@ -462,15 +462,15 @@ function gofast_finanzas_admin_shortcode() {
 
     // ========== DESCUENTOS MENSAJEROS ==========
     
-    // CREAR DESCUENTO
+    // 1. CREAR DESCUENTO
     if (isset($_POST['gofast_crear_descuento']) && wp_verify_nonce($_POST['gofast_descuento_nonce'], 'gofast_crear_descuento')) {
         $fecha = sanitize_text_field($_POST['fecha'] ?? '');
         $mensajero_id = (int) ($_POST['mensajero_id'] ?? 0);
         $valor = floatval($_POST['valor'] ?? 0);
         $descripcion = sanitize_text_field($_POST['descripcion'] ?? '');
 
-        if (empty($fecha) || $mensajero_id <= 0 || $valor <= 0) {
-            $mensaje = 'Fecha, mensajero y valor son obligatorios y el valor debe ser mayor a cero.';
+        if (empty($fecha) || $mensajero_id <= 0 || $valor == 0) {
+            $mensaje = 'Fecha, mensajero y valor son obligatorios. El valor debe ser diferente de cero (puede ser positivo o negativo).';
             $mensaje_tipo = 'error';
         } else {
             $insertado = $wpdb->insert(
@@ -489,11 +489,67 @@ function gofast_finanzas_admin_shortcode() {
             if ($insertado) {
                 $mensaje = 'Descuento aplicado correctamente.';
                 $mensaje_tipo = 'success';
-                $tab_activo = 'saldos_mensajeros';
+                $tab_activo = 'descuentos';
             } else {
                 $mensaje = 'Error al aplicar el descuento: ' . $wpdb->last_error;
                 $mensaje_tipo = 'error';
             }
+        }
+    }
+
+    // 2. EDITAR DESCUENTO
+    if (isset($_POST['gofast_editar_descuento']) && wp_verify_nonce($_POST['gofast_editar_descuento_nonce'], 'gofast_editar_descuento')) {
+        $descuento_id = (int) $_POST['descuento_id'];
+        $fecha = sanitize_text_field($_POST['fecha'] ?? '');
+        $mensajero_id = (int) ($_POST['mensajero_id'] ?? 0);
+        $valor = floatval($_POST['valor'] ?? 0);
+        $descripcion = sanitize_text_field($_POST['descripcion'] ?? '');
+
+        if (empty($fecha) || $mensajero_id <= 0 || $valor == 0) {
+            $mensaje = 'Todos los campos son obligatorios. El valor debe ser diferente de cero (puede ser positivo o negativo).';
+            $mensaje_tipo = 'error';
+        } else {
+            $actualizado = $wpdb->update(
+                'descuentos_mensajeros_gofast',
+                [
+                    'fecha' => $fecha,
+                    'mensajero_id' => $mensajero_id,
+                    'valor' => $valor,
+                    'descripcion' => $descripcion
+                ],
+                ['id' => $descuento_id],
+                ['%s', '%d', '%f', '%s'],
+                ['%d']
+            );
+
+            if ($actualizado !== false) {
+                $mensaje = 'Descuento actualizado correctamente.';
+                $mensaje_tipo = 'success';
+                $tab_activo = 'descuentos';
+            } else {
+                $mensaje = 'Error al actualizar el descuento.';
+                $mensaje_tipo = 'error';
+            }
+        }
+    }
+
+    // 3. ELIMINAR DESCUENTO
+    if (isset($_POST['gofast_eliminar_descuento']) && wp_verify_nonce($_POST['gofast_eliminar_descuento_nonce'], 'gofast_eliminar_descuento')) {
+        $descuento_id = (int) $_POST['descuento_id'];
+
+        $eliminado = $wpdb->delete(
+            'descuentos_mensajeros_gofast',
+            ['id' => $descuento_id],
+            ['%d']
+        );
+
+        if ($eliminado) {
+            $mensaje = 'Descuento eliminado correctamente.';
+            $mensaje_tipo = 'success';
+            $tab_activo = 'descuentos';
+        } else {
+            $mensaje = 'Error al eliminar el descuento.';
+            $mensaje_tipo = 'error';
         }
     }
 
@@ -519,16 +575,17 @@ function gofast_finanzas_admin_shortcode() {
     $where_conditions = [];
 
     // Total Ingresos (servicios + compras, excluyendo cancelados)
+    // Usar rangos completos de fecha/hora para respetar zona horaria GMT-5
     $where_ingresos_servicios = ["tracking_estado != 'cancelado'"];
     $params_ingresos_servicios = [];
     
     if (!empty($fecha_desde)) {
-        $where_ingresos_servicios[] = "DATE(fecha) >= %s";
-        $params_ingresos_servicios[] = $fecha_desde;
+        $where_ingresos_servicios[] = "fecha >= %s";
+        $params_ingresos_servicios[] = $fecha_desde . ' 00:00:00';
     }
     if (!empty($fecha_hasta)) {
-        $where_ingresos_servicios[] = "DATE(fecha) <= %s";
-        $params_ingresos_servicios[] = $fecha_hasta;
+        $where_ingresos_servicios[] = "fecha <= %s";
+        $params_ingresos_servicios[] = $fecha_hasta . ' 23:59:59';
     }
 
     $total_ingresos_servicios = (float) ($wpdb->get_var(
@@ -541,12 +598,12 @@ function gofast_finanzas_admin_shortcode() {
     $params_ingresos_compras = [];
     
     if (!empty($fecha_desde)) {
-        $where_ingresos_compras[] = "DATE(fecha_creacion) >= %s";
-        $params_ingresos_compras[] = $fecha_desde;
+        $where_ingresos_compras[] = "fecha_creacion >= %s";
+        $params_ingresos_compras[] = $fecha_desde . ' 00:00:00';
     }
     if (!empty($fecha_hasta)) {
-        $where_ingresos_compras[] = "DATE(fecha_creacion) <= %s";
-        $params_ingresos_compras[] = $fecha_hasta;
+        $where_ingresos_compras[] = "fecha_creacion <= %s";
+        $params_ingresos_compras[] = $fecha_hasta . ' 23:59:59';
     }
 
     $total_ingresos_compras = (float) ($wpdb->get_var(
@@ -615,16 +672,17 @@ function gofast_finanzas_admin_shortcode() {
     ) ?? 0);
 
     // Total Transferencias Ingresos (aprobadas)
+    // Usar rangos completos de fecha/hora para respetar zona horaria GMT-5
     $where_transf_entradas = ["estado = 'aprobada'"];
     $params_transf_entradas = [];
     
     if (!empty($fecha_desde)) {
-        $where_transf_entradas[] = "DATE(fecha_creacion) >= %s";
-        $params_transf_entradas[] = $fecha_desde;
+        $where_transf_entradas[] = "fecha_creacion >= %s";
+        $params_transf_entradas[] = $fecha_desde . ' 00:00:00';
     }
     if (!empty($fecha_hasta)) {
-        $where_transf_entradas[] = "DATE(fecha_creacion) <= %s";
-        $params_transf_entradas[] = $fecha_hasta;
+        $where_transf_entradas[] = "fecha_creacion <= %s";
+        $params_transf_entradas[] = $fecha_hasta . ' 23:59:59';
     }
 
     $total_transferencias_ingresos = (float) ($wpdb->get_var(
@@ -656,25 +714,174 @@ function gofast_finanzas_admin_shortcode() {
     $saldo_transferencias = $total_transferencias_ingresos - $total_transferencias_salidas;
 
     // Total Saldos Pendientes por Pagar
-    $where_pagos_pendientes = ["tipo_pago = 'pendiente'"];
-    $params_pagos_pendientes = [];
+    // Calcular el total a pagar de cada mensajero por día, excluyendo días con pagos registrados
+    $total_saldos_pendientes = 0;
     
-    if (!empty($fecha_desde)) {
-        $where_pagos_pendientes[] = "fecha >= %s";
-        $params_pagos_pendientes[] = $fecha_desde;
+    // Obtener todos los mensajeros activos
+    $mensajeros_para_saldos = $wpdb->get_results(
+        "SELECT id FROM usuarios_gofast WHERE rol = 'mensajero' AND activo = 1"
+    );
+    
+    // Generar array de fechas en el rango
+    $fechas_rango = [];
+    if (!empty($fecha_desde) && !empty($fecha_hasta)) {
+        $fecha_inicio = new DateTime($fecha_desde);
+        $fecha_fin = new DateTime($fecha_hasta);
+        $fecha_actual = clone $fecha_inicio;
+        
+        while ($fecha_actual <= $fecha_fin) {
+            $fechas_rango[] = $fecha_actual->format('Y-m-d');
+            $fecha_actual->modify('+1 day');
+        }
     }
-    if (!empty($fecha_hasta)) {
-        $where_pagos_pendientes[] = "fecha <= %s";
-        $params_pagos_pendientes[] = $fecha_hasta;
+    
+    // Para cada mensajero, calcular saldo pendiente por día
+    foreach ($mensajeros_para_saldos as $mensajero) {
+        $mensajero_id = (int) $mensajero->id;
+        
+        // Obtener la fecha del último pago registrado (efectivo o transferencia) antes del rango
+        $ultimo_pago_antes = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT fecha 
+                 FROM pagos_mensajeros_gofast 
+                 WHERE mensajero_id = %d 
+                 AND tipo_pago IN ('efectivo', 'transferencia')
+                 " . (!empty($fecha_desde) ? "AND fecha < %s" : "") . "
+                 ORDER BY fecha DESC, fecha_pago DESC 
+                 LIMIT 1",
+                array_merge([$mensajero_id], !empty($fecha_desde) ? [$fecha_desde] : [])
+            )
+        );
+        
+        $fecha_desde_mensajero = $fecha_desde;
+        if ($ultimo_pago_antes) {
+            // Calcular desde el día siguiente al último pago
+            $fecha_desde_mensajero = date('Y-m-d', strtotime($ultimo_pago_antes->fecha . ' +1 day'));
+            // Si la fecha calculada es mayor que fecha_desde, usar fecha_desde
+            if (!empty($fecha_desde) && $fecha_desde_mensajero < $fecha_desde) {
+                $fecha_desde_mensajero = $fecha_desde;
+            }
+        }
+        
+        // Para cada día en el rango, verificar si hay pago y calcular saldo
+        foreach ($fechas_rango as $fecha_dia) {
+            // Verificar si hay un pago registrado para este día y mensajero
+            $pago_registrado = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT fecha_pago 
+                     FROM pagos_mensajeros_gofast 
+                     WHERE mensajero_id = %d 
+                     AND fecha = %s 
+                     AND tipo_pago IN ('efectivo', 'transferencia')
+                     ORDER BY fecha_pago DESC
+                     LIMIT 1",
+                    $mensajero_id,
+                    $fecha_dia
+                )
+            );
+            
+            // Si hay pago registrado, obtener la hora del pago para excluir solo movimientos anteriores
+            $hora_pago = null;
+            if ($pago_registrado && !empty($pago_registrado->fecha_pago)) {
+                $hora_pago = $pago_registrado->fecha_pago;
+            }
+            
+            // Si el día está antes de fecha_desde_mensajero, no contar
+            if (!empty($fecha_desde_mensajero) && $fecha_dia < $fecha_desde_mensajero) {
+                continue;
+            }
+            
+            // Calcular ingresos del día (solo posteriores al pago si existe)
+            // Usar rangos completos de fecha/hora para respetar zona horaria GMT-5
+            $where_servicios = "mensajero_id = %d AND fecha >= %s AND fecha <= %s AND tracking_estado != 'cancelado'";
+            $params_servicios = [$mensajero_id, $fecha_dia . ' 00:00:00', $fecha_dia . ' 23:59:59'];
+            
+            if ($hora_pago) {
+                // Solo contar servicios posteriores a la hora del pago
+                $where_servicios .= " AND fecha > %s";
+                $params_servicios[] = $hora_pago;
+            }
+            
+            $ingresos_servicios_dia = (float) ($wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COALESCE(SUM(total), 0) 
+                     FROM servicios_gofast 
+                     WHERE " . $where_servicios,
+                    $params_servicios
+                ) ?? 0)
+            );
+            
+            $where_compras = "mensajero_id = %d AND fecha_creacion >= %s AND fecha_creacion <= %s AND estado != 'cancelada'";
+            $params_compras = [$mensajero_id, $fecha_dia . ' 00:00:00', $fecha_dia . ' 23:59:59'];
+            
+            if ($hora_pago) {
+                // Solo contar compras posteriores a la hora del pago
+                $where_compras .= " AND fecha_creacion > %s";
+                $params_compras[] = $hora_pago;
+            }
+            
+            $ingresos_compras_dia = (float) ($wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COALESCE(SUM(valor), 0) 
+                     FROM compras_gofast 
+                     WHERE " . $where_compras,
+                    $params_compras
+                ) ?? 0)
+            );
+            
+            $ingresos_totales_dia = $ingresos_servicios_dia + $ingresos_compras_dia;
+            
+            // Calcular transferencias aprobadas del día (solo posteriores al pago si existe)
+            $where_transf = "mensajero_id = %d AND fecha_creacion >= %s AND fecha_creacion <= %s AND estado = 'aprobada'";
+            $params_transf = [$mensajero_id, $fecha_dia . ' 00:00:00', $fecha_dia . ' 23:59:59'];
+            
+            if ($hora_pago) {
+                // Solo contar transferencias posteriores a la hora del pago
+                $where_transf .= " AND fecha_creacion > %s";
+                $params_transf[] = $hora_pago;
+            }
+            
+            $transferencias_dia = (float) ($wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COALESCE(SUM(valor), 0) 
+                     FROM transferencias_gofast 
+                     WHERE " . $where_transf,
+                    $params_transf
+                ) ?? 0)
+            );
+            
+            // Calcular descuentos del día (solo posteriores al pago si existe)
+            // Considerar la hora de creación del descuento (fecha_creacion) para saber si fue antes o después del pago
+            $where_descuentos = "mensajero_id = %d AND fecha = %s";
+            $params_descuentos = [$mensajero_id, $fecha_dia];
+            
+            if ($hora_pago) {
+                // Si hay pago en el día, solo contar descuentos creados DESPUÉS de la hora del pago
+                $where_descuentos .= " AND fecha_creacion > %s";
+                $params_descuentos[] = $hora_pago;
+            }
+            
+            $descuentos_dia = (float) ($wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COALESCE(SUM(valor), 0) 
+                     FROM descuentos_mensajeros_gofast 
+                     WHERE " . $where_descuentos,
+                    $params_descuentos
+                ) ?? 0)
+            );
+            
+            // Calcular comisión y total a pagar del día (SIN descuentos - los descuentos están en su propia casilla)
+            $comision_dia = $ingresos_totales_dia * 0.20;
+            $total_a_pagar_dia = $comision_dia - $transferencias_dia; // NO restar descuentos aquí
+            
+            // Sumar al total de saldos pendientes (solo comisión - transferencias, sin descuentos)
+            $total_saldos_pendientes += $total_a_pagar_dia;
+        }
     }
-
-    $total_saldos_pendientes = (float) ($wpdb->get_var(
-        !empty($params_pagos_pendientes)
-            ? $wpdb->prepare("SELECT SUM(total_a_pagar) FROM pagos_mensajeros_gofast WHERE " . implode(' AND ', $where_pagos_pendientes), $params_pagos_pendientes)
-            : "SELECT SUM(total_a_pagar) FROM pagos_mensajeros_gofast WHERE tipo_pago = 'pendiente'"
-    ) ?? 0);
 
     // Total Descuentos
+    // El campo fecha es de tipo DATE, así que usamos comparación directa
+    // Usar EXACTAMENTE la misma estructura que egresos, vales empresa, vales personal (que funcionan)
     $where_descuentos = [];
     $params_descuentos = [];
     
@@ -687,17 +894,21 @@ function gofast_finanzas_admin_shortcode() {
         $params_descuentos[] = $fecha_hasta;
     }
 
+    // Total Descuentos - calcular y convertir a float
     $total_descuentos = (float) ($wpdb->get_var(
         !empty($params_descuentos)
-            ? $wpdb->prepare("SELECT SUM(valor) FROM descuentos_mensajeros_gofast WHERE " . implode(' AND ', $where_descuentos), $params_descuentos)
-            : "SELECT SUM(valor) FROM descuentos_mensajeros_gofast"
+            ? $wpdb->prepare("SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast WHERE " . implode(' AND ', $where_descuentos), $params_descuentos)
+            : "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast"
     ) ?? 0);
 
+    // Calcular comisiones (20% de los ingresos totales)
+    $total_comisiones = $total_ingresos * 0.20;
+    
     // Cálculos finales
     $subtotal = $total_ingresos - $total_egresos - $total_vales_empresa - $total_descuentos;
     $efectivo = $subtotal - $saldo_transferencias - $total_saldos_pendientes;
     $utilidad_total = $subtotal;
-    $utilidad_individual = $utilidad_total / 2;
+    $utilidad_individual = $utilidad_total > 0 ? ($utilidad_total / 2) : 0;
 
     /*********************************************
      * DATOS PARA TAB DE INGRESOS
@@ -706,19 +917,20 @@ function gofast_finanzas_admin_shortcode() {
     
     if (!empty($fecha_desde) && !empty($fecha_hasta)) {
         // Obtener ingresos agrupados por día
+        // Usar rangos completos de fecha/hora para respetar zona horaria GMT-5
         $sql_ingresos = $wpdb->prepare(
             "SELECT 
                 DATE(fecha) as fecha_dia,
                 COUNT(*) as num_pedidos,
                 SUM(total) as total_servicios
             FROM servicios_gofast
-            WHERE DATE(fecha) >= %s 
-            AND DATE(fecha) <= %s 
+            WHERE fecha >= %s 
+            AND fecha <= %s 
             AND tracking_estado != 'cancelado'
             GROUP BY DATE(fecha)
             ORDER BY fecha_dia DESC",
-            $fecha_desde,
-            $fecha_hasta
+            $fecha_desde . ' 00:00:00',
+            $fecha_hasta . ' 23:59:59'
         );
 
         $ingresos_servicios = $wpdb->get_results($sql_ingresos);
@@ -729,13 +941,13 @@ function gofast_finanzas_admin_shortcode() {
                 COUNT(*) as num_compras,
                 SUM(valor) as total_compras
             FROM compras_gofast
-            WHERE DATE(fecha_creacion) >= %s 
-            AND DATE(fecha_creacion) <= %s 
+            WHERE fecha_creacion >= %s 
+            AND fecha_creacion <= %s 
             AND estado != 'cancelada'
             GROUP BY DATE(fecha_creacion)
             ORDER BY fecha_dia DESC",
-            $fecha_desde,
-            $fecha_hasta
+            $fecha_desde . ' 00:00:00',
+            $fecha_hasta . ' 23:59:59'
         );
 
         $ingresos_compras = $wpdb->get_results($sql_compras);
@@ -964,14 +1176,14 @@ function gofast_finanzas_admin_shortcode() {
     // Solo transferencias aprobadas
     $where_transf_entradas[] = "t.estado = 'aprobada'";
 
-    // Filtro por fecha
+    // Filtro por fecha - usar rangos completos de fecha/hora para respetar zona horaria GMT-5
     if (!empty($fecha_desde)) {
-        $where_transf_entradas[] = "DATE(t.fecha_creacion) >= %s";
-        $params_transf_entradas[] = $fecha_desde;
+        $where_transf_entradas[] = "t.fecha_creacion >= %s";
+        $params_transf_entradas[] = $fecha_desde . ' 00:00:00';
     }
     if (!empty($fecha_hasta)) {
-        $where_transf_entradas[] = "DATE(t.fecha_creacion) <= %s";
-        $params_transf_entradas[] = $fecha_hasta;
+        $where_transf_entradas[] = "t.fecha_creacion <= %s";
+        $params_transf_entradas[] = $fecha_hasta . ' 23:59:59';
     }
 
     // Filtro por mensajero
@@ -1017,6 +1229,56 @@ function gofast_finanzas_admin_shortcode() {
     );
 
     /*********************************************
+     * DATOS PARA TAB DE DESCUENTOS
+     *********************************************/
+    $where_descuentos_list = [];
+    $params_descuentos_list = [];
+
+    // Filtro por fecha
+    if (!empty($fecha_desde)) {
+        $where_descuentos_list[] = "d.fecha >= %s";
+        $params_descuentos_list[] = $fecha_desde;
+    }
+    if (!empty($fecha_hasta)) {
+        $where_descuentos_list[] = "d.fecha <= %s";
+        $params_descuentos_list[] = $fecha_hasta;
+    }
+
+    // Filtro por mensajero
+    $filtro_mensajero_descuentos = isset($_GET['filtro_mensajero_descuentos']) ? (int) $_GET['filtro_mensajero_descuentos'] : 0;
+    if ($filtro_mensajero_descuentos > 0) {
+        $where_descuentos_list[] = "d.mensajero_id = %d";
+        $params_descuentos_list[] = $filtro_mensajero_descuentos;
+    }
+
+    // Filtro por descripción
+    $filtro_descripcion_descuentos = isset($_GET['filtro_descripcion_descuentos']) ? sanitize_text_field($_GET['filtro_descripcion_descuentos']) : '';
+    if (!empty($filtro_descripcion_descuentos)) {
+        $where_descuentos_list[] = "d.descripcion LIKE %s";
+        $params_descuentos_list[] = '%' . $wpdb->esc_like($filtro_descripcion_descuentos) . '%';
+    }
+
+    $sql_descuentos = "SELECT d.*, 
+                              m.nombre as mensajero_nombre,
+                              m.telefono as mensajero_telefono,
+                              u.nombre as creador_nombre
+                       FROM descuentos_mensajeros_gofast d
+                       LEFT JOIN usuarios_gofast m ON d.mensajero_id = m.id
+                       LEFT JOIN usuarios_gofast u ON d.creado_por = u.id";
+    
+    if (!empty($where_descuentos_list)) {
+        $sql_descuentos .= " WHERE " . implode(' AND ', $where_descuentos_list);
+    }
+    
+    $sql_descuentos .= " ORDER BY d.fecha DESC, d.id DESC";
+
+    if (!empty($params_descuentos_list)) {
+        $descuentos = $wpdb->get_results($wpdb->prepare($sql_descuentos, $params_descuentos_list));
+    } else {
+        $descuentos = $wpdb->get_results($sql_descuentos);
+    }
+
+    /*********************************************
      * DATOS PARA TAB DE SALDOS MENSAJEROS
      *********************************************/
     $filtro_mensajero_saldos = isset($_GET['filtro_mensajero_saldos']) ? (int) $_GET['filtro_mensajero_saldos'] : 0;
@@ -1055,12 +1317,12 @@ function gofast_finanzas_admin_shortcode() {
     $params_servicios_mensajero = [];
     
     if (!empty($fecha_desde)) {
-        $where_servicios_mensajero .= " AND DATE(fecha) >= %s";
-        $params_servicios_mensajero[] = $fecha_desde;
+        $where_servicios_mensajero .= " AND fecha >= %s";
+        $params_servicios_mensajero[] = $fecha_desde . ' 00:00:00';
     }
     if (!empty($fecha_hasta)) {
-        $where_servicios_mensajero .= " AND DATE(fecha) <= %s";
-        $params_servicios_mensajero[] = $fecha_hasta;
+        $where_servicios_mensajero .= " AND fecha <= %s";
+        $params_servicios_mensajero[] = $fecha_hasta . ' 23:59:59';
     }
     if ($filtro_mensajero_saldos > 0) {
         $where_servicios_mensajero .= " AND mensajero_id = %d";
@@ -1071,12 +1333,12 @@ function gofast_finanzas_admin_shortcode() {
     $params_compras_mensajero = [];
     
     if (!empty($fecha_desde)) {
-        $where_compras_mensajero .= " AND DATE(fecha_creacion) >= %s";
-        $params_compras_mensajero[] = $fecha_desde;
+        $where_compras_mensajero .= " AND fecha_creacion >= %s";
+        $params_compras_mensajero[] = $fecha_desde . ' 00:00:00';
     }
     if (!empty($fecha_hasta)) {
-        $where_compras_mensajero .= " AND DATE(fecha_creacion) <= %s";
-        $params_compras_mensajero[] = $fecha_hasta;
+        $where_compras_mensajero .= " AND fecha_creacion <= %s";
+        $params_compras_mensajero[] = $fecha_hasta . ' 23:59:59';
     }
     if ($filtro_mensajero_saldos > 0) {
         $where_compras_mensajero .= " AND mensajero_id = %d";
@@ -1112,12 +1374,53 @@ function gofast_finanzas_admin_shortcode() {
     foreach ($mensajeros_saldos as $mensajero) {
         $mensajero_id = (int) $mensajero->id;
         
+        // Obtener la fecha del último pago registrado (efectivo o transferencia)
+        $ultimo_pago = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT fecha, tipo_pago, fecha_pago 
+                 FROM pagos_mensajeros_gofast 
+                 WHERE mensajero_id = %d 
+                 AND tipo_pago IN ('efectivo', 'transferencia')
+                 ORDER BY fecha DESC, fecha_pago DESC 
+                 LIMIT 1",
+                $mensajero_id
+            )
+        );
+        
+        // Fecha desde la cual calcular (desde el último pago o desde la fecha_desde del filtro)
+        $fecha_desde_calculo = $fecha_desde;
+        $fecha_ultimo_pago = null;
+        $hora_ultimo_pago = null;
+        if ($ultimo_pago) {
+            $fecha_ultimo_pago = $ultimo_pago->fecha;
+            $hora_ultimo_pago = $ultimo_pago->fecha_pago; // Incluye hora
+            // Si hay último pago, calcular desde el día siguiente al último pago
+            // O si la fecha_desde es mayor, usar fecha_desde
+            if (empty($fecha_desde) || $fecha_ultimo_pago >= $fecha_desde) {
+                // Si el último pago es del mismo día que fecha_desde, usar la hora del pago
+                // Si no, calcular desde el día siguiente al último pago
+                if ($fecha_ultimo_pago == $fecha_desde) {
+                    $fecha_desde_calculo = $fecha_desde; // Mismo día, pero filtrar por hora
+                } else {
+                    $fecha_desde_calculo = date('Y-m-d', strtotime($fecha_ultimo_pago . ' +1 day'));
+                }
+            }
+        }
+        
         // Total destinos
         $where_destinos = "mensajero_id = %d AND tracking_estado != 'cancelado'";
         $params_destinos = [$mensajero_id];
-        if (!empty($fecha_desde)) {
-            $where_destinos .= " AND DATE(fecha) >= %s";
-            $params_destinos[] = $fecha_desde;
+        if (!empty($fecha_desde_calculo)) {
+            // Si el último pago es del mismo día que fecha_desde, filtrar por hora
+            if ($hora_ultimo_pago && $fecha_ultimo_pago == $fecha_desde) {
+                $where_destinos .= " AND (DATE(fecha) > %s OR (DATE(fecha) = %s AND fecha > %s))";
+                $params_destinos[] = $fecha_desde_calculo;
+                $params_destinos[] = $fecha_desde_calculo;
+                $params_destinos[] = $hora_ultimo_pago;
+            } else {
+                $where_destinos .= " AND DATE(fecha) >= %s";
+                $params_destinos[] = $fecha_desde_calculo;
+            }
         }
         if (!empty($fecha_hasta)) {
             $where_destinos .= " AND DATE(fecha) <= %s";
@@ -1126,7 +1429,13 @@ function gofast_finanzas_admin_shortcode() {
         
         $total_destinos = (int) ($wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))), 0) FROM servicios_gofast WHERE $where_destinos",
+                "SELECT COALESCE(SUM(
+                    CASE 
+                        WHEN destinos IS NULL OR destinos = '' THEN 0
+                        WHEN JSON_VALID(destinos) = 0 THEN 0
+                        ELSE COALESCE(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos')), 0)
+                    END
+                ), 0) FROM servicios_gofast WHERE $where_destinos",
                 $params_destinos
             ) ?? 0)
         );
@@ -1134,9 +1443,17 @@ function gofast_finanzas_admin_shortcode() {
         // Total compras
         $where_compras = "mensajero_id = %d AND estado != 'cancelada'";
         $params_compras = [$mensajero_id];
-        if (!empty($fecha_desde)) {
-            $where_compras .= " AND DATE(fecha_creacion) >= %s";
-            $params_compras[] = $fecha_desde;
+        if (!empty($fecha_desde_calculo)) {
+            // Si el último pago es del mismo día que fecha_desde, filtrar por hora
+            if ($hora_ultimo_pago && $fecha_ultimo_pago == $fecha_desde) {
+                $where_compras .= " AND (DATE(fecha_creacion) > %s OR (DATE(fecha_creacion) = %s AND fecha_creacion > %s))";
+                $params_compras[] = $fecha_desde_calculo;
+                $params_compras[] = $fecha_desde_calculo;
+                $params_compras[] = $hora_ultimo_pago;
+            } else {
+                $where_compras .= " AND DATE(fecha_creacion) >= %s";
+                $params_compras[] = $fecha_desde_calculo;
+            }
         }
         if (!empty($fecha_hasta)) {
             $where_compras .= " AND DATE(fecha_creacion) <= %s";
@@ -1171,9 +1488,17 @@ function gofast_finanzas_admin_shortcode() {
         // Transferencias aprobadas
         $where_transf = "mensajero_id = %d AND estado = 'aprobada'";
         $params_transf = [$mensajero_id];
-        if (!empty($fecha_desde)) {
-            $where_transf .= " AND DATE(fecha_creacion) >= %s";
-            $params_transf[] = $fecha_desde;
+        if (!empty($fecha_desde_calculo)) {
+            // Si el último pago es del mismo día que fecha_desde, filtrar por hora
+            if ($hora_ultimo_pago && $fecha_ultimo_pago == $fecha_desde) {
+                $where_transf .= " AND (DATE(fecha_creacion) > %s OR (DATE(fecha_creacion) = %s AND fecha_creacion > %s))";
+                $params_transf[] = $fecha_desde_calculo;
+                $params_transf[] = $fecha_desde_calculo;
+                $params_transf[] = $hora_ultimo_pago;
+            } else {
+                $where_transf .= " AND DATE(fecha_creacion) >= %s";
+                $params_transf[] = $fecha_desde_calculo;
+            }
         }
         if (!empty($fecha_hasta)) {
             $where_transf .= " AND DATE(fecha_creacion) <= %s";
@@ -1187,29 +1512,73 @@ function gofast_finanzas_admin_shortcode() {
             ) ?? 0)
         );
 
-        // Descuentos
-        $where_descuentos = "mensajero_id = %d";
-        $params_descuentos = [$mensajero_id];
-        if (!empty($fecha_desde)) {
-            $where_descuentos .= " AND fecha >= %s";
-            $params_descuentos[] = $fecha_desde;
+        // Descuentos - Mostrar TODOS los descuentos del rango (para este mensajero específico)
+        // IMPORTANTE: Usar variable diferente para no sobrescribir $total_descuentos del resumen general
+        $where_descuentos_mensajero = "mensajero_id = %d";
+        $params_descuentos_mensajero = [$mensajero_id];
+        if (!empty($fecha_desde_calculo)) {
+            $where_descuentos_mensajero .= " AND fecha >= %s";
+            $params_descuentos_mensajero[] = $fecha_desde_calculo;
         }
         if (!empty($fecha_hasta)) {
-            $where_descuentos .= " AND fecha <= %s";
-            $params_descuentos[] = $fecha_hasta;
+            $where_descuentos_mensajero .= " AND fecha <= %s";
+            $params_descuentos_mensajero[] = $fecha_hasta;
         }
         
-        $total_descuentos = (float) ($wpdb->get_var(
+        $total_descuentos_mensajero = (float) ($wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast WHERE $where_descuentos",
-                $params_descuentos
+                "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast WHERE $where_descuentos_mensajero",
+                $params_descuentos_mensajero
             ) ?? 0)
         );
+        
+        // Descuentos para el cálculo del total a pagar (excluir descuentos anteriores a la hora del pago)
+        // Obtener todos los pagos del rango para considerar sus horas
+        $pagos_rango = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT fecha, fecha_pago 
+                 FROM pagos_mensajeros_gofast 
+                 WHERE mensajero_id = %d 
+                 AND tipo_pago IN ('efectivo', 'transferencia')
+                 AND fecha >= %s 
+                 AND fecha <= %s
+                 ORDER BY fecha_pago ASC",
+                $mensajero_id,
+                $fecha_desde_calculo ?? '1900-01-01',
+                $fecha_hasta ?? '9999-12-31'
+            )
+        );
+        
+        $total_descuentos_para_pago = $total_descuentos_mensajero;
+        
+        // Si hay pagos en el rango, excluir descuentos que fueron creados antes de cada pago
+        if (!empty($pagos_rango)) {
+            $descuentos_excluidos = 0;
+            foreach ($pagos_rango as $pago) {
+                // Excluir descuentos del mismo día que fueron creados antes de la hora del pago
+                $descuentos_antes_pago = (float) ($wpdb->get_var(
+                    $wpdb->prepare(
+                        "SELECT COALESCE(SUM(valor), 0) 
+                         FROM descuentos_mensajeros_gofast 
+                         WHERE mensajero_id = %d 
+                         AND fecha = %s 
+                         AND fecha_creacion < %s",
+                        $mensajero_id,
+                        $pago->fecha,
+                        $pago->fecha_pago
+                    ) ?? 0)
+                );
+                $descuentos_excluidos += $descuentos_antes_pago;
+            }
+            $total_descuentos_para_pago = $total_descuentos_mensajero - $descuentos_excluidos;
+        }
 
-        // Calcular comisión y total a pagar (igual que en reportes: comisión - transferencias)
+        // Calcular comisión y total a pagar (comisión - transferencias - descuentos)
         $comision_generada = $ingresos_totales * 0.20;
         $utilidad_neta = $ingresos_totales - $comision_generada;
-        $total_a_pagar = $comision_generada - $transferencias_aprobadas;
+        // Usar descuentos_para_pago si existe (excluye descuentos del día del pago), sino usar total_descuentos_mensajero
+        $descuentos_aplicar = isset($total_descuentos_para_pago) ? $total_descuentos_para_pago : $total_descuentos_mensajero;
+        $total_a_pagar = $comision_generada - $transferencias_aprobadas - $descuentos_aplicar;
 
         // Agregar mensajero a la lista (incluso si todos los valores son 0)
         $saldos_mensajeros[] = (object) [
@@ -1222,8 +1591,11 @@ function gofast_finanzas_admin_shortcode() {
             'comision_generada' => $comision_generada,
             'utilidad_neta' => $utilidad_neta,
             'transferencias_aprobadas' => $transferencias_aprobadas,
-            'total_descuentos' => $total_descuentos,
-            'total_a_pagar' => $total_a_pagar
+            'total_descuentos' => $total_descuentos_mensajero,
+            'total_a_pagar' => $total_a_pagar,
+            'fecha_ultimo_pago' => $fecha_ultimo_pago,
+            'tipo_ultimo_pago' => $ultimo_pago ? $ultimo_pago->tipo_pago : null,
+            'fecha_desde_calculo' => $fecha_desde_calculo
         ];
     }
 
@@ -1232,12 +1604,12 @@ function gofast_finanzas_admin_shortcode() {
     $params_pedidos_sin_asignar = [];
     
     if (!empty($fecha_desde)) {
-        $where_pedidos_sin_asignar .= " AND DATE(fecha) >= %s";
-        $params_pedidos_sin_asignar[] = $fecha_desde;
+        $where_pedidos_sin_asignar .= " AND fecha >= %s";
+        $params_pedidos_sin_asignar[] = $fecha_desde . ' 00:00:00';
     }
     if (!empty($fecha_hasta)) {
-        $where_pedidos_sin_asignar .= " AND DATE(fecha) <= %s";
-        $params_pedidos_sin_asignar[] = $fecha_hasta;
+        $where_pedidos_sin_asignar .= " AND fecha <= %s";
+        $params_pedidos_sin_asignar[] = $fecha_hasta . ' 23:59:59';
     }
 
     $pedidos_sin_asignar_saldos = (int) ($wpdb->get_var(
@@ -1306,6 +1678,7 @@ function gofast_finanzas_admin_shortcode() {
                                              tab === 'vales_personal' ? 'Vales Personal' : 
                                              tab === 'transferencias_entradas' ? 'Transferencias Entradas' : 
                                              tab === 'transferencias_salidas' ? 'Transferencias Salidas' : 
+                                             tab === 'descuentos' ? 'Descuentos' :
                                              'Saldos Mensajeros')) {
                     btn.classList.add('gofast-config-tab-active');
                 }
@@ -1351,64 +1724,169 @@ function gofast_finanzas_admin_shortcode() {
         </div>
     <?php endif; ?>
 
+
     <!-- BLOQUE DE RESULTADOS GENERALES -->
     <div class="gofast-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; margin-bottom: 20px;">
-        <h3 style="margin-top: 0; color: #fff;">📊 Resultados Generales</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+            <h3 style="margin-top: 0; color: #fff; margin-bottom: 0;">📊 Resultados Generales</h3>
+            <div style="background: rgba(255,255,255,0.2); padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+                📅 Rango de fechas: 
+                <strong><?= gofast_date_format($fecha_desde, 'd/m/Y') ?></strong> 
+                <?php if ($fecha_desde !== $fecha_hasta): ?>
+                    hasta <strong><?= gofast_date_format($fecha_hasta, 'd/m/Y') ?></strong>
+                <?php endif; ?>
+            </div>
+        </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px;">
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Total Ingresos</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($total_ingresos, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Total Comisiones (20%)
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_comisiones, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    • Servicios: $<?= number_format($total_ingresos_servicios, 0, ',', '.') ?><br>
+                    • Compras: $<?= number_format($total_ingresos_compras, 0, ',', '.') ?><br>
+                    • Total: $<?= number_format($total_ingresos, 0, ',', '.') ?> × 20%
+                </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Total Egresos</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($total_egresos, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Total Egresos
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_egresos, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Suma de egresos registrados<br>
+                    <small style="opacity: 0.7;">Tabla: egresos_gofast</small>
+                </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Vales Empresa</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($total_vales_empresa, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Vales Empresa
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_vales_empresa, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Suma de vales de empresa
+                </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Vales Personal</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($total_vales_personal, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Vales Personal
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_vales_personal, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Suma de vales del personal
+                </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Transf. Ingresos</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($total_transferencias_ingresos, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Transf. Ingresos
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_transferencias_ingresos, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Transferencias aprobadas
+                </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Transf. Salidas</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($total_transferencias_salidas, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Transf. Salidas
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_transferencias_salidas, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Transferencias salientes
+                </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Saldo Transferencias</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($saldo_transferencias, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Saldo Transferencias
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($saldo_transferencias, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Cálculo:</strong><br>
+                    $<?= number_format($total_transferencias_ingresos, 0, ',', '.') ?> - $<?= number_format($total_transferencias_salidas, 0, ',', '.') ?><br>
+                    <small style="opacity: 0.7;">Ingresos - Salidas</small>
+                </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Saldos Pendientes</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($total_saldos_pendientes, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Saldos Pendientes
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_saldos_pendientes, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Comisión - Transferencias<br>
+                    <small style="opacity: 0.7;">Solo días sin pago registrado<br>Los descuentos están en su propia casilla</small>
+                </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Total Descuentos</div>
-                <div style="font-size: 20px; font-weight: 700;">$<?= number_format($total_descuentos, 0, ',', '.') ?></div>
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Total Descuentos
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px; color: <?= $total_descuentos < 0 ? '#28a745' : '#fff' ?>;">
+                    $<?= number_format(abs($total_descuentos), 0, ',', '.') ?>
+                    <?php if ($total_descuentos < 0): ?>
+                        <small style="font-size: 12px; opacity: 0.8;">(Bonificación)</small>
+                    <?php endif; ?>
+                </div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Descuentos a mensajeros
+                    <?php if (!empty($fecha_desde) && !empty($fecha_hasta)): ?>
+                        <br><small style="opacity: 0.7;">Rango: <?= gofast_date_format($fecha_desde, 'd/m/Y') ?> - <?= gofast_date_format($fecha_hasta, 'd/m/Y') ?></small>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
         <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2);">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
                 <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
-                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">Subtotal</div>
-                    <div style="font-size: 24px; font-weight: 700;">$<?= number_format($subtotal, 0, ',', '.') ?></div>
+                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
+                        Subtotal
+                    </div>
+                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($subtotal, 0, ',', '.') ?></div>
+                    <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
+                        <strong>Cálculo:</strong><br>
+                        $<?= number_format($total_ingresos, 0, ',', '.') ?> - $<?= number_format($total_egresos, 0, ',', '.') ?> - $<?= number_format($total_vales_empresa, 0, ',', '.') ?> - $<?= number_format($total_descuentos, 0, ',', '.') ?><br>
+                        <small style="opacity: 0.7;">Ingresos - Egresos - Vales - Descuentos</small>
+                    </div>
                 </div>
                 <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
-                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">Efectivo</div>
-                    <div style="font-size: 24px; font-weight: 700;">$<?= number_format($efectivo, 0, ',', '.') ?></div>
+                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
+                        Efectivo
+                    </div>
+                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($efectivo, 0, ',', '.') ?></div>
+                    <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
+                        <strong>Cálculo:</strong><br>
+                        $<?= number_format($subtotal, 0, ',', '.') ?> - $<?= number_format($saldo_transferencias, 0, ',', '.') ?> - $<?= number_format($total_saldos_pendientes, 0, ',', '.') ?><br>
+                        <small style="opacity: 0.7;">Subtotal - Transferencias - Pendientes</small>
+                    </div>
                 </div>
                 <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
-                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">Utilidad Total</div>
-                    <div style="font-size: 24px; font-weight: 700;">$<?= number_format($utilidad_total, 0, ',', '.') ?></div>
+                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
+                        Utilidad Total
+                    </div>
+                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($utilidad_total, 0, ',', '.') ?></div>
+                    <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
+                        <strong>Cálculo:</strong><br>
+                        Utilidad Total = Subtotal<br>
+                        <small style="opacity: 0.7;">$<?= number_format($utilidad_total, 0, ',', '.') ?></small>
+                    </div>
                 </div>
                 <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
-                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">Utilidad Individual</div>
-                    <div style="font-size: 24px; font-weight: 700;">$<?= number_format($utilidad_individual, 0, ',', '.') ?></div>
+                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
+                        Utilidad Individual
+                    </div>
+                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($utilidad_individual, 0, ',', '.') ?></div>
+                    <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
+                        <strong>Cálculo:</strong><br>
+                        $<?= number_format($utilidad_total, 0, ',', '.') ?> ÷ 2<br>
+                        <small style="opacity: 0.7;">Utilidad Total dividida entre 2</small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1448,6 +1926,11 @@ function gofast_finanzas_admin_shortcode() {
                 📤 Transferencias Salidas
             </button>
             <button type="button" 
+                    class="gofast-config-tab <?= $tab_activo === 'descuentos' ? 'gofast-config-tab-active' : '' ?>"
+                    onclick="mostrarTabFinanzas('descuentos', this)">
+                ➖ Descuentos
+            </button>
+            <button type="button" 
                     class="gofast-config-tab <?= $tab_activo === 'saldos_mensajeros' ? 'gofast-config-tab-active' : '' ?>"
                     onclick="mostrarTabFinanzas('saldos_mensajeros', this)">
                 💵 Saldos Mensajeros
@@ -1460,7 +1943,7 @@ function gofast_finanzas_admin_shortcode() {
             <form method="get" action="" id="form-filtros-generales" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
                 <!-- Mantener otros parámetros GET (excepto los que vamos a actualizar) -->
                 <?php foreach ($_GET as $key => $value): ?>
-                    <?php if (!in_array($key, ['fecha_desde', 'fecha_hasta', 'tab', 'filtro_descripcion', 'filtro_mensajero', 'filtro_origen'])): ?>
+                    <?php if (!in_array($key, ['fecha_desde', 'fecha_hasta', 'tab', 'filtro_descripcion', 'filtro_mensajero', 'filtro_origen', 'filtro_mensajero_descuentos', 'filtro_descripcion_descuentos'])): ?>
                         <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                     <?php endif; ?>
                 <?php endforeach; ?>
@@ -2343,10 +2826,471 @@ function gofast_finanzas_admin_shortcode() {
             <p style="font-size:13px;color:#666;margin:8px 0 16px;">
                 Gestiona las transferencias salientes de la empresa. Puedes crear, editar y eliminar registros.
             </p>
-            <p style="background: #fff3cd; padding: 12px; border-radius: 6px; color: #856404; margin-bottom: 16px;">
-                ⚠️ Esta funcionalidad estará disponible próximamente.
-            </p>
+
+            <!-- Formulario crear transferencia salida -->
+            <div class="gofast-box" style="background: #f8f9fa; margin-bottom: 20px;">
+                <h4 style="margin-top: 0;">➕ Insertar Transferencia Salida</h4>
+                <form method="post">
+                    <?php wp_nonce_field('gofast_crear_transferencia_salida', 'gofast_transferencia_salida_nonce'); ?>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha <span style="color: #dc3545;">*</span></label>
+                            <input type="date" 
+                                   name="fecha" 
+                                   value="<?= esc_attr(gofast_date_today()) ?>"
+                                   required
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Descripción <span style="color: #dc3545;">*</span></label>
+                            <input type="text" 
+                                   name="descripcion" 
+                                   required
+                                   maxlength="255"
+                                   placeholder="Ej: Transferencia a proveedor"
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Valor <span style="color: #dc3545;">*</span></label>
+                            <input type="number" 
+                                   name="valor" 
+                                   step="0.01"
+                                   min="0.01"
+                                   required
+                                   placeholder="Ej: 50000"
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
+                    </div>
+                    <button type="submit" name="gofast_crear_transferencia_salida" class="gofast-btn-mini">✅ Crear Transferencia</button>
+                </form>
+            </div>
+
+            <!-- Filtros adicionales -->
+            <div class="gofast-box" style="background: #f8f9fa; margin-bottom: 20px;">
+                <h4 style="margin-top: 0;">🔍 Filtros Adicionales</h4>
+                <form method="get" action="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
+                    <!-- Mantener otros parámetros GET -->
+                    <?php foreach ($_GET as $key => $value): ?>
+                        <?php if (!in_array($key, ['filtro_descripcion_transf_salidas'])): ?>
+                            <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                    
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Filtro por descripción</label>
+                        <input type="text" 
+                               name="filtro_descripcion_transf_salidas" 
+                               value="<?= esc_attr($filtro_descripcion_transf_salidas) ?>"
+                               placeholder="Buscar en descripción..."
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <div>
+                        <button type="submit" class="gofast-btn" style="background: var(--gofast-yellow); width: 100%;">
+                            🔍 Filtrar
+                        </button>
+                    </div>
+                    <?php if (!empty($filtro_descripcion_transf_salidas)): ?>
+                        <div>
+                            <a href="<?= esc_url(remove_query_arg('filtro_descripcion_transf_salidas')) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
+                                🔄 Limpiar
+                            </a>
+                        </div>
+                    <?php endif; ?>
+                </form>
+            </div>
+
+            <!-- Listado de transferencias salidas -->
+            <div class="gofast-box">
+                <h4 style="margin-top: 0;">📋 Listado de Transferencias Salidas</h4>
+                
+                <?php if (empty($transferencias_salidas)): ?>
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        No hay transferencias salidas registradas.
+                    </p>
+                <?php else: ?>
+                    <div class="gofast-table-wrap">
+                        <table class="gofast-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Fecha</th>
+                                    <th>Descripción</th>
+                                    <th>Valor</th>
+                                    <th>Creado por</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($transferencias_salidas as $transf): ?>
+                                    <tr>
+                                        <td>#<?= esc_html($transf->id) ?></td>
+                                        <td><?= gofast_date_format($transf->fecha, 'd/m/Y') ?></td>
+                                        <td><?= esc_html($transf->descripcion) ?></td>
+                                        <td><strong>$<?= number_format($transf->valor, 0, ',', '.') ?></strong></td>
+                                        <td><?= esc_html($transf->creador_nombre ?? '—') ?></td>
+                                        <td style="white-space:nowrap;">
+                                            <button type="button" 
+                                                    class="gofast-btn-mini gofast-btn-editar-transf-salida" 
+                                                    data-transf-id="<?= esc_attr($transf->id) ?>"
+                                                    data-transf-fecha="<?= esc_attr($transf->fecha) ?>"
+                                                    data-transf-descripcion="<?= esc_attr($transf->descripcion) ?>"
+                                                    data-transf-valor="<?= esc_attr($transf->valor) ?>"
+                                                    style="background: var(--gofast-yellow); color: #000;">
+                                                ✏️ Editar
+                                            </button>
+                                            <form method="post" style="display:inline-block;margin-left:4px;" onsubmit="return confirm('¿Estás seguro de eliminar esta transferencia? Esta acción no se puede deshacer.');">
+                                                <?php wp_nonce_field('gofast_eliminar_transferencia_salida', 'gofast_eliminar_transferencia_salida_nonce'); ?>
+                                                <input type="hidden" name="transferencia_id" value="<?= esc_attr($transf->id) ?>">
+                                                <button type="submit" name="gofast_eliminar_transferencia_salida" class="gofast-btn-mini" style="background:#dc3545;color:#fff;">
+                                                    🗑️ Eliminar
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
+
+        <!-- Modal para editar transferencia salida -->
+        <div id="modal-editar-transf-salida" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;overflow-y:auto;padding:20px;">
+            <div style="max-width:600px;margin:20px auto;background:#fff;border-radius:8px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+                <h2 style="margin-top:0;margin-bottom:12px;font-size:20px;">✏️ Editar Transferencia Salida</h2>
+                
+                <form method="post" id="form-editar-transf-salida">
+                    <?php wp_nonce_field('gofast_editar_transferencia_salida', 'gofast_editar_transferencia_salida_nonce'); ?>
+                    <input type="hidden" name="transferencia_id" id="editar-transf-salida-id">
+                    
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:#000;">Fecha:</label>
+                        <input type="date" 
+                               name="fecha" 
+                               id="editar-transf-salida-fecha"
+                               required
+                               style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                    </div>
+                    
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:#000;">Descripción:</label>
+                        <input type="text" 
+                               name="descripcion" 
+                               id="editar-transf-salida-descripcion"
+                               required
+                               maxlength="255"
+                               style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                    </div>
+                    
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:#000;">Valor:</label>
+                        <input type="number" 
+                               name="valor" 
+                               id="editar-transf-salida-valor"
+                               step="0.01"
+                               min="0.01"
+                               required
+                               style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                    </div>
+                    
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid #ddd;">
+                        <button type="button" class="gofast-btn-mini gofast-btn-outline" onclick="cerrarModalEditarTransfSalida()">Cancelar</button>
+                        <button type="submit" name="gofast_editar_transferencia_salida" class="gofast-btn-mini">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+        // Abrir modal de editar transferencia salida
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.gofast-btn-editar-transf-salida').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    const transfId = this.getAttribute('data-transf-id');
+                    const transfFecha = this.getAttribute('data-transf-fecha');
+                    const transfDescripcion = this.getAttribute('data-transf-descripcion');
+                    const transfValor = this.getAttribute('data-transf-valor');
+                    
+                    document.getElementById('editar-transf-salida-id').value = transfId;
+                    document.getElementById('editar-transf-salida-fecha').value = transfFecha;
+                    document.getElementById('editar-transf-salida-descripcion').value = transfDescripcion;
+                    document.getElementById('editar-transf-salida-valor').value = transfValor;
+                    
+                    document.getElementById('modal-editar-transf-salida').style.display = 'block';
+                });
+            });
+            
+            // Cerrar modal al hacer clic fuera
+            const modalEditarTransfSalida = document.getElementById('modal-editar-transf-salida');
+            if (modalEditarTransfSalida) {
+                modalEditarTransfSalida.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        cerrarModalEditarTransfSalida();
+                    }
+                });
+            }
+        });
+        
+        function cerrarModalEditarTransfSalida() {
+            document.getElementById('modal-editar-transf-salida').style.display = 'none';
+            document.getElementById('form-editar-transf-salida').reset();
+        }
+        </script>
+
+        <!-- TAB: DESCUENTOS -->
+        <div id="tab-descuentos" class="gofast-config-tab-content" style="display: <?= $tab_activo === 'descuentos' ? 'block' : 'none' ?>;">
+            <h3>➖ Descuentos a Mensajeros</h3>
+            <p style="font-size:13px;color:#666;margin:8px 0 16px;">
+                Gestiona los descuentos aplicados a mensajeros por día. Los descuentos se restan del total a pagar de cada mensajero.
+            </p>
+
+            <!-- Formulario crear descuento -->
+            <div class="gofast-box" style="background: #f8f9fa; margin-bottom: 20px;">
+                <h4 style="margin-top: 0;">➕ Insertar Descuento</h4>
+                <form method="post">
+                    <?php wp_nonce_field('gofast_crear_descuento', 'gofast_descuento_nonce'); ?>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha <span style="color: #dc3545;">*</span></label>
+                            <input type="date" 
+                                   name="fecha" 
+                                   value="<?= esc_attr(gofast_date_today()) ?>"
+                                   required
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Mensajero <span style="color: #dc3545;">*</span></label>
+                            <select name="mensajero_id" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                                <option value="">Seleccione un mensajero</option>
+                                <?php foreach ($mensajeros as $m): ?>
+                                    <option value="<?= (int) $m->id; ?>"><?= esc_html($m->nombre); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Valor <span style="color: #dc3545;">*</span></label>
+                            <input type="number" 
+                                   name="valor" 
+                                   step="0.01"
+                                   required
+                                   placeholder="Ej: 50000 o -50000"
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                            <small style="color: #666; font-size: 11px;">Puede ser positivo (descuento) o negativo (bonificación)</small>
+                        </div>
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Descripción</label>
+                            <input type="text" 
+                                   name="descripcion" 
+                                   maxlength="255"
+                                   placeholder="Ej: Descuento por daño en vehículo"
+                                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        </div>
+                    </div>
+                    <button type="submit" name="gofast_crear_descuento" class="gofast-btn-mini">✅ Crear Descuento</button>
+                </form>
+            </div>
+
+            <!-- Filtros adicionales -->
+            <div class="gofast-box" style="background: #f8f9fa; margin-bottom: 20px;">
+                <h4 style="margin-top: 0;">🔍 Filtros Adicionales</h4>
+                <form method="get" action="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
+                    <!-- Mantener otros parámetros GET -->
+                    <?php foreach ($_GET as $key => $value): ?>
+                        <?php if (!in_array($key, ['filtro_mensajero_descuentos', 'filtro_descripcion_descuentos'])): ?>
+                            <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                    
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Filtro por mensajero</label>
+                        <select name="filtro_mensajero_descuentos" id="filtro-mensajero-descuentos" class="gofast-select-filtro" data-placeholder="Todos los mensajeros">
+                            <option value="0">Todos</option>
+                            <?php foreach ($mensajeros as $m): ?>
+                                <option value="<?= (int) $m->id; ?>"<?php selected($filtro_mensajero_descuentos, $m->id); ?>>
+                                    <?= esc_html($m->nombre); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Filtro por descripción</label>
+                        <input type="text" 
+                               name="filtro_descripcion_descuentos" 
+                               value="<?= esc_attr($filtro_descripcion_descuentos) ?>"
+                               placeholder="Buscar en descripción..."
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <div>
+                        <button type="submit" class="gofast-btn" style="background: var(--gofast-yellow); width: 100%;">
+                            🔍 Filtrar
+                        </button>
+                    </div>
+                    <?php if ($filtro_mensajero_descuentos > 0 || !empty($filtro_descripcion_descuentos)): ?>
+                        <div>
+                            <a href="<?= esc_url(remove_query_arg(['filtro_mensajero_descuentos', 'filtro_descripcion_descuentos'])) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
+                                🔄 Limpiar
+                            </a>
+                        </div>
+                    <?php endif; ?>
+                </form>
+            </div>
+
+            <!-- Listado de descuentos -->
+            <div class="gofast-box">
+                <h4 style="margin-top: 0;">📋 Listado de Descuentos</h4>
+                
+                <?php if (empty($descuentos)): ?>
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        No hay descuentos registrados.
+                    </p>
+                <?php else: ?>
+                    <div class="gofast-table-wrap">
+                        <table class="gofast-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Fecha</th>
+                                    <th>Mensajero</th>
+                                    <th>Valor</th>
+                                    <th>Descripción</th>
+                                    <th>Creado por</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($descuentos as $descuento): ?>
+                                    <tr>
+                                        <td>#<?= esc_html($descuento->id) ?></td>
+                                        <td><?= gofast_date_format($descuento->fecha, 'd/m/Y') ?></td>
+                                        <td>
+                                            <strong><?= esc_html($descuento->mensajero_nombre ?? '—') ?></strong><br>
+                                            <small style="color: #666;"><?= esc_html($descuento->mensajero_telefono ?? '') ?></small>
+                                        </td>
+                                        <td><strong style="color: #dc3545;">$<?= number_format($descuento->valor, 0, ',', '.') ?></strong></td>
+                                        <td><?= esc_html($descuento->descripcion ?: '—') ?></td>
+                                        <td><?= esc_html($descuento->creador_nombre ?? '—') ?></td>
+                                        <td style="white-space:nowrap;">
+                                            <button type="button" 
+                                                    class="gofast-btn-mini gofast-btn-editar-descuento" 
+                                                    data-descuento-id="<?= esc_attr($descuento->id) ?>"
+                                                    data-descuento-fecha="<?= esc_attr($descuento->fecha) ?>"
+                                                    data-descuento-mensajero-id="<?= esc_attr($descuento->mensajero_id) ?>"
+                                                    data-descuento-valor="<?= esc_attr($descuento->valor) ?>"
+                                                    data-descuento-descripcion="<?= esc_attr($descuento->descripcion) ?>"
+                                                    style="background: var(--gofast-yellow); color: #000;">
+                                                ✏️ Editar
+                                            </button>
+                                            <form method="post" style="display:inline-block;margin-left:4px;" onsubmit="return confirm('¿Estás seguro de eliminar este descuento? Esta acción no se puede deshacer.');">
+                                                <?php wp_nonce_field('gofast_eliminar_descuento', 'gofast_eliminar_descuento_nonce'); ?>
+                                                <input type="hidden" name="descuento_id" value="<?= esc_attr($descuento->id) ?>">
+                                                <button type="submit" name="gofast_eliminar_descuento" class="gofast-btn-mini" style="background:#dc3545;color:#fff;">
+                                                    🗑️ Eliminar
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Modal para editar descuento -->
+        <div id="modal-editar-descuento" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;overflow-y:auto;padding:20px;">
+            <div style="max-width:600px;margin:20px auto;background:#fff;border-radius:8px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+                <h2 style="margin-top:0;margin-bottom:12px;font-size:20px;">✏️ Editar Descuento</h2>
+                
+                <form method="post" id="form-editar-descuento">
+                    <?php wp_nonce_field('gofast_editar_descuento', 'gofast_editar_descuento_nonce'); ?>
+                    <input type="hidden" name="descuento_id" id="editar-descuento-id">
+                    
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:#000;">Fecha:</label>
+                        <input type="date" 
+                               name="fecha" 
+                               id="editar-descuento-fecha"
+                               required
+                               style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                    </div>
+                    
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:#000;">Mensajero:</label>
+                        <select name="mensajero_id" id="editar-descuento-mensajero-id" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                            <option value="">Seleccione un mensajero</option>
+                            <?php foreach ($mensajeros as $m): ?>
+                                <option value="<?= (int) $m->id; ?>"><?= esc_html($m->nombre); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:#000;">Valor:</label>
+                        <input type="number" 
+                               name="valor" 
+                               id="editar-descuento-valor"
+                               step="0.01"
+                               required
+                               style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                        <small style="color: #666; font-size: 11px;">Puede ser positivo (descuento) o negativo (bonificación)</small>
+                    </div>
+                    
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:#000;">Descripción:</label>
+                        <input type="text" 
+                               name="descripcion" 
+                               id="editar-descuento-descripcion"
+                               maxlength="255"
+                               style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                    </div>
+                    
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid #ddd;">
+                        <button type="button" class="gofast-btn-mini gofast-btn-outline" onclick="cerrarModalEditarDescuento()">Cancelar</button>
+                        <button type="submit" name="gofast_editar_descuento" class="gofast-btn-mini">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+        // Abrir modal de editar descuento
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.gofast-btn-editar-descuento').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    const descuentoId = this.getAttribute('data-descuento-id');
+                    const descuentoFecha = this.getAttribute('data-descuento-fecha');
+                    const descuentoMensajeroId = this.getAttribute('data-descuento-mensajero-id');
+                    const descuentoValor = this.getAttribute('data-descuento-valor');
+                    const descuentoDescripcion = this.getAttribute('data-descuento-descripcion');
+                    
+                    document.getElementById('editar-descuento-id').value = descuentoId;
+                    document.getElementById('editar-descuento-fecha').value = descuentoFecha;
+                    document.getElementById('editar-descuento-mensajero-id').value = descuentoMensajeroId;
+                    document.getElementById('editar-descuento-valor').value = descuentoValor;
+                    document.getElementById('editar-descuento-descripcion').value = descuentoDescripcion || '';
+                    
+                    document.getElementById('modal-editar-descuento').style.display = 'block';
+                });
+            });
+            
+            // Cerrar modal al hacer clic fuera
+            const modalEditarDescuento = document.getElementById('modal-editar-descuento');
+            if (modalEditarDescuento) {
+                modalEditarDescuento.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        cerrarModalEditarDescuento();
+                    }
+                });
+            }
+        });
+        
+        function cerrarModalEditarDescuento() {
+            document.getElementById('modal-editar-descuento').style.display = 'none';
+            document.getElementById('form-editar-descuento').reset();
+        }
+        </script>
 
         <!-- TAB: SALDOS MENSAJEROS -->
         <div id="tab-saldos_mensajeros" class="gofast-config-tab-content" style="display: <?= $tab_activo === 'saldos_mensajeros' ? 'block' : 'none' ?>;">
@@ -2404,6 +3348,10 @@ function gofast_finanzas_admin_shortcode() {
             <!-- Tabla de saldos por mensajero -->
             <div class="gofast-box">
                 <h4 style="margin-top: 0;">📋 Saldos por Mensajero</h4>
+                <p style="font-size: 12px; color: #666; margin: 8px 0 16px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
+                    ℹ️ <strong>Nota:</strong> Los valores mostrados corresponden al saldo pendiente desde el último pago registrado (efectivo o transferencia). 
+                    Si no hay pagos previos, se calcula desde el inicio del rango de fechas seleccionado.
+                </p>
                 
                 <?php if (empty($saldos_mensajeros)): ?>
                     <p style="text-align: center; color: #666; padding: 20px;">
@@ -2415,12 +3363,9 @@ function gofast_finanzas_admin_shortcode() {
                             <thead>
                                 <tr>
                                     <th>Mensajero</th>
-                                    <th>📍 Total Destinos</th>
-                                    <th>🛒 Total Compras</th>
-                                    <th>💰 Ingresos Totales</th>
-                                    <th>💵 Comisión (20%)</th>
-                                    <th>📈 Utilidad Neta</th>
+                                    <th>📅 Último Pago</th>
                                     <th>💸 Transferencias Aprobadas</th>
+                                    <th>➖ Descuentos</th>
                                     <th>💳 Total a Pagar</th>
                                     <th>Acciones</th>
                                 </tr>
@@ -2432,12 +3377,26 @@ function gofast_finanzas_admin_shortcode() {
                                             <strong><?= esc_html($saldo->mensajero_nombre) ?></strong><br>
                                             <small style="color: #666;"><?= esc_html($saldo->mensajero_telefono) ?></small>
                                         </td>
-                                        <td style="text-align: center;"><?= number_format($saldo->total_destinos) ?></td>
-                                        <td style="text-align: center;"><?= number_format($saldo->total_compras) ?></td>
-                                        <td style="text-align: right;"><strong>$<?= number_format($saldo->ingresos_totales, 0, ',', '.') ?></strong></td>
-                                        <td style="text-align: right;"><strong>$<?= number_format($saldo->comision_generada, 0, ',', '.') ?></strong></td>
-                                        <td style="text-align: right;"><strong>$<?= number_format($saldo->utilidad_neta, 0, ',', '.') ?></strong></td>
+                                        <td style="text-align: center; font-size: 12px;">
+                                            <?php if ($saldo->fecha_ultimo_pago): ?>
+                                                <strong><?= gofast_date_format($saldo->fecha_ultimo_pago, 'd/m/Y') ?></strong><br>
+                                                <small style="color: <?= $saldo->tipo_ultimo_pago === 'efectivo' ? '#28a745' : '#2196F3'; ?>;">
+                                                    <?= $saldo->tipo_ultimo_pago === 'efectivo' ? '💵 Efectivo' : '💸 Transferencia' ?>
+                                                </small><br>
+                                                <small style="color: #999; font-size: 10px;">
+                                                    Desde: <?= gofast_date_format($saldo->fecha_desde_calculo, 'd/m/Y') ?>
+                                                </small>
+                                            <?php else: ?>
+                                                <span style="color: #999;">Sin pagos</span><br>
+                                                <small style="color: #999; font-size: 10px;">
+                                                    Desde: <?= gofast_date_format($saldo->fecha_desde_calculo ?? $fecha_desde, 'd/m/Y') ?>
+                                                </small>
+                                            <?php endif; ?>
+                                        </td>
                                         <td style="text-align: right;">$<?= number_format($saldo->transferencias_aprobadas, 0, ',', '.') ?></td>
+                                        <td style="text-align: right;">
+                                            <strong style="color: #dc3545;">$<?= number_format($saldo->total_descuentos, 0, ',', '.') ?></strong>
+                                        </td>
                                         <td style="text-align: right;">
                                             <strong style="color: <?= $saldo->total_a_pagar >= 0 ? '#4CAF50' : '#f44336'; ?>; font-size: 16px;">
                                                 $<?= number_format($saldo->total_a_pagar, 0, ',', '.') ?>
@@ -2449,10 +3408,10 @@ function gofast_finanzas_admin_shortcode() {
                                                     style="background: #28a745; color: #fff; margin-right: 4px;"
                                                     data-mensajero-id="<?= (int) $saldo->mensajero_id ?>"
                                                     data-mensajero-nombre="<?= esc_attr($saldo->mensajero_nombre ?? '') ?>"
-                                                    data-comision="<?= number_format((float)($saldo->comision_generada ?? 0), 2, '.', '') ?>"
-                                                    data-transferencias="<?= number_format((float)($saldo->transferencias_aprobadas ?? 0), 2, '.', '') ?>"
-                                                    data-descuentos="<?= number_format((float)($saldo->total_descuentos ?? 0), 2, '.', '') ?>"
-                                                    data-total="<?= number_format((float)($saldo->total_a_pagar ?? 0), 2, '.', '') ?>">
+                                                    data-comision="<?= (float)($saldo->comision_generada ?? 0) ?>"
+                                                    data-transferencias="<?= (float)($saldo->transferencias_aprobadas ?? 0) ?>"
+                                                    data-descuentos="<?= (float)($saldo->total_descuentos ?? 0) ?>"
+                                                    data-total="<?= (float)($saldo->total_a_pagar ?? 0) ?>">
                                                 💵 Pago Efectivo
                                             </button>
                                             <button type="button" 
@@ -2460,14 +3419,11 @@ function gofast_finanzas_admin_shortcode() {
                                                     style="background: #2196F3; color: #fff; margin-right: 4px;"
                                                     data-mensajero-id="<?= (int) $saldo->mensajero_id ?>"
                                                     data-mensajero-nombre="<?= esc_attr($saldo->mensajero_nombre ?? '') ?>"
-                                                    data-comision="<?= number_format((float)($saldo->comision_generada ?? 0), 2, '.', '') ?>"
-                                                    data-transferencias="<?= number_format((float)($saldo->transferencias_aprobadas ?? 0), 2, '.', '') ?>"
-                                                    data-descuentos="<?= number_format((float)($saldo->total_descuentos ?? 0), 2, '.', '') ?>"
-                                                    data-total="<?= number_format((float)($saldo->total_a_pagar ?? 0), 2, '.', '') ?>">
+                                                    data-comision="<?= (float)($saldo->comision_generada ?? 0) ?>"
+                                                    data-transferencias="<?= (float)($saldo->transferencias_aprobadas ?? 0) ?>"
+                                                    data-descuentos="<?= (float)($saldo->total_descuentos ?? 0) ?>"
+                                                    data-total="<?= (float)($saldo->total_a_pagar ?? 0) ?>">
                                                 💸 Pago Transferencia
-                                            </button>
-                                            <button type="button" class="gofast-btn-mini" style="background: var(--gofast-yellow); color: #000;">
-                                                ➖ Generar Descuento
                                             </button>
                                         </td>
                                     </tr>
@@ -2481,6 +3437,114 @@ function gofast_finanzas_admin_shortcode() {
 
     </div>
 </div>
+
+<!-- Estilos CSS para el modal -->
+<style>
+/* Overlay oscuro de fondo - oculto por defecto */
+.gofast-modal {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.6) !important;
+    z-index: 999999 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    backdrop-filter: blur(4px);
+    display: none !important; /* Oculto por defecto */
+}
+
+/* Solo mostrar flex cuando el modal tenga display: block */
+.gofast-modal[style*="display: block"] {
+    display: flex !important;
+}
+
+/* Contenedor del modal */
+.gofast-modal-content {
+    position: relative !important;
+    background: #fff !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+    width: 90% !important;
+    max-width: 500px !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    animation: gofastModalSlideIn 0.3s ease-out;
+}
+
+@keyframes gofastModalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Header del modal */
+.gofast-modal-header {
+    padding: 20px 24px !important;
+    border-bottom: 2px solid #f0f0f0 !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+
+.gofast-modal-header h3 {
+    margin: 0 !important;
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    color: #333 !important;
+}
+
+.gofast-modal-close {
+    font-size: 28px !important;
+    font-weight: 300 !important;
+    color: #999 !important;
+    cursor: pointer !important;
+    line-height: 1 !important;
+    transition: color 0.2s;
+}
+
+.gofast-modal-close:hover {
+    color: #333 !important;
+}
+
+/* Body del modal */
+.gofast-modal-body {
+    padding: 24px !important;
+}
+
+/* Footer del modal */
+.gofast-modal-footer {
+    padding: 16px 24px !important;
+    border-top: 2px solid #f0f0f0 !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 12px !important;
+}
+
+.gofast-modal-footer .gofast-btn {
+    padding: 10px 20px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    border: none !important;
+    transition: all 0.2s !important;
+}
+
+.gofast-modal-footer .gofast-btn-secondary {
+    background: #6c757d !important;
+    color: #fff !important;
+}
+
+.gofast-modal-footer .gofast-btn-secondary:hover {
+    background: #5a6268 !important;
+}
+</style>
 
 <!-- Modal para registrar pago -->
 <div id="modal-registrar-pago" class="gofast-modal" style="display: none;">
@@ -2498,41 +3562,32 @@ function gofast_finanzas_admin_shortcode() {
             <input type="hidden" name="transferencias_total" id="pago-transferencias">
             <input type="hidden" name="descuentos_total" id="pago-descuentos">
             <input type="hidden" name="total_a_pagar" id="pago-total">
+            <input type="hidden" name="fecha" id="pago-fecha" value="<?= gofast_current_time('Y-m-d') ?>">
             
             <div class="gofast-modal-body">
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Mensajero</label>
-                    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px; font-weight: 600;" id="pago-mensajero-nombre"></div>
+                <!-- Contenido unificado para ambos tipos de pago -->
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <div id="pago-icono-tipo" style="font-size: 48px; margin-bottom: 16px;">💵</div>
+                    <h3 id="pago-titulo-tipo" style="margin: 0 0 8px 0; color: #333;">Confirmar Pago</h3>
                 </div>
                 
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha del Pago *</label>
-                    <input type="date" name="fecha" id="pago-fecha" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" value="<?= gofast_current_time('Y-m-d') ?>">
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 16px; border-radius: 6px; margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #666;">Comisión Generada:</span>
-                        <strong id="pago-comision-display">$0</strong>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; color: #666;">Mensajero</label>
+                        <div style="padding: 12px; background: #fff; border-radius: 6px; font-weight: 600; font-size: 16px; text-align: center; color: #000;" id="pago-mensajero-nombre"></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #666;">Transferencias Aprobadas:</span>
-                        <strong id="pago-transferencias-display">$0</strong>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; color: #666;">Tipo de Pago</label>
+                        <div style="padding: 12px; background: #fff; border-radius: 6px; font-weight: 600; font-size: 16px; text-align: center;" id="pago-tipo-display"></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #666;">Descuentos:</span>
-                        <strong id="pago-descuentos-display">$0</strong>
+                    
+                    <div style="padding-top: 16px; border-top: 2px solid #ddd;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; color: #666;">Valor a Pagar</label>
+                        <div style="padding: 16px; background: #fff; border-radius: 6px; text-align: center;">
+                            <strong id="pago-total-display" style="font-size: 32px; color: #28a745; font-weight: 700;">$0</strong>
+                        </div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 2px solid #ddd;">
-                        <span style="font-weight: 600; font-size: 16px;">Total a Pagar:</span>
-                        <strong id="pago-total-display" style="font-size: 18px; color: #4CAF50;">$0</strong>
-                    </div>
-                </div>
-                
-                <div style="background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
-                    <small style="color: #856404;">
-                        ⚠️ Al registrar el pago, se guardará un registro con los valores calculados para el período seleccionado.
-                    </small>
                 </div>
             </div>
             
@@ -2547,6 +3602,14 @@ function gofast_finanzas_admin_shortcode() {
 <script>
 // Función para abrir modal de pago
 function abrirModalPago(tipoPago, mensajeroId, mensajeroNombre, comision, transferencias, descuentos, total) {
+    var modal = document.getElementById('modal-registrar-pago');
+    
+    if (!modal) {
+        console.error('Modal no encontrado');
+        return;
+    }
+    
+    // Limpiar valores anteriores y establecer nuevos
     document.getElementById('pago-mensajero-id').value = mensajeroId || '';
     document.getElementById('pago-tipo').value = tipoPago || '';
     document.getElementById('pago-comision').value = comision || '0';
@@ -2554,27 +3617,64 @@ function abrirModalPago(tipoPago, mensajeroId, mensajeroNombre, comision, transf
     document.getElementById('pago-descuentos').value = descuentos || '0';
     document.getElementById('pago-total').value = total || '0';
     
-    document.getElementById('pago-mensajero-nombre').textContent = mensajeroNombre || '';
+    // Función para convertir string a número de forma segura
+    var convertirANumero = function(str) {
+        if (str === null || str === undefined) return 0;
+        // Convertir a string y limpiar
+        var strLimpio = String(str).trim();
+        if (strLimpio === '' || strLimpio === 'null' || strLimpio === 'undefined') return 0;
+        // Remover comas de miles y espacios
+        strLimpio = strLimpio.replace(/,/g, '').replace(/\s/g, '');
+        // Convertir a número
+        var num = parseFloat(strLimpio);
+        return isNaN(num) ? 0 : num;
+    };
     
-    // Asegurar que los valores sean numéricos antes de usar toLocaleString
-    var comisionNum = parseFloat(comision || 0);
-    var transferenciasNum = parseFloat(transferencias || 0);
-    var descuentosNum = parseFloat(descuentos || 0);
-    var totalNum = parseFloat(total || 0);
+    // Convertir valor total a número de forma segura
+    var totalNum = convertirANumero(String(total || '0'));
     
-    // Verificar que no sean NaN antes de formatear
-    if (isNaN(comisionNum)) comisionNum = 0;
-    if (isNaN(transferenciasNum)) transferenciasNum = 0;
-    if (isNaN(descuentosNum)) descuentosNum = 0;
-    if (isNaN(totalNum)) totalNum = 0;
+    // Obtener elementos del modal unificado
+    var nombreDisplay = document.getElementById('pago-mensajero-nombre');
+    var tipoDisplay = document.getElementById('pago-tipo-display');
+    var totalDisplay = document.getElementById('pago-total-display');
+    var iconoTipo = document.getElementById('pago-icono-tipo');
+    var tituloTipo = document.getElementById('pago-titulo-tipo');
+    var tituloModal = document.getElementById('modal-pago-titulo');
     
-    document.getElementById('pago-comision-display').textContent = '$' + comisionNum.toLocaleString('es-CO');
-    document.getElementById('pago-transferencias-display').textContent = '$' + transferenciasNum.toLocaleString('es-CO');
-    document.getElementById('pago-descuentos-display').textContent = '$' + descuentosNum.toLocaleString('es-CO');
-    document.getElementById('pago-total-display').textContent = '$' + totalNum.toLocaleString('es-CO');
+    // Asegurar que el nombre se muestre correctamente
+    var nombreMostrar = String(mensajeroNombre || '').trim();
+    if (nombreDisplay) {
+        nombreDisplay.textContent = nombreMostrar || 'Sin nombre';
+    }
     
-    document.getElementById('modal-pago-titulo').textContent = tipoPago === 'efectivo' ? 'Registrar Pago en Efectivo' : 'Registrar Pago por Transferencia';
-    document.getElementById('modal-registrar-pago').style.display = 'block';
+    // Configurar tipo de pago y visualización
+    if (tipoPago === 'efectivo') {
+        if (tipoDisplay) {
+            tipoDisplay.textContent = '💵 Pago en Efectivo';
+            tipoDisplay.style.color = '#28a745';
+        }
+        if (iconoTipo) iconoTipo.textContent = '💵';
+        if (tituloTipo) tituloTipo.textContent = 'Confirmar Pago en Efectivo';
+        if (tituloModal) tituloModal.textContent = 'Registrar Pago en Efectivo';
+    } else {
+        if (tipoDisplay) {
+            tipoDisplay.textContent = '💸 Pago por Transferencia';
+            tipoDisplay.style.color = '#2196F3';
+        }
+        if (iconoTipo) iconoTipo.textContent = '💸';
+        if (tituloTipo) tituloTipo.textContent = 'Confirmar Pago por Transferencia';
+        if (tituloModal) tituloModal.textContent = 'Registrar Pago por Transferencia';
+    }
+    
+    // Mostrar valor total
+    if (totalDisplay) {
+        var colorTotal = totalNum >= 0 ? '#28a745' : '#f44336';
+        totalDisplay.textContent = '$' + Math.abs(totalNum).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        totalDisplay.style.color = colorTotal;
+    }
+    
+    // Mostrar el modal usando style.display = 'block' para que el CSS lo detecte
+    modal.style.display = 'block';
 }
 
 // Función para cerrar modal de pago
@@ -2790,29 +3890,59 @@ function inicializarSelect2Filtros() {
         
         // Agregar event listeners a los botones de pago
         document.querySelectorAll('.btn-pago-efectivo').forEach(function(btn) {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var mensajeroId = this.getAttribute('data-mensajero-id') || '';
+                var mensajeroNombre = this.getAttribute('data-mensajero-nombre') || '';
+                var comision = this.getAttribute('data-comision') || '0';
+                var transferencias = this.getAttribute('data-transferencias') || '0';
+                var descuentos = this.getAttribute('data-descuentos') || '0';
+                var total = this.getAttribute('data-total') || '0';
+                
+                // Debug: verificar que los datos se estén leyendo
+                console.log('Datos del botón:', {
+                    mensajeroId: mensajeroId,
+                    mensajeroNombre: mensajeroNombre,
+                    comision: comision,
+                    transferencias: transferencias,
+                    descuentos: descuentos,
+                    total: total
+                });
+                
                 abrirModalPago(
                     'efectivo',
-                    this.getAttribute('data-mensajero-id'),
-                    this.getAttribute('data-mensajero-nombre'),
-                    this.getAttribute('data-comision'),
-                    this.getAttribute('data-transferencias'),
-                    this.getAttribute('data-descuentos'),
-                    this.getAttribute('data-total')
+                    mensajeroId,
+                    mensajeroNombre,
+                    comision,
+                    transferencias,
+                    descuentos,
+                    total
                 );
             });
         });
         
         document.querySelectorAll('.btn-pago-transferencia').forEach(function(btn) {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var mensajeroId = this.getAttribute('data-mensajero-id') || '';
+                var mensajeroNombre = this.getAttribute('data-mensajero-nombre') || '';
+                var comision = this.getAttribute('data-comision') || '0';
+                var transferencias = this.getAttribute('data-transferencias') || '0';
+                var descuentos = this.getAttribute('data-descuentos') || '0';
+                var total = this.getAttribute('data-total') || '0';
+                
                 abrirModalPago(
                     'transferencia',
-                    this.getAttribute('data-mensajero-id'),
-                    this.getAttribute('data-mensajero-nombre'),
-                    this.getAttribute('data-comision'),
-                    this.getAttribute('data-transferencias'),
-                    this.getAttribute('data-descuentos'),
-                    this.getAttribute('data-total')
+                    mensajeroId,
+                    mensajeroNombre,
+                    comision,
+                    transferencias,
+                    descuentos,
+                    total
                 );
             });
         });
