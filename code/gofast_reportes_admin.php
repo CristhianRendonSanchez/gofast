@@ -1142,58 +1142,7 @@ function gofast_reportes_admin_shortcode() {
     <?php endif; ?>
 
     <!-- =====================================================
-         C) TOP MENSAJEROS (Solo Admin)
-    ====================================================== -->
-    <?php if ($es_admin && !empty($top_mensajeros)): ?>
-        <div class="gofast-box" style="margin-bottom:20px;">
-            <h3 style="margin-top:0;">🏆 Top Mensajeros</h3>
-            <div style="margin-bottom:10px;padding:8px;background:#f0f7ff;border-left:3px solid #2196F3;border-radius:4px;font-size:12px;color:#1976D2;">
-                💡 <strong>En móvil:</strong> Desliza horizontalmente para ver todas las columnas
-            </div>
-            <div class="gofast-table-wrap" style="width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;display:block;">
-                <table class="gofast-table" style="min-width:600px;width:100%;">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Mensajero</th>
-                            <th>Pedidos Entregados</th>
-                            <th>Total Ingresos</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($top_mensajeros as $idx => $m): ?>
-                            <tr>
-                                <td><?= $idx + 1; ?></td>
-                                <td><?= esc_html($m->nombre); ?></td>
-                                <td><?= number_format($m->total_entregados); ?></td>
-                                <td>$<?= number_format($m->total_ingresos, 0, ',', '.'); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            
-            <?php if ($total_paginas_mensajeros > 1): ?>
-                <div class="gofast-pagination" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
-                    <?php
-                    $base_url_mensajeros = get_permalink();
-                    $query_args_mensajeros = $_GET;
-                    for ($i = 1; $i <= $total_paginas_mensajeros; $i++):
-                        $query_args_mensajeros['pg_mensajeros'] = $i;
-                        $url_mensajeros = esc_url( add_query_arg($query_args_mensajeros, $base_url_mensajeros) );
-                        $active_mensajeros = ($i === $pg_mensajeros) ? 'gofast-page-current' : '';
-                        ?>
-                        <a href="<?php echo $url_mensajeros; ?>" class="gofast-page-link <?php echo $active_mensajeros; ?>" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;background:#fff;<?php echo $active_mensajeros ? 'background:var(--gofast-yellow);font-weight:700;' : ''; ?>">
-                            <?php echo $i; ?>
-                        </a>
-                    <?php endfor; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
-    <!-- =====================================================
-         D) PEDIDOS POR DÍA (ÚLTIMOS 30 DÍAS)
+         C) PEDIDOS POR DÍA (ÚLTIMOS 30 DÍAS)
     ====================================================== -->
     <?php if (!empty($pedidos_por_dia)): ?>
         <div class="gofast-box" style="margin-bottom:20px;">

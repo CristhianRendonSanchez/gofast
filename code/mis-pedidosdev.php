@@ -1,8 +1,8 @@
 /*******************************************************
- * GOFAST – LISTADO DE PEDIDOS (CLIENTE / ADMIN / MENSAJERO)
- * Shortcode: [gofast_pedidos]
+ * GOFAST – LISTADO DE PEDIDOS DEV (CLIENTE / ADMIN / MENSAJERO)
+ * Shortcode: [gofast_pedidos_dev]
  *******************************************************/
-function gofast_pedidos_shortcode() {
+function gofast_pedidos_dev_shortcode() {
     global $wpdb;
 
     if (session_status() === PHP_SESSION_NONE) {
@@ -683,6 +683,7 @@ function gofast_pedidos_shortcode() {
                                     $recargo_sel = (int)($dest['recargo_seleccionable_valor'] ?? 0);
                                     $recargo_total = (int)($dest['recargo_total'] ?? 0);
                                     $recargo_global_dest = (int)($dest['recargo_global_valor'] ?? 0);
+                                    $recargo_sel_id = $dest['recargo_seleccionable_id'] ?? null;
                                     $total_recargos_dest = $recargo_sel + $recargo_total + $recargo_global_dest;
                                     if ($total_recargos_dest > 0): 
                                     ?>
@@ -752,7 +753,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Función para inicializar Select2 en un elemento
     function initSelect2(selectElement) {
         if (!window.jQuery || !jQuery.fn.select2) return;
-        if (jQuery(selectElement).data('select2')) return;
+        if (jQuery(selectElement).data('select2')) return; // Ya inicializado
         
         jQuery(selectElement).select2({
             placeholder: '🔍 Buscar barrio...',
@@ -820,6 +821,7 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         container.appendChild(div);
         
+        // Inicializar Select2 en el nuevo select
         const newSelect = div.querySelector('.destino-barrio-select');
         initSelect2(newSelect);
         
@@ -843,6 +845,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('form-editar-servicio').addEventListener('submit', function(e) {
         e.preventDefault();
         
+        // Recopilar origen
         const origenSelect = document.getElementById('origen-barrio-select');
         const origenDireccion = document.getElementById('origen-direccion');
         const selectedOrigen = origenSelect.options[origenSelect.selectedIndex];
@@ -858,6 +861,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Recopilar destinos
         const destinos = [];
         document.querySelectorAll('.destino-item').forEach(function(item) {
             const select = item.querySelector('.destino-barrio-select');
@@ -880,7 +884,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Guardar JSON
         document.getElementById('destinos-editados-json').value = JSON.stringify({ origen: origen, destinos: destinos });
+        
+        // Enviar
         this.submit();
     });
 });
@@ -899,6 +906,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <?php
         else:
+            // Servicio no encontrado
             ?>
             <div class="gofast-home">
                 <div class="gofast-box" style="background:#f8d7da;border-left:4px solid #dc3545;color:#721c24;">
@@ -2078,101 +2086,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 return $result;
             }
         }).on('select2:open', function(e) {
-            // Asegurar que el dropdown se posicione correctamente en el modal
+            // Simplificado: solo asegurar z-index y focus
             setTimeout(function() {
-                const $select = jQuery(selectElement);
-                const $selectContainer = $select.closest('.select2-container');
-                const $dropdown = jQuery('.select2-dropdown');
-                const $modal = jQuery('#modal-editar-destinos');
-                const $modalContent = $select.closest('.modal-editar-destinos-content');
-                const $searchContainer = $dropdown.find('.select2-search--dropdown');
-                const $searchField = $searchContainer.find('.select2-search__field');
-                
-                // Asegurar z-index alto para que aparezca sobre el modal
-                $dropdown.css({
-                    'z-index': '10001',
-                    'position': 'absolute'
-                });
-                
-                if ($searchContainer.length) {
-                    $searchContainer.css({
-                        'display': 'block',
-                        'visibility': 'visible',
-                        'opacity': '1'
-                    });
-                }
-                
-                if ($searchField.length) {
-                    $searchField.css({
-                        'display': 'block',
-                        'visibility': 'visible',
-                        'opacity': '1'
-                    });
+                try {
+                    const $dropdown = jQuery('.select2-dropdown');
+                    const $searchField = $dropdown.find('.select2-search__field');
                     
-                    setTimeout(function() {
+                    $dropdown.css('z-index', '10001');
+                    
+                    if ($searchField.length) {
                         $searchField.focus();
-                    }, 100);
+                    }
+                } catch (err) {
+                    // Silenciar errores
                 }
-                
-                // Calcular posición y ajustar si es necesario
-                setTimeout(function() {
-                    const selectOffset = $selectContainer.offset();
-                    const selectHeight = $selectContainer.outerHeight();
-                    const dropdownHeight = $dropdown.outerHeight() || 200; // altura estimada si aún no se ha renderizado
-                    const windowHeight = jQuery(window).height();
-                    const windowScrollTop = jQuery(window).scrollTop();
-                    const modalScrollTop = $modal.scrollTop();
-                    
-                    // Calcular posición relativa al viewport (no al documento)
-                    const selectTopRelative = selectOffset.top - windowScrollTop;
-                    const selectBottomRelative = selectTopRelative + selectHeight;
-                    
-                    // Calcular espacio disponible
-                    const spaceBelow = windowHeight - selectBottomRelative;
-                    const spaceAbove = selectTopRelative;
-                    
-                    // Si no hay suficiente espacio debajo pero sí arriba, forzar que se abra hacia arriba
-                    if (spaceBelow < Math.min(dropdownHeight, 200) && spaceAbove > Math.min(dropdownHeight, 200)) {
-                        $selectContainer.addClass('select2-container--above');
-                        $dropdown.addClass('select2-dropdown--above');
-                    } else {
-                        $selectContainer.removeClass('select2-container--above');
-                        $dropdown.removeClass('select2-dropdown--above');
-                    }
-                    
-                    // Asegurar que el select sea visible en el viewport haciendo scroll del modal si es necesario
-                    const selectTopInModal = selectOffset.top - $modal.offset().top + modalScrollTop;
-                    const modalViewportTop = modalScrollTop;
-                    const modalViewportBottom = modalScrollTop + $modal.height();
-                    
-                    // Si el select está cerca del borde inferior del viewport del modal, hacer scroll
-                    if (selectTopInModal + selectHeight > modalViewportBottom - 50) {
-                        const scrollAmount = (selectTopInModal + selectHeight) - (modalViewportBottom - 50);
-                        $modal.animate({ scrollTop: modalScrollTop + scrollAmount }, 200);
-                    } else if (selectTopInModal < modalViewportTop + 50) {
-                        const scrollAmount = (modalViewportTop + 50) - selectTopInModal;
-                        $modal.animate({ scrollTop: modalScrollTop - scrollAmount }, 200);
-                    }
-                    
-                    // En móvil, asegurar que el dropdown sea visible y tenga el ancho correcto
-                    if (window.innerWidth <= 768) {
-                        if ($modalContent.length) {
-                            const contentWidth = $modalContent.width();
-                            $dropdown.css({
-                                'max-width': contentWidth + 'px',
-                                'width': 'auto',
-                                'min-width': '200px',
-                                'left': selectOffset.left + 'px !important'
-                            });
-                        }
-                    } else {
-                        // En desktop, ajustar posición left para que esté alineado con el select
-                        $dropdown.css({
-                            'left': selectOffset.left + 'px !important',
-                            'width': Math.max($selectContainer.outerWidth(), 200) + 'px'
-                        });
-                    }
-                }, 150);
             }, 50);
         });
     }
@@ -3100,6 +3027,6 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
     return ob_get_clean();
 }
-add_shortcode('gofast_pedidos', 'gofast_pedidos_shortcode');
+add_shortcode('gofast_pedidos_dev', 'gofast_pedidos_dev_shortcode');
 
 
