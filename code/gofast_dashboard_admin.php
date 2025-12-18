@@ -192,6 +192,13 @@ function gofast_dashboard_admin_shortcode() {
             <h3 style="margin:0 0 8px 0;color:#1a1a1a;">Solicitudes de Trabajo</h3>
             <p style="margin:0;color:#666;font-size:14px;">Ver y gestionar solicitudes de trabajo de mensajeros</p>
         </a>
+        
+        
+        <a href="<?php echo esc_url( home_url('/admin-finanzas') ); ?>" class="gofast-box" style="display:block;text-decoration:none;padding:24px;transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
+            <div style="font-size:40px;margin-bottom:12px;">💹</div>
+            <h3 style="margin:0 0 8px 0;color:#1a1a1a;">Finanzas</h3>
+            <p style="margin:0;color:#666;font-size:14px;">Gestionar egresos, vales, saldos de mensajeros y reportes financieros</p>
+        </a>
 
     </div>
 
