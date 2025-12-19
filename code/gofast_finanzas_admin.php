@@ -3865,7 +3865,12 @@ function gofast_finanzas_admin_shortcode() {
                     <?php if ($total_paginas_saldos > 1): ?>
                         <div class="gofast-pagination" style="margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
                             <?php
+                            // Preservar todos los parámetros importantes al cambiar de página
                             $url_base = remove_query_arg('pg_saldos');
+                            // Asegurar que subtab_saldos esté presente
+                            if (strpos($url_base, 'subtab_saldos') === false) {
+                                $url_base = add_query_arg('subtab_saldos', $subtab_saldos, $url_base);
+                            }
                             for ($i = 1; $i <= $total_paginas_saldos; $i++):
                             ?>
                                 <a href="<?= esc_url(add_query_arg('pg_saldos', $i, $url_base)) ?>" 
@@ -4008,10 +4013,15 @@ function gofast_finanzas_admin_shortcode() {
                         <?php if ($total_paginas_historial > 1): ?>
                             <div class="gofast-pagination" style="margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
                                 <?php
+                                // Preservar todos los parámetros importantes al cambiar de página
                                 $url_base_historial = remove_query_arg('pg_historial');
+                                // Asegurar que subtab_saldos esté presente
+                                if (strpos($url_base_historial, 'subtab_saldos') === false) {
+                                    $url_base_historial = add_query_arg('subtab_saldos', $subtab_saldos, $url_base_historial);
+                                }
                                 for ($i = 1; $i <= $total_paginas_historial; $i++):
                                 ?>
-                                    <a href="<?= esc_url(add_query_arg('pg_historial', $i, $url_base_historial)) ?>" 
+                                    <a href="<?= esc_url(add_query_arg('pg_historial', $i, $url_base_historial)) ?>"
                                        class="gofast-page-link <?= $i === $pg_historial ? 'gofast-page-current' : '' ?>"
                                        style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; text-decoration: none; color: <?= $i === $pg_historial ? '#000' : '#333' ?>; background: <?= $i === $pg_historial ? 'var(--gofast-yellow, #F4C524)' : '#fff' ?>; font-weight: <?= $i === $pg_historial ? '700' : '400' ?>;">
                                         <?= $i ?>
