@@ -192,7 +192,8 @@ function gofast_reportes_financieros_shortcode() {
     $total_comisiones = $total_ingresos * 0.20;
 
     // Saldos Mensajeros - Calculado con historial completo hasta fecha_hasta (igual que gofast_finanzas_admin.php)
-    $mensajeros = $wpdb->get_results("SELECT id, nombre, telefono, email FROM usuarios_gofast WHERE rol = 'mensajero' AND activo = 1 ORDER BY nombre ASC");
+    // NOTA: No filtramos por activo=1 para incluir mensajeros deshabilitados en reportes financieros
+    $mensajeros = $wpdb->get_results("SELECT id, nombre, telefono, email FROM usuarios_gofast WHERE rol = 'mensajero' ORDER BY nombre ASC");
     
     $saldos_mensajeros = [];
     foreach ($mensajeros as $mensajero) {

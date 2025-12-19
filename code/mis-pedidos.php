@@ -29,7 +29,16 @@ function gofast_pedidos_shortcode() {
     $usuarios_negocios = [];
     
     if ($rol === 'admin') {
+        // Mensajeros para filtros (incluye deshabilitados para ver pedidos históricos)
         $mensajeros = $wpdb->get_results("
+            SELECT id, nombre 
+            FROM usuarios_gofast
+            WHERE rol = 'mensajero'
+            ORDER BY nombre ASC
+        ");
+        
+        // Mensajeros para asignación (solo activos)
+        $mensajeros_asignacion = $wpdb->get_results("
             SELECT id, nombre 
             FROM usuarios_gofast
             WHERE rol = 'mensajero' AND activo = 1
@@ -1301,7 +1310,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                                         <select name="gofast_mensajero_id" class="gofast-mensajero-select" onchange="this.form.submit()">
                                             <option value="">Sin asignar</option>
-                                            <?php foreach ($mensajeros as $m): ?>
+                                            <?php foreach ($mensajeros_asignacion as $m): ?>
                                                 <option value="<?php echo (int) $m->id; ?>"<?php selected($p->mensajero_id, $m->id); ?>>
                                                     <?php echo esc_html($m->nombre); ?>
                                                 </option>
@@ -1624,7 +1633,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             onchange="this.form.submit()"
                                             style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 4px;">
                                         <option value="">Sin asignar</option>
-                                        <?php foreach ($mensajeros as $m): ?>
+                                        <?php foreach ($mensajeros_asignacion as $m): ?>
                                             <option value="<?= (int) $m->id ?>"<?php selected($p->mensajero_id, $m->id) ?>>
                                                 <?= esc_html($m->nombre) ?>
                                             </option>
