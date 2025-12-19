@@ -331,8 +331,8 @@ function gofast_reportes_admin_shortcode() {
         $params_transferencias[] = $hasta . ' 23:59:59';
     }
     
-    // Solo transferencias aprobadas
-    $where_transferencias .= " AND estado = 'aprobada'";
+    // Solo transferencias aprobadas y normales (excluir de tipo 'pago')
+    $where_transferencias .= " AND estado = 'aprobada' AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')";
     
     // Sumar valor de transferencias aprobadas
     if (!empty($params_transferencias)) {

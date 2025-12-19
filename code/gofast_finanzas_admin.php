@@ -91,11 +91,12 @@ function gofast_finanzas_admin_shortcode() {
                             'mensajero_id' => $mensajero_id,
                             'valor' => $total_a_pagar,
                             'estado' => 'aprobada',
+                            'tipo' => 'pago',
                             'creado_por' => $user_id,
                             'observaciones' => 'Pago automático - Transferencia - Fecha: ' . $fecha,
                             'fecha_creacion' => gofast_date_mysql()
                         ],
-                        ['%d', '%f', '%s', '%d', '%s', '%s']
+                        ['%d', '%f', '%s', '%s', '%d', '%s', '%s']
                     );
                 }
                 
@@ -137,44 +138,66 @@ function gofast_finanzas_admin_shortcode() {
                 $pago_id
             ));
             
-            $actualizado = $wpdb->update(
-                'pagos_mensajeros_gofast',
-                [
-                    'fecha' => $fecha,
-                    'tipo_pago' => $tipo_pago,
-                    'total_a_pagar' => $total_a_pagar
-                ],
-                ['id' => $pago_id],
-                ['%s', '%s', '%f'],
-                ['%d']
-            );
+            if (!$pago_anterior) {
+                $mensaje = 'Pago no encontrado.';
+                $mensaje_tipo = 'error';
+            } else {
+                $mensajero_id = (int) $pago_anterior->mensajero_id;
+                
+                // No permitir cambiar el tipo de pago, mantener el original
+                $tipo_pago = $pago_anterior->tipo_pago;
+                
+                $actualizado = $wpdb->update(
+                    'pagos_mensajeros_gofast',
+                    [
+                        'fecha' => $fecha,
+                        'total_a_pagar' => $total_a_pagar
+                    ],
+                    ['id' => $pago_id],
+                    ['%s', '%f'],
+                    ['%d']
+                );
 
-            if ($actualizado !== false) {
-                // Si era transferencia, buscar y actualizar la transferencia asociada
-                if ($pago_anterior && $pago_anterior->tipo_pago === 'transferencia') {
-                    // Buscar transferencia con el mismo valor y fecha aproximada
-                    $transferencia_asociada = $wpdb->get_row($wpdb->prepare(
-                        "SELECT id FROM transferencias_gofast 
-                         WHERE mensajero_id = %d 
-                         AND valor = %f 
-                         AND observaciones LIKE %s
-                         LIMIT 1",
-                        $pago_anterior->mensajero_id,
-                        $pago_anterior->total_a_pagar,
-                        '%Pago automático%' . $pago_anterior->fecha . '%'
-                    ));
-                    
-                    if ($transferencia_asociada) {
-                        // Actualizar valor de la transferencia
-                        $wpdb->update(
-                            'transferencias_gofast',
-                            ['valor' => $total_a_pagar],
-                            ['id' => $transferencia_asociada->id],
-                            ['%f'],
-                            ['%d']
-                        );
+                if ($actualizado !== false) {
+                    // Si el pago es de tipo transferencia, actualizar la transferencia asociada (solo el valor)
+                    if ($tipo_pago === 'transferencia') {
+                        // Buscar transferencia de pago asociada
+                        $transferencia_asociada = $wpdb->get_row($wpdb->prepare(
+                            "SELECT id FROM transferencias_gofast 
+                             WHERE mensajero_id = %d 
+                             AND valor = %f 
+                             AND tipo = 'pago'
+                             AND observaciones LIKE %s
+                             LIMIT 1",
+                            $mensajero_id,
+                            $pago_anterior->total_a_pagar,
+                            '%Pago automático%' . $pago_anterior->fecha . '%'
+                        ));
+                        
+                        if ($transferencia_asociada) {
+                            // Actualizar valor y observaciones de la transferencia
+                            $wpdb->update(
+                                'transferencias_gofast',
+                                [
+                                    'valor' => $total_a_pagar,
+                                    'observaciones' => 'Pago automático - Transferencia - Fecha: ' . $fecha
+                                ],
+                                ['id' => $transferencia_asociada->id],
+                                ['%f', '%s'],
+                                ['%d']
+                            );
+                        }
                     }
+                
+                    $mensaje = '✅ Pago actualizado correctamente.';
+                    $mensaje_tipo = 'success';
+                    $tab_activo = 'saldos_mensajeros';
+                    $subtab_saldos = 'historial_pagos';
+                } else {
+                    $mensaje = 'Error al actualizar el pago: ' . $wpdb->last_error;
+                    $mensaje_tipo = 'error';
                 }
+            }
                 
                 $mensaje = '✅ Pago actualizado correctamente.';
                 $mensaje_tipo = 'success';
@@ -195,9 +218,38 @@ function gofast_finanzas_admin_shortcode() {
             $mensaje = 'ID de pago inválido.';
             $mensaje_tipo = 'error';
         } else {
+            // Obtener datos del pago antes de eliminar para saber si tiene transferencia asociada
+            $pago = $wpdb->get_row($wpdb->prepare(
+                "SELECT mensajero_id, tipo_pago, total_a_pagar, fecha FROM pagos_mensajeros_gofast WHERE id = %d",
+                $pago_id
+            ));
+            
             $eliminado = $wpdb->delete('pagos_mensajeros_gofast', ['id' => $pago_id], ['%d']);
 
             if ($eliminado) {
+                // Si el pago era de tipo transferencia, eliminar también la transferencia asociada
+                if ($pago && $pago->tipo_pago === 'transferencia') {
+                    $transferencia_asociada = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id FROM transferencias_gofast 
+                         WHERE mensajero_id = %d 
+                         AND valor = %f 
+                         AND tipo = 'pago'
+                         AND observaciones LIKE %s
+                         LIMIT 1",
+                        $pago->mensajero_id,
+                        $pago->total_a_pagar,
+                        '%Pago automático%' . $pago->fecha . '%'
+                    ));
+                    
+                    if ($transferencia_asociada) {
+                        $wpdb->delete(
+                            'transferencias_gofast',
+                            ['id' => $transferencia_asociada->id],
+                            ['%d']
+                        );
+                    }
+                }
+                
                 $mensaje = '✅ Pago eliminado correctamente.';
                 $mensaje_tipo = 'success';
                 $tab_activo = 'saldos_mensajeros';
@@ -795,8 +847,8 @@ function gofast_finanzas_admin_shortcode() {
                 : "SELECT COALESCE(SUM(valor), 0) FROM vales_personal_gofast"
         ) ?? 0);
 
-        // Total Transferencias Ingresos (aprobadas)
-        $where_transf_entradas = ["estado = 'aprobada'"];
+        // Total Transferencias Ingresos (aprobadas, solo normales, excluir de tipo 'pago')
+        $where_transf_entradas = ["estado = 'aprobada'", "(tipo IS NULL OR tipo = 'normal' OR tipo = '')"];
         $params_transf_entradas = [];
         
         if (!empty($fecha_desde)) {
@@ -811,7 +863,7 @@ function gofast_finanzas_admin_shortcode() {
         $total_transferencias_ingresos = (float) ($wpdb->get_var(
             !empty($params_transf_entradas)
                 ? $wpdb->prepare("SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE " . implode(' AND ', $where_transf_entradas), $params_transf_entradas)
-                : "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE estado = 'aprobada'"
+                : "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE estado = 'aprobada' AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')"
         ) ?? 0);
 
         // Total Transferencias Salidas
@@ -897,11 +949,13 @@ function gofast_finanzas_admin_shortcode() {
             )
         ) ?? 0);
         
-        // Total Transferencias Ingresos hasta fecha_hasta
+        // Total Transferencias Ingresos hasta fecha_hasta (solo normales, excluir de tipo 'pago')
         $total_transferencias_ingresos = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                 WHERE estado = 'aprobada' AND DATE(fecha_creacion) <= %s",
+                 WHERE estado = 'aprobada' 
+                 AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')
+                 AND DATE(fecha_creacion) <= %s",
                 $fecha_hasta
             )
         ) ?? 0);
@@ -1504,6 +1558,9 @@ function gofast_finanzas_admin_shortcode() {
             $params_transf[] = $fecha_hasta;
         }
         
+        // Agregar condición para excluir transferencias de tipo 'pago'
+        $where_transf .= " AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')";
+        
         $transferencias_aprobadas = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE $where_transf",
@@ -1565,6 +1622,7 @@ function gofast_finanzas_admin_shortcode() {
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
                  WHERE mensajero_id = %d AND estado = 'aprobada' 
+                 AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')
                  AND DATE(fecha_creacion) <= %s",
                 $mensajero_id, $fecha_hasta
             )
@@ -1650,11 +1708,13 @@ function gofast_finanzas_admin_shortcode() {
                     )
                 ) ?? 0);
                 
-                // Transferencias del día
+                // Transferencias del día (solo normales, excluir de tipo 'pago')
                 $transferencias_dia = (float) ($wpdb->get_var(
                     $wpdb->prepare(
                         "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                         WHERE mensajero_id = %d AND estado = 'aprobada' AND DATE(fecha_creacion) = %s",
+                         WHERE mensajero_id = %d AND estado = 'aprobada' 
+                         AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')
+                         AND DATE(fecha_creacion) = %s",
                         $mensajero_id, $fecha_dia
                     )
                 ) ?? 0);
@@ -1752,8 +1812,8 @@ function gofast_finanzas_admin_shortcode() {
     }
     
     // Recalcular efectivo ahora que tenemos el valor real de saldos pendientes
-    // Efectivo = Subtotal - Saldo Transferencias - Saldos Pendientes
-    $efectivo = $subtotal - $saldo_transferencias - $total_saldos_pendientes;
+    // Efectivo = Subtotal - Saldo Transferencias - Saldos Pendientes - Vales Personal
+    $efectivo = $subtotal - $saldo_transferencias - $total_saldos_pendientes - $total_vales_personal;
     
     // Filtrar solo mensajeros con saldo pendiente (total_a_pagar > 0)
     $saldos_mensajeros = array_filter($saldos_mensajeros, function($saldo) {
@@ -3992,10 +4052,12 @@ function gofast_finanzas_admin_shortcode() {
             
             <div style="margin-bottom: 12px;">
                 <label style="display: block; margin-bottom: 4px; font-weight: 600;">Tipo de Pago:</label>
-                <select name="tipo_pago" id="editar-pago-tipo" form="form-editar-pago" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                <select name="tipo_pago" id="editar-pago-tipo" form="form-editar-pago" required disabled style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; background-color: #f5f5f5; cursor: not-allowed;">
                     <option value="efectivo">💵 Efectivo</option>
                     <option value="transferencia">💸 Transferencia</option>
                 </select>
+                <input type="hidden" name="tipo_pago" id="editar-pago-tipo-hidden" form="form-editar-pago">
+                <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">⚠️ El tipo de pago no se puede modificar. Solo se puede editar el valor.</small>
             </div>
             
             <div style="margin-bottom: 16px;">
@@ -4585,8 +4647,9 @@ function abrirModalEditarPago(pagoId, fecha, tipo, total, mensajero) {
     document.getElementById('editar-pago-id').value = pagoId;
     document.getElementById('editar-pago-fecha').value = fecha;
     document.getElementById('editar-pago-tipo').value = tipo;
+    document.getElementById('editar-pago-tipo-hidden').value = tipo; // Sincronizar con hidden input
     document.getElementById('editar-pago-total').value = total;
-    document.getElementById('editar-pago-info').innerHTML = 'Editando pago de <strong>' + mensajero + '</strong>';
+    document.getElementById('editar-pago-info').innerHTML = 'Editando pago de <strong>' + mensajero + '</strong><br><small style="color:#666;">⚠️ Solo se puede modificar la fecha y el valor. El tipo de pago no se puede cambiar.</small>';
     document.getElementById('modal-editar-pago').style.display = 'block';
 }
 

@@ -84,11 +84,12 @@ function gofast_transferencias_shortcode() {
                         'mensajero_id' => $mensajero_id,
                         'valor' => $valor,
                         'estado' => $estado,
+                        'tipo' => 'normal',
                         'creado_por' => $user_id,
                         'observaciones' => null,
                         'fecha_creacion' => gofast_date_mysql()
                     ],
-                    ['%d', '%f', '%s', '%d', '%s', '%s']
+                    ['%d', '%f', '%s', '%s', '%d', '%s', '%s']
                 );
 
                 if ($insertado) {
@@ -154,7 +155,98 @@ function gofast_transferencias_shortcode() {
         }
     }
 
-    // 4. ELIMINAR TRANSFERENCIA (Solo Admin)
+    // 4. EDITAR TRANSFERENCIA (Solo Admin) - Puede editar fecha y valor sin importar el estado
+    if (isset($_POST['gofast_editar_transferencia']) && wp_verify_nonce($_POST['gofast_editar_transferencia_nonce'], 'gofast_editar_transferencia') && $rol === 'admin') {
+        $transferencia_id = (int) $_POST['transferencia_id'];
+        $nueva_fecha = sanitize_text_field($_POST['fecha_creacion'] ?? '');
+        $nuevo_valor = floatval($_POST['valor'] ?? 0);
+
+        if ($nuevo_valor <= 0) {
+            $mensaje = 'El valor debe ser mayor a cero.';
+            $mensaje_tipo = 'error';
+        } elseif (empty($nueva_fecha)) {
+            $mensaje = 'La fecha es obligatoria.';
+            $mensaje_tipo = 'error';
+        } else {
+            // Verificar que la transferencia existe y obtener la hora original
+            $transferencia = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, fecha_creacion FROM transferencias_gofast WHERE id = %d",
+                $transferencia_id
+            ));
+
+            if (!$transferencia) {
+                $mensaje = 'Transferencia no encontrada.';
+                $mensaje_tipo = 'error';
+            } else {
+                // Mantener la hora original si existe, sino usar la hora actual
+                $hora_original = '';
+                if ($transferencia->fecha_creacion) {
+                    $fecha_completa = DateTime::createFromFormat('Y-m-d H:i:s', $transferencia->fecha_creacion);
+                    if ($fecha_completa) {
+                        $hora_original = $fecha_completa->format('H:i:s');
+                    } else {
+                        $hora_original = date('H:i:s');
+                    }
+                } else {
+                    $hora_original = date('H:i:s');
+                }
+                
+                $fecha_completa_nueva = $nueva_fecha . ' ' . $hora_original;
+                
+                $actualizado = $wpdb->update(
+                    'transferencias_gofast',
+                    [
+                        'valor' => $nuevo_valor,
+                        'fecha_creacion' => $fecha_completa_nueva,
+                        'fecha_actualizacion' => gofast_date_mysql()
+                    ],
+                    ['id' => $transferencia_id],
+                    ['%f', '%s', '%s'],
+                    ['%d']
+                );
+
+                if ($actualizado !== false) {
+                    $mensaje = 'Transferencia actualizada correctamente.';
+                    $mensaje_tipo = 'success';
+                } else {
+                    $mensaje = 'Error al actualizar la transferencia.';
+                    $mensaje_tipo = 'error';
+                }
+            }
+        }
+    }
+
+    // 5. CAMBIAR TIPO DE TRANSFERENCIA (Solo Admin)
+    if (isset($_POST['gofast_cambiar_tipo_transferencia']) && wp_verify_nonce($_POST['gofast_cambiar_tipo_nonce'], 'gofast_cambiar_tipo_transferencia') && $rol === 'admin') {
+        $transferencia_id = (int) $_POST['transferencia_id'];
+        $nuevo_tipo = sanitize_text_field($_POST['nuevo_tipo'] ?? '');
+
+        if (!in_array($nuevo_tipo, ['normal', 'pago'])) {
+            $mensaje = 'Tipo de transferencia inválido.';
+            $mensaje_tipo = 'error';
+        } else {
+            $actualizado = $wpdb->update(
+                'transferencias_gofast',
+                [
+                    'tipo' => $nuevo_tipo,
+                    'fecha_actualizacion' => gofast_date_mysql()
+                ],
+                ['id' => $transferencia_id],
+                ['%s', '%s'],
+                ['%d']
+            );
+
+            if ($actualizado) {
+                $mensaje = 'Tipo de transferencia actualizado correctamente.';
+                $mensaje_tipo = 'success';
+            } else {
+                $mensaje = 'Error al actualizar el tipo de transferencia.';
+                $mensaje_tipo = 'error';
+            }
+        }
+    }
+
+    // 6. ELIMINAR TRANSFERENCIA (Solo Admin)
     if (isset($_POST['gofast_eliminar_transferencia']) && wp_verify_nonce($_POST['gofast_eliminar_nonce'], 'gofast_eliminar_transferencia') && $rol === 'admin') {
         $transferencia_id = (int) $_POST['transferencia_id'];
 
@@ -183,6 +275,8 @@ function gofast_transferencias_shortcode() {
     $valor_min = isset($_GET['valor_min']) ? floatval($_GET['valor_min']) : 0;
     $valor_max = isset($_GET['valor_max']) ? floatval($_GET['valor_max']) : 0;
     $estado_filtro = isset($_GET['estado']) ? sanitize_text_field($_GET['estado']) : '';
+    $tipo_filtro = isset($_GET['tipo']) ? sanitize_text_field($_GET['tipo']) : '';
+    $mensajero_filtro = isset($_GET['mensajero_id']) ? (int) $_GET['mensajero_id'] : 0;
 
     // Valores por defecto según rol
     if (empty($_GET['fecha_desde']) && empty($_GET['fecha_hasta']) && empty($_GET['estado'])) {
@@ -220,6 +314,12 @@ function gofast_transferencias_shortcode() {
         $where_parts[] = "t.mensajero_id = %d";
         $where_values[] = $user_id;
     }
+    
+    // Filtro por mensajero (solo admin)
+    if ($rol === 'admin' && $mensajero_filtro > 0) {
+        $where_parts[] = "t.mensajero_id = %d";
+        $where_values[] = $mensajero_filtro;
+    }
 
     // Filtro por fecha
     if (!empty($fecha_desde)) {
@@ -245,6 +345,12 @@ function gofast_transferencias_shortcode() {
     if (!empty($estado_filtro) && in_array($estado_filtro, ['pendiente', 'aprobada', 'rechazada'])) {
         $where_parts[] = "t.estado = %s";
         $where_values[] = $estado_filtro;
+    }
+
+    // Filtro por tipo
+    if (!empty($tipo_filtro) && in_array($tipo_filtro, ['normal', 'pago'])) {
+        $where_parts[] = "t.tipo = %s";
+        $where_values[] = $tipo_filtro;
     }
 
     // Construir consulta SQL
@@ -401,12 +507,25 @@ function gofast_transferencias_shortcode() {
         <form method="get" action="" class="gofast-filtros-form">
             <!-- Mantener otros parámetros GET si existen -->
             <?php foreach ($_GET as $key => $value): ?>
-                <?php if (!in_array($key, ['fecha_desde', 'fecha_hasta', 'valor_min', 'valor_max', 'estado'])): ?>
+                <?php if (!in_array($key, ['fecha_desde', 'fecha_hasta', 'valor_min', 'valor_max', 'estado', 'tipo', 'mensajero_id'])): ?>
                     <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                 <?php endif; ?>
             <?php endforeach; ?>
             
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                <?php if ($rol === 'admin'): ?>
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Mensajero</label>
+                    <select name="mensajero_id" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <option value="">Todos</option>
+                        <?php foreach ($mensajeros as $m): ?>
+                            <option value="<?= esc_attr($m->id) ?>" <?= $mensajero_filtro == $m->id ? 'selected' : '' ?>>
+                                <?= esc_html($m->nombre) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
                 <div>
                     <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha desde</label>
                     <input type="date" 
@@ -450,6 +569,14 @@ function gofast_transferencias_shortcode() {
                         <option value="rechazada" <?= $estado_filtro === 'rechazada' ? 'selected' : '' ?>>❌ Rechazada</option>
                     </select>
                 </div>
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Tipo</label>
+                    <select name="tipo" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <option value="">Todos</option>
+                        <option value="normal" <?= $tipo_filtro === 'normal' ? 'selected' : '' ?>>📋 Normal</option>
+                        <option value="pago" <?= $tipo_filtro === 'pago' ? 'selected' : '' ?>>💰 Pago</option>
+                    </select>
+                </div>
             </div>
             
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -458,7 +585,7 @@ function gofast_transferencias_shortcode() {
                 </button>
                 <?php
                 // Construir URL sin los parámetros de filtro
-                $clean_url = remove_query_arg(['fecha_desde', 'fecha_hasta', 'valor_min', 'valor_max', 'estado']);
+                $clean_url = remove_query_arg(['fecha_desde', 'fecha_hasta', 'valor_min', 'valor_max', 'estado', 'tipo', 'mensajero_id']);
                 if (empty($clean_url) || $clean_url === home_url('/')) {
                     $clean_url = home_url('/transferencias');
                 }
@@ -471,7 +598,7 @@ function gofast_transferencias_shortcode() {
             </div>
         </form>
         
-        <?php if (!empty($transferencias) || !empty($fecha_desde) || !empty($fecha_hasta) || $valor_min > 0 || $valor_max > 0 || !empty($estado_filtro)): ?>
+        <?php if (!empty($transferencias) || !empty($fecha_desde) || !empty($fecha_hasta) || $valor_min > 0 || $valor_max > 0 || !empty($estado_filtro) || !empty($tipo_filtro)): ?>
             <div style="margin-top: 12px; padding: 10px; background: #e7f3ff; border-radius: 6px; font-size: 13px;">
                 <strong>Resultados:</strong> 
                 <?= count($transferencias) ?> transferencia(s) encontrada(s)
@@ -504,6 +631,7 @@ function gofast_transferencias_shortcode() {
                                 <th>Creado por</th>
                             <?php endif; ?>
                             <th>Valor</th>
+                            <th>Tipo</th>
                             <th>Estado</th>
                             <?php if ($rol === 'admin'): ?>
                                 <th>Acciones</th>
@@ -523,6 +651,25 @@ function gofast_transferencias_shortcode() {
                                     <td><?= esc_html($t->creador_nombre) ?></td>
                                 <?php endif; ?>
                                 <td><strong>$<?= number_format($t->valor, 0, ',', '.') ?></strong></td>
+                                <td>
+                                    <?php
+                                    $tipo_text = '';
+                                    $tipo_icon = '';
+                                    $tipo_color = '';
+                                    if (!empty($t->tipo) && $t->tipo === 'pago') {
+                                        $tipo_text = '💰 Pago';
+                                        $tipo_icon = '💰';
+                                        $tipo_color = '#007bff';
+                                    } else {
+                                        $tipo_text = '📋 Normal';
+                                        $tipo_icon = '📋';
+                                        $tipo_color = '#6c757d';
+                                    }
+                                    ?>
+                                    <span style="font-size: 12px; color: <?= $tipo_color ?>; font-weight: 600;">
+                                        <?= $tipo_text ?>
+                                    </span>
+                                </td>
                                 <td>
                                     <?php
                                     $estado_class = '';
@@ -570,6 +717,18 @@ function gofast_transferencias_shortcode() {
                                                 ❌ Rechazar
                                             </button>
                                             <button type="button" 
+                                                    onclick="mostrarModalEditarTransferencia(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>, '<?= esc_js(date('Y-m-d', strtotime($t->fecha_creacion))) ?>', '<?= esc_js($t->estado) ?>')"
+                                                    class="gofast-btn-mini" 
+                                                    style="background: #ffc107; color: #000; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">
+                                                ✏️ Editar
+                                            </button>
+                                            <button type="button" 
+                                                    onclick="mostrarModalCambiarTipo(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>, '<?= esc_js($t->tipo ?? 'normal') ?>')"
+                                                    class="gofast-btn-mini" 
+                                                    style="background: #17a2b8; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                                🔄 Tipo
+                                            </button>
+                                            <button type="button" 
                                                     onclick="mostrarModalEliminar(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>)"
                                                     class="gofast-btn-mini" 
                                                     style="background: #6c757d; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
@@ -615,6 +774,9 @@ function gofast_transferencias_shortcode() {
                             <div>
                                 <div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: #<?= esc_html($t->id) ?></div>
                                 <div style="font-size: 11px; color: #999;"><?= gofast_date_format($t->fecha_creacion, 'd/m/Y H:i') ?></div>
+                                <div style="font-size: 11px; color: <?= (!empty($t->tipo) && $t->tipo === 'pago') ? '#007bff' : '#6c757d' ?>; margin-top: 4px; font-weight: 600;">
+                                    <?= (!empty($t->tipo) && $t->tipo === 'pago') ? '💰 Pago' : '📋 Normal' ?>
+                                </div>
                             </div>
                             <span class="gofast-badge-estado <?= $estado_class ?>" style="font-size: 12px; padding: 4px 10px;">
                                 <?= $estado_text ?>
@@ -670,6 +832,16 @@ function gofast_transferencias_shortcode() {
                                     ❌ Rechazar
                                 </button>
                                 <button type="button" 
+                                        onclick="mostrarModalEditarTransferencia(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>, '<?= esc_js(date('Y-m-d', strtotime($t->fecha_creacion))) ?>', '<?= esc_js($t->estado) ?>')"
+                                        style="flex: 1; min-width: 100px; background: #ffc107; color: #000; border: 0; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                                    ✏️ Editar
+                                </button>
+                                <button type="button" 
+                                        onclick="mostrarModalCambiarTipo(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>, '<?= esc_js($t->tipo ?? 'normal') ?>')"
+                                        style="flex: 1; min-width: 100px; background: #17a2b8; color: #fff; border: 0; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                                    🔄 Tipo
+                                </button>
+                                <button type="button" 
                                         onclick="mostrarModalEliminar(<?= esc_js($t->id) ?>, '<?= esc_js($t->mensajero_nombre) ?>', <?= esc_js($t->valor) ?>)"
                                         style="flex: 1; min-width: 100px; background: #6c757d; color: #fff; border: 0; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
                                     🗑️ Eliminar
@@ -684,8 +856,66 @@ function gofast_transferencias_shortcode() {
 
 </div>
 
-<!-- Modal para rechazar transferencia (Solo Admin) -->
+<!-- Modal para editar transferencia (Solo Admin) -->
 <?php if ($rol === 'admin'): ?>
+    <div id="modal-editar-transferencia" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10003; overflow-y: auto; padding: 20px;">
+        <div style="max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 20px;">✏️ Editar Transferencia</h2>
+            
+            <!-- Información de la transferencia -->
+            <div id="transferencia-info-editar" style="background: #f8f9fa; border-left: 4px solid #ffc107; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;">
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: start;">
+                    <strong style="color: #666;">Mensajero:</strong>
+                    <span id="modal-mensajero-nombre-editar" style="font-weight: 600; color: #000;"></span>
+                    
+                    <strong style="color: #666;">Estado Actual:</strong>
+                    <span id="modal-estado-actual-editar" style="font-weight: 600; color: #000;"></span>
+                </div>
+            </div>
+            
+            <form method="post" id="form-editar-transferencia" action="">
+                <?php wp_nonce_field('gofast_editar_transferencia', 'gofast_editar_transferencia_nonce'); ?>
+                <input type="hidden" name="transferencia_id" id="modal-transferencia-id-editar">
+                
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #000;">Fecha <span style="color: #dc3545;">*</span></label>
+                    <input type="date" 
+                           name="fecha_creacion" 
+                           id="modal-fecha-editar"
+                           required
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                </div>
+                
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #000;">Valor <span style="color: #dc3545;">*</span></label>
+                    <input type="number" 
+                           name="valor" 
+                           id="modal-valor-editar"
+                           required
+                           min="0.01"
+                           step="0.01"
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">El valor debe ser mayor a cero.</small>
+                </div>
+                
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
+                    <button type="button" 
+                            onclick="cerrarModalEditarTransferencia()" 
+                            class="gofast-btn-mini gofast-btn-outline">
+                        Cancelar
+                    </button>
+                    <button type="submit" 
+                            name="gofast_editar_transferencia" 
+                            class="gofast-btn-mini" 
+                            style="background: #ffc107; color: #000;">
+                        💾 Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<!-- Modal para rechazar transferencia (Solo Admin) -->
     <div id="modal-rechazar-transferencia" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; overflow-y: auto; padding: 20px;">
         <div style="max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
             <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 20px;">❌ Rechazar Transferencia</h2>
@@ -724,6 +954,57 @@ function gofast_transferencias_shortcode() {
                             class="gofast-btn-mini" 
                             style="background: #dc3545; color: #fff;">
                         ❌ Rechazar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para cambiar tipo de transferencia (Solo Admin) -->
+    <div id="modal-cambiar-tipo-transferencia" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10002; overflow-y: auto; padding: 20px;">
+        <div style="max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 20px;">🔄 Cambiar Tipo de Transferencia</h2>
+            
+            <!-- Información de la transferencia -->
+            <div id="transferencia-info-tipo" style="background: #f8f9fa; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;">
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: start;">
+                    <strong style="color: #666;">Mensajero:</strong>
+                    <span id="modal-mensajero-nombre-tipo" style="font-weight: 600; color: #000;"></span>
+                    
+                    <strong style="color: #666;">Valor:</strong>
+                    <span id="modal-transferencia-valor-tipo" style="font-weight: 600; color: #000;"></span>
+                    
+                    <strong style="color: #666;">Tipo Actual:</strong>
+                    <span id="modal-tipo-actual" style="font-weight: 600; color: #000;"></span>
+                </div>
+            </div>
+            
+            <form method="post" id="form-cambiar-tipo-transferencia" action="">
+                <?php wp_nonce_field('gofast_cambiar_tipo_transferencia', 'gofast_cambiar_tipo_nonce'); ?>
+                <input type="hidden" name="transferencia_id" id="modal-transferencia-id-tipo">
+                
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #000;">Nuevo Tipo</label>
+                    <select name="nuevo_tipo" 
+                            id="modal-nuevo-tipo"
+                            required
+                            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                        <option value="normal">📋 Normal</option>
+                        <option value="pago">💰 Pago</option>
+                    </select>
+                </div>
+                
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
+                    <button type="button" 
+                            onclick="cerrarModalCambiarTipo()" 
+                            class="gofast-btn-mini gofast-btn-outline">
+                        Cancelar
+                    </button>
+                    <button type="submit" 
+                            name="gofast_cambiar_tipo_transferencia" 
+                            class="gofast-btn-mini" 
+                            style="background: #17a2b8; color: #fff;">
+                        🔄 Cambiar Tipo
                     </button>
                 </div>
             </form>
@@ -775,6 +1056,20 @@ function gofast_transferencias_shortcode() {
     </div>
 
     <script>
+    function mostrarModalEditarTransferencia(id, mensajero, valor, fecha, estado) {
+        document.getElementById('modal-transferencia-id-editar').value = id;
+        document.getElementById('modal-mensajero-nombre-editar').textContent = mensajero;
+        document.getElementById('modal-estado-actual-editar').textContent = estado === 'pendiente' ? '⏳ Pendiente' : estado === 'aprobada' ? '✅ Aprobada' : '❌ Rechazada';
+        document.getElementById('modal-fecha-editar').value = fecha;
+        document.getElementById('modal-valor-editar').value = valor;
+        document.getElementById('modal-editar-transferencia').style.display = 'block';
+    }
+    
+    function cerrarModalEditarTransferencia() {
+        document.getElementById('modal-editar-transferencia').style.display = 'none';
+        document.getElementById('form-editar-transferencia').reset();
+    }
+    
     function mostrarModalRechazar(id, mensajero, valor) {
         document.getElementById('modal-transferencia-id').value = id;
         document.getElementById('modal-mensajero-nombre').textContent = mensajero;
@@ -785,6 +1080,20 @@ function gofast_transferencias_shortcode() {
     function cerrarModalRechazar() {
         document.getElementById('modal-rechazar-transferencia').style.display = 'none';
         document.getElementById('form-rechazar-transferencia').reset();
+    }
+    
+    function mostrarModalCambiarTipo(id, mensajero, valor, tipoActual) {
+        document.getElementById('modal-transferencia-id-tipo').value = id;
+        document.getElementById('modal-mensajero-nombre-tipo').textContent = mensajero;
+        document.getElementById('modal-transferencia-valor-tipo').textContent = '$' + new Intl.NumberFormat('es-CO').format(valor);
+        document.getElementById('modal-tipo-actual').textContent = tipoActual === 'pago' ? '💰 Pago' : '📋 Normal';
+        document.getElementById('modal-nuevo-tipo').value = tipoActual === 'pago' ? 'normal' : 'pago';
+        document.getElementById('modal-cambiar-tipo-transferencia').style.display = 'block';
+    }
+    
+    function cerrarModalCambiarTipo() {
+        document.getElementById('modal-cambiar-tipo-transferencia').style.display = 'none';
+        document.getElementById('form-cambiar-tipo-transferencia').reset();
     }
     
     function mostrarModalEliminar(id, mensajero, valor) {
@@ -799,10 +1108,24 @@ function gofast_transferencias_shortcode() {
         document.getElementById('form-eliminar-transferencia').reset();
     }
     
+    // Cerrar al hacer clic fuera del modal de editar
+    document.getElementById('modal-editar-transferencia').addEventListener('click', function(e) {
+        if (e.target === this) {
+            cerrarModalEditarTransferencia();
+        }
+    });
+    
     // Cerrar al hacer clic fuera del modal de rechazar
     document.getElementById('modal-rechazar-transferencia').addEventListener('click', function(e) {
         if (e.target === this) {
             cerrarModalRechazar();
+        }
+    });
+    
+    // Cerrar al hacer clic fuera del modal de cambiar tipo
+    document.getElementById('modal-cambiar-tipo-transferencia').addEventListener('click', function(e) {
+        if (e.target === this) {
+            cerrarModalCambiarTipo();
         }
     });
     

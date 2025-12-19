@@ -93,13 +93,24 @@ function gofast_reportes_financieros_shortcode() {
             )
         ) ?? 0);
         
-        // Total Transferencias Ingresos
+        // Total Transferencias Ingresos (solo normales, excluir de tipo 'pago')
         $total_transferencias_ingresos = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
                  WHERE estado = 'aprobada' 
+                 AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')
                  AND fecha_creacion >= %s AND fecha_creacion <= %s",
                 $fecha_desde . ' 00:00:00', $fecha_hasta . ' 23:59:59'
+            )
+        ) ?? 0);
+        
+        // Total Pagos en el rango (pagos a mensajeros tipo efectivo + transferencia)
+        $total_pagos_dia = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
+                 WHERE tipo_pago IN ('efectivo', 'transferencia')
+                 AND fecha >= %s AND fecha <= %s",
+                $fecha_desde, $fecha_hasta
             )
         ) ?? 0);
         
@@ -159,11 +170,23 @@ function gofast_reportes_financieros_shortcode() {
             )
         ) ?? 0);
         
-        // Total Transferencias Ingresos hasta fecha_hasta
+        // Total Transferencias Ingresos hasta fecha_hasta (solo normales, excluir de tipo 'pago')
         $total_transferencias_ingresos = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                 WHERE estado = 'aprobada' AND DATE(fecha_creacion) <= %s",
+                 WHERE estado = 'aprobada' 
+                 AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')
+                 AND DATE(fecha_creacion) <= %s",
+                $fecha_hasta
+            )
+        ) ?? 0);
+        
+        // Total Pagos hasta fecha_hasta
+        $total_pagos_dia = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
+                 WHERE tipo_pago IN ('efectivo', 'transferencia')
+                 AND fecha <= %s",
                 $fecha_hasta
             )
         ) ?? 0);
@@ -220,11 +243,12 @@ function gofast_reportes_financieros_shortcode() {
         $ingresos_totales = $ingresos_servicios + $ingresos_compras;
         $comision_generada = $ingresos_totales * 0.20;
         
-        // Transferencias aprobadas en el rango
+        // Transferencias aprobadas en el rango (solo normales, excluir de tipo 'pago')
         $transferencias_aprobadas = (float) $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
                  WHERE mensajero_id = %d AND estado = 'aprobada'
+                 AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')
                  AND DATE(fecha_creacion) >= %s AND DATE(fecha_creacion) <= %s",
                 $mensajero_id, $fecha_desde, $fecha_hasta
             )
@@ -272,6 +296,7 @@ function gofast_reportes_financieros_shortcode() {
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
                  WHERE mensajero_id = %d AND estado = 'aprobada' 
+                 AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')
                  AND DATE(fecha_creacion) <= %s",
                 $mensajero_id, $fecha_hasta
             )
@@ -383,7 +408,7 @@ function gofast_reportes_financieros_shortcode() {
     .total-row { background: #e8f5e9; font-weight: bold; }
     .negative { color: #dc3545; }
     .positive { color: #28a745; }
-    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
     .summary-box { background: #f8f9fa; padding: 16px; border-radius: 8px; text-align: center; }
     .summary-box .value { font-size: 24px; font-weight: bold; color: #333; }
     .summary-box .label { font-size: 12px; color: #666; }
@@ -412,6 +437,10 @@ function gofast_reportes_financieros_shortcode() {
             <div class="label">Total Egresos</div>
         </div>
         <div class="summary-box">
+            <div class="value">$' . number_format($total_pagos_dia, 0, ',', '.') . '</div>
+            <div class="label">💰 Pagos en el Día</div>
+        </div>
+        <div class="summary-box">
             <div class="value">$' . number_format($total_saldos_pendientes, 0, ',', '.') . '</div>
             <div class="label">Saldos Pendientes</div>
         </div>
@@ -424,6 +453,7 @@ function gofast_reportes_financieros_shortcode() {
             <tr><td>📤 Total Egresos</td><td class="text-right negative">-$' . number_format($total_egresos, 0, ',', '.') . '</td></tr>
             <tr><td>🏢 Vales Empresa</td><td class="text-right negative">-$' . number_format($total_vales_empresa, 0, ',', '.') . '</td></tr>
             <tr><td>💸 Saldo Transferencias (Ingresos - Salidas)</td><td class="text-right">$' . number_format($saldo_transferencias, 0, ',', '.') . '</td></tr>
+            <tr><td>💰 Pagos en el Día</td><td class="text-right positive">$' . number_format($total_pagos_dia, 0, ',', '.') . '</td></tr>
             <tr><td>💵 Saldos Pendientes Mensajeros</td><td class="text-right">$' . number_format($total_saldos_pendientes, 0, ',', '.') . '</td></tr>
             <tr><td>➖ Total Descuentos</td><td class="text-right negative">-$' . number_format($total_descuentos, 0, ',', '.') . '</td></tr>
             <tr class="total-row"><td><strong>📊 Subtotal (Comisiones - Egresos - Vales - Descuentos)</strong></td><td class="text-right"><strong>$' . number_format($subtotal, 0, ',', '.') . '</strong></td></tr>
@@ -646,6 +676,7 @@ function gofast_reportes_financieros_shortcode() {
                     <tr><td>📤 Total Egresos</td><td class="text-right negative">-$' . number_format($total_egresos, 0, ',', '.') . '</td></tr>
                     <tr><td>🏢 Vales Empresa</td><td class="text-right negative">-$' . number_format($total_vales_empresa, 0, ',', '.') . '</td></tr>
                     <tr><td>💸 Saldo Transferencias</td><td class="text-right">$' . number_format($saldo_transferencias, 0, ',', '.') . '</td></tr>
+                    <tr><td>💰 Pagos en el Día</td><td class="text-right positive">$' . number_format($total_pagos_dia, 0, ',', '.') . '</td></tr>
                     <tr><td>💵 Saldos Pendientes Mensajeros</td><td class="text-right">$' . number_format($total_saldos_pendientes, 0, ',', '.') . '</td></tr>
                     <tr><td>➖ Total Descuentos</td><td class="text-right negative">-$' . number_format($total_descuentos, 0, ',', '.') . '</td></tr>
                     <tr class="total-row"><td><strong>📊 Subtotal</strong></td><td class="text-right"><strong>$' . number_format($subtotal, 0, ',', '.') . '</strong></td></tr>
