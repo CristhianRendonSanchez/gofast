@@ -3,7 +3,7 @@
  * Shortcode: [gofast_reportes_admin]
  * URL: /admin-reportes
  ***************************************************/
-function gofast_reportes_admin_shortcode() {
+function gofast_pedidos_dev_shortcode() {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
@@ -174,13 +174,14 @@ function gofast_reportes_admin_shortcode() {
         $params_sin_asignar[] = $estado;
     }
     
+    // Aplicar filtros de fecha (SIEMPRE, para mostrar solo el rango seleccionado)
     if ($desde !== '') {
-        $where_sin_asignar .= " AND fecha >= %s";
-        $params_sin_asignar[] = $desde . ' 00:00:00';
+        $where_sin_asignar .= " AND DATE(fecha) >= %s";
+        $params_sin_asignar[] = $desde;
     }
     if ($hasta !== '') {
-        $where_sin_asignar .= " AND fecha <= %s";
-        $params_sin_asignar[] = $hasta . ' 23:59:59';
+        $where_sin_asignar .= " AND DATE(fecha) <= %s";
+        $params_sin_asignar[] = $hasta;
     }
     
     if ($buscar !== '') {
@@ -247,14 +248,14 @@ function gofast_reportes_admin_shortcode() {
             $params_compras[] = $mensajero_id;
         }
         
-        // Aplicar filtros de fecha
+        // Aplicar filtros de fecha (SIEMPRE, para mostrar solo el rango seleccionado)
         if ($desde !== '') {
-            $where_compras .= " AND fecha_creacion >= %s";
-            $params_compras[] = $desde . ' 00:00:00';
+            $where_compras .= " AND DATE(fecha_creacion) >= %s";
+            $params_compras[] = $desde;
         }
         if ($hasta !== '') {
-            $where_compras .= " AND fecha_creacion <= %s";
-            $params_compras[] = $hasta . ' 23:59:59';
+            $where_compras .= " AND DATE(fecha_creacion) <= %s";
+            $params_compras[] = $hasta;
         }
         
         // Excluir canceladas
@@ -321,18 +322,18 @@ function gofast_reportes_admin_shortcode() {
         $params_transferencias[] = $mensajero_id;
     }
     
-    // Aplicar filtros de fecha
+    // Aplicar filtros de fecha (SIEMPRE, para mostrar solo el rango seleccionado)
     if ($desde !== '') {
-        $where_transferencias .= " AND fecha_creacion >= %s";
-        $params_transferencias[] = $desde . ' 00:00:00';
+        $where_transferencias .= " AND DATE(fecha_creacion) >= %s";
+        $params_transferencias[] = $desde;
     }
     if ($hasta !== '') {
-        $where_transferencias .= " AND fecha_creacion <= %s";
-        $params_transferencias[] = $hasta . ' 23:59:59';
+        $where_transferencias .= " AND DATE(fecha_creacion) <= %s";
+        $params_transferencias[] = $hasta;
     }
     
-    // Solo transferencias aprobadas y normales (excluir de tipo 'pago')
-    $where_transferencias .= " AND estado = 'aprobada' AND (tipo IS NULL OR tipo = 'normal' OR tipo = '')";
+    // Solo transferencias aprobadas
+    $where_transferencias .= " AND estado = 'aprobada'";
     
     // Sumar valor de transferencias aprobadas
     if (!empty($params_transferencias)) {
@@ -2092,7 +2093,7 @@ function gofast_reportes_admin_shortcode() {
 <?php
     return ob_get_clean();
 }
-add_shortcode('gofast_reportes_admin', 'gofast_reportes_admin_shortcode');
+add_shortcode('gofast_pedidos_dev', 'gofast_pedidos_dev_shortcode');
 ?>
 
 <style>

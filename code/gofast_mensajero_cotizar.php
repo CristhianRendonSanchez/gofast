@@ -74,20 +74,26 @@ function gofast_mensajero_cotizar_shortcode() {
             }
 
             $origen = intval($_POST['origen']);
-            // Obtener negocio_id de la sesión o detectar por barrio_id
-            $negocio_id = isset($_SESSION['gofast_mensajero_cotizacion']['negocio_id']) ? intval($_SESSION['gofast_mensajero_cotizacion']['negocio_id']) : 0;
-            $negocio_user_id = isset($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']) ? intval($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']) : null;
+            // Obtener negocio_id SOLO si fue seleccionado explícitamente (NO detectar automáticamente por barrio_id)
+            $negocio_id = 0;
+            $negocio_user_id = null;
             
-            // Si no hay negocio_id en sesión, intentar detectarlo por barrio_id
-            if ($negocio_id == 0 && $origen > 0 && !empty($todos_negocios)) {
-                foreach ($todos_negocios as $neg) {
-                    if (intval($neg->barrio_id) === $origen) {
-                        $negocio_id = intval($neg->id);
-                        $negocio_user_id = intval($neg->user_id);
-                        break;
-                    }
+            // Prioridad 1: Si viene negocio_id del POST (cuando se selecciona explícitamente un negocio), usarlo
+            if (isset($_POST['negocio_id']) && intval($_POST['negocio_id']) > 0) {
+                $negocio_id = intval($_POST['negocio_id']);
+                // Si viene cliente_id del POST, usarlo
+                if (isset($_POST['cliente_id']) && intval($_POST['cliente_id']) > 0) {
+                    $negocio_user_id = intval($_POST['cliente_id']);
                 }
             }
+            // Prioridad 2: Si no viene del POST, verificar en sesión (solo si fue guardado explícitamente)
+            elseif (isset($_SESSION['gofast_mensajero_cotizacion']['negocio_id']) && intval($_SESSION['gofast_mensajero_cotizacion']['negocio_id']) > 0) {
+                $negocio_id = intval($_SESSION['gofast_mensajero_cotizacion']['negocio_id']);
+                if (isset($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']) && intval($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']) > 0) {
+                    $negocio_user_id = intval($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']);
+                }
+            }
+            // Si no hay negocio_id en POST ni en sesión, $negocio_id queda en 0 (barrio simple, sin negocio)
             
             $destinos_finales = array_map('intval', explode(',', $_POST['destinos_finales']));
             $destinos_finales = array_filter($destinos_finales);
@@ -112,29 +118,41 @@ function gofast_mensajero_cotizar_shortcode() {
             $negocio_seleccionado = null;
             $cliente_propietario = null;
             if ($negocio_id > 0) {
-                if ($negocio_user_id) {
-                    // Buscar por negocio_id y user_id del cliente propietario
+                // Intentar buscar el negocio con cliente_id si se proporcionó
+                if ($negocio_user_id && $negocio_user_id > 0) {
                     $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
                         "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
                          FROM negocios_gofast n
                          INNER JOIN usuarios_gofast u ON n.user_id = u.id
-                         WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1",
+                         WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1
+                         LIMIT 1",
                         $negocio_id,
                         $negocio_user_id
                     ));
-                } else {
-                    // Buscar solo por negocio_id
+                }
+                
+                // Si no se encontró con cliente_id específico, buscar solo por negocio_id
+                if (!$negocio_seleccionado) {
                     $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
                         "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
                          FROM negocios_gofast n
                          INNER JOIN usuarios_gofast u ON n.user_id = u.id
-                         WHERE n.id = %d AND n.activo = 1 AND u.activo = 1",
+                         WHERE n.id = %d AND n.activo = 1 AND u.activo = 1
+                         LIMIT 1",
                         $negocio_id
                     ));
                 }
                 
-                if ($negocio_seleccionado) {
-                    $cliente_propietario = $negocio_seleccionado->user_id;
+                // Validar que el negocio se encontró
+                if (!$negocio_seleccionado) {
+                    return "<div class='gofast-box'>Error: El negocio seleccionado (ID: " . esc_html($negocio_id) . ") no se encontró o no está activo.</div>";
+                }
+                
+                $cliente_propietario = intval($negocio_seleccionado->user_id);
+                
+                // Validar que el cliente propietario existe y está activo
+                if (empty($cliente_propietario) || $cliente_propietario <= 0) {
+                    return "<div class='gofast-box'>Error: El cliente propietario del negocio no es válido (user_id: " . esc_html($negocio_seleccionado->user_id) . ").</div>";
                 }
             }
 
@@ -250,11 +268,22 @@ function gofast_mensajero_cotizar_shortcode() {
             // Construir direccion_origen_servicio según reglas:
             // 1. Solo barrio (si no hay negocio)
             // 2. Negocio + dirección (si hay negocio)
-            if ($negocio_seleccionado) {
+            if ($negocio_seleccionado && $negocio_id > 0) {
+                // Validar que tenemos el user_id del negocio
+                if (empty($negocio_seleccionado->user_id) || $negocio_seleccionado->user_id <= 0) {
+                    return "<div class='gofast-box'>Error: No se pudo determinar el cliente propietario del negocio.</div>";
+                }
+                
                 // Usar datos del NEGOCIO (no del cliente)
                 $nombre_cliente = $negocio_seleccionado->nombre; // Nombre del negocio
                 $telefono_cliente = $negocio_seleccionado->whatsapp ?: $negocio_seleccionado->cliente_telefono; // WhatsApp del negocio primero
-                $user_id_servicio = $cliente_propietario; // Asociar al cliente propietario del negocio
+                // SIEMPRE usar el user_id del negocio seleccionado (cliente propietario), nunca el mensajero
+                $user_id_servicio = intval($negocio_seleccionado->user_id); // Asociar al cliente propietario del negocio
+                
+                // Validar que el user_id_servicio es diferente del mensajero (debe ser el cliente)
+                if ($user_id_servicio === $mensajero->id) {
+                    return "<div class='gofast-box'>Error: El cliente propietario del negocio no puede ser el mismo que el mensajero.</div>";
+                }
                 
                 // Caso 2: Negocio + dirección
                 $dir_origen_negocio = $negocio_seleccionado->direccion_full ?: '';
@@ -264,8 +293,10 @@ function gofast_mensajero_cotizar_shortcode() {
                     $direccion_origen_servicio = $negocio_seleccionado->nombre;
                 }
             } else {
-                // Caso 1: Solo barrio
+                // Caso 1: Solo barrio (sin negocio seleccionado)
                 $direccion_origen_servicio = $nombre_origen;
+                // Asegurar que user_id_servicio es el mensajero cuando no hay negocio
+                $user_id_servicio = $mensajero->id;
             }
             
             $data_insert = [
@@ -316,7 +347,25 @@ function gofast_mensajero_cotizar_shortcode() {
         // Guardar en sesión
         if (isset($_POST['gofast_mensajero_cotizar'])) {
             $origen = intval($_POST['origen'] ?? 0);
-            $negocio_id = isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0;
+            // SOLO guardar negocio_id si viene explícitamente del POST (cuando se selecciona un negocio)
+            // Si no viene o es 0, NO guardar negocio_id (barrio simple)
+            $negocio_id = 0;
+            $negocio_user_id = null;
+            
+            if (isset($_POST['negocio_id']) && intval($_POST['negocio_id']) > 0) {
+                $negocio_id = intval($_POST['negocio_id']);
+                if (isset($_POST['cliente_id']) && intval($_POST['cliente_id']) > 0) {
+                    $negocio_user_id = intval($_POST['cliente_id']);
+                }
+            }
+            
+            // También verificar si el origen seleccionado es un negocio (por los atributos data del select)
+            // Esto es un fallback por si los campos hidden no se enviaron
+            if ($negocio_id <= 0 && $origen > 0) {
+                // Buscar si hay algún negocio con este barrio_id
+                // Pero solo si el origen fue seleccionado desde un negocio (no hacer detección automática)
+                // Este código se mantiene como fallback pero no debería ejecutarse normalmente
+            }
             $destinos = array_map('intval', (array) ($_POST['destino'] ?? []));
             
             // Eliminar solo valores vacíos/cero (permitir duplicados)
@@ -347,7 +396,8 @@ function gofast_mensajero_cotizar_shortcode() {
                 $_SESSION['gofast_mensajero_cotizacion'] = [
                     'origen' => $origen,
                     'destinos' => $destinos,
-                    'negocio_id' => $negocio_id,
+                    'negocio_id' => $negocio_id, // Solo será > 0 si se seleccionó explícitamente un negocio
+                    'negocio_user_id' => $negocio_user_id, // Solo será != null si se seleccionó explícitamente un negocio
                     'recargos_seleccionables' => $recargos_seleccionables_guardar,
                 ];
             }
@@ -533,17 +583,172 @@ function gofast_mensajero_cotizar_shortcode() {
         }
 
         const form = document.getElementById('gofast-mensajero-form');
-        if (form) {
-            form.addEventListener('submit', function(e){
-                const origen = document.getElementById('origen').value;
-                const destino = document.getElementById('destino-principal').value;
-                if (!origen || !destino){
-                    e.preventDefault();
-                    alert('Debes seleccionar origen y al menos un destino ⚠️');
-                    return false;
+        if (!form) return;
+
+        // Función para actualizar campos hidden según la selección
+        function actualizarCamposNegocio() {
+            // SIEMPRE eliminar campos hidden anteriores primero (importante para barrios simples)
+            const existingNegocioId = document.getElementById('hidden-negocio-id');
+            const existingClienteId = document.getElementById('hidden-cliente-id');
+            if (existingNegocioId) existingNegocioId.remove();
+            if (existingClienteId) existingClienteId.remove();
+            
+            const origenSelect = document.getElementById('origen');
+            if (!origenSelect || !origenSelect.value) {
+                return;
+            }
+            
+            // Si está usando Select2, obtener el elemento seleccionado de otra manera
+            let selectedOption = null;
+            const selectedValue = origenSelect.value;
+            
+            if (window.jQuery && jQuery.fn.select2 && jQuery(origenSelect).data('select2')) {
+                // Select2 está activo
+                const select2Data = jQuery(origenSelect).select2('data');
+                if (select2Data && select2Data.length > 0) {
+                    // Buscar la opción por su valor
+                    selectedOption = origenSelect.querySelector('option[value="' + selectedValue + '"]');
+                    if (!selectedOption) {
+                        // Intentar buscar por el id de Select2
+                        const select2Id = select2Data[0].id;
+                        selectedOption = origenSelect.querySelector('option[value="' + select2Id + '"]');
+                    }
                 }
-            });
+            }
+            
+            // Si no se encontró con Select2, usar método normal
+            if (!selectedOption) {
+                selectedOption = origenSelect.querySelector('option[value="' + selectedValue + '"]');
+                if (!selectedOption && origenSelect.selectedIndex >= 0) {
+                    selectedOption = origenSelect.options[origenSelect.selectedIndex];
+                }
+            }
+            
+            // Buscar TODAS las opciones con ese valor y encontrar la que tenga atributos data
+            const todasOpciones = origenSelect.querySelectorAll('option[value="' + selectedValue + '"]');
+            
+            // Si está usando Select2, también buscar por el texto seleccionado
+            let textoSeleccionado = '';
+            let textoSeleccionadoTieneNegocio = false;
+            if (window.jQuery && jQuery.fn.select2 && jQuery(origenSelect).data('select2')) {
+                const select2Data = jQuery(origenSelect).select2('data');
+                if (select2Data && select2Data.length > 0) {
+                    textoSeleccionado = select2Data[0].text || '';
+                    textoSeleccionadoTieneNegocio = textoSeleccionado.includes('🏪');
+                }
+            }
+            
+            // SOLO buscar opción de negocio si el texto seleccionado contiene el emoji 🏪
+            // Si no tiene emoji, es un barrio simple y debemos usar la opción sin negocio
+            let opcionConNegocio = null;
+            let opcionSinNegocio = null;
+            
+            for (let i = 0; i < todasOpciones.length; i++) {
+                const opcion = todasOpciones[i];
+                const tieneAtributoNegocio = opcion.getAttribute('data-is-negocio') === 'true' || 
+                                             opcion.getAttribute('data-negocio-id') !== null;
+                const tieneEmojiNegocio = opcion.textContent.includes('🏪') || opcion.innerHTML.includes('🏪');
+                const textoCoincide = textoSeleccionado && (opcion.textContent.trim() === textoSeleccionado.trim() || opcion.innerHTML.includes(textoSeleccionado));
+                
+                // Si el texto seleccionado tiene emoji 🏪, buscar la opción con negocio
+                if (textoSeleccionadoTieneNegocio) {
+                    if (tieneAtributoNegocio || tieneEmojiNegocio) {
+                        if (textoCoincide || !opcionConNegocio) {
+                            opcionConNegocio = opcion;
+                            if (textoCoincide && tieneAtributoNegocio) break; // Coincidencia exacta con atributos
+                        }
+                    }
+                } else {
+                    // Si el texto seleccionado NO tiene emoji, es un barrio simple
+                    if (!tieneAtributoNegocio && !tieneEmojiNegocio) {
+                        opcionSinNegocio = opcion;
+                        if (textoCoincide) break; // Coincidencia exacta
+                    }
+                }
+            }
+            
+            // Usar la opción correcta según lo que se seleccionó
+            if (textoSeleccionadoTieneNegocio && opcionConNegocio) {
+                selectedOption = opcionConNegocio;
+            } else if (!textoSeleccionadoTieneNegocio && opcionSinNegocio) {
+                selectedOption = opcionSinNegocio;
+            } else if (todasOpciones.length > 0) {
+                // Fallback: usar la primera opción
+                selectedOption = todasOpciones[0];
+            }
+            
+            if (!selectedOption) {
+                return;
+            }
+            
+            const isNegocio = selectedOption.getAttribute('data-is-negocio') === 'true';
+            const negocioId = selectedOption.getAttribute('data-negocio-id');
+            const clienteId = selectedOption.getAttribute('data-cliente-id');
+            
+            // También intentar leer con dataset (por si acaso)
+            const isNegocioDataset = selectedOption.dataset.isNegocio === 'true';
+            const negocioIdDataset = selectedOption.dataset.negocioId;
+            const clienteIdDataset = selectedOption.dataset.clienteId;
+            
+            // Usar dataset si getAttribute no funcionó
+            const finalIsNegocio = isNegocio || isNegocioDataset;
+            const finalNegocioId = negocioId || negocioIdDataset;
+            const finalClienteId = clienteId || clienteIdDataset;
+            
+            // SOLO agregar campos hidden si es un negocio explícitamente seleccionado
+            if ((finalIsNegocio === true || finalIsNegocio === 'true') && finalNegocioId && finalNegocioId !== '' && finalNegocioId !== '0') {
+                // Agregar campos hidden para negocio_id y cliente_id
+                const negocioInput = document.createElement('input');
+                negocioInput.type = 'hidden';
+                negocioInput.name = 'negocio_id';
+                negocioInput.id = 'hidden-negocio-id';
+                negocioInput.value = finalNegocioId;
+                form.appendChild(negocioInput);
+                
+                if (finalClienteId && finalClienteId !== '' && finalClienteId !== '0') {
+                    const clienteInput = document.createElement('input');
+                    clienteInput.type = 'hidden';
+                    clienteInput.name = 'cliente_id';
+                    clienteInput.id = 'hidden-cliente-id';
+                    clienteInput.value = finalClienteId;
+                    form.appendChild(clienteInput);
+                }
+            }
         }
+
+        // Manejar cambio del select de origen para agregar campos hidden de negocio
+        const origenSelect = document.getElementById('origen');
+        if (origenSelect) {
+            // Evento change nativo
+            origenSelect.addEventListener('change', actualizarCamposNegocio);
+            
+            // Evento change de Select2 (si está usando Select2)
+            if (window.jQuery && jQuery.fn.select2) {
+                jQuery(origenSelect).on('select2:select', function() {
+                    setTimeout(actualizarCamposNegocio, 100);
+                });
+            }
+            
+            // Ejecutar al cargar la página si ya hay una opción seleccionada
+            if (origenSelect.value) {
+                setTimeout(actualizarCamposNegocio, 200);
+            }
+        }
+        
+        // Asegurar que los campos hidden estén presentes antes de enviar el formulario
+        form.addEventListener('submit', function(e) {
+            // PRIMERO: Actualizar campos hidden
+            actualizarCamposNegocio();
+            
+            // SEGUNDO: Validar campos requeridos
+            const origen = document.getElementById('origen').value;
+            const destino = document.getElementById('destino-principal').value;
+            if (!origen || !destino){
+                e.preventDefault();
+                alert('Debes seleccionar origen y al menos un destino ⚠️');
+                return false;
+            }
+        });
     });
 
     function addDestinoMensajero(){
@@ -615,14 +820,42 @@ function gofast_mensajero_cotizar_shortcode() {
 
             const text = normalize(data.text);
             
+            // Extraer partes del texto para negocios (formato: "🏪 Nombre Negocio — Nombre Barrio")
+            let nombreNegocio = '';
+            let nombreBarrio = '';
+            let esNegocio = false;
+            
+            // Detectar si es un negocio (tiene el emoji 🏪 y el separador "—")
+            if (text.includes('—') || text.includes(' - ')) {
+                esNegocio = true;
+                const partes = text.split(/[—\-]/).map(p => p.trim());
+                if (partes.length >= 2) {
+                    // Quitar el emoji del nombre del negocio
+                    nombreNegocio = partes[0].replace(/^🏪\s*/, '').trim();
+                    nombreBarrio = partes[1].trim();
+                }
+            }
+            
             // PRIMERO: Verificar coincidencia exacta (ignorando mayúsculas y tildes)
             if (text === term) {
                 data.matchScore = 10000;
                 return data;
             }
             
+            // Si es negocio, verificar coincidencia exacta con el nombre del barrio
+            if (esNegocio && nombreBarrio && nombreBarrio === term) {
+                data.matchScore = 10000;
+                return data;
+            }
+            
             // SEGUNDO: Verificar si el texto comienza exactamente con el término
             if (text.indexOf(term) === 0) {
+                data.matchScore = 9500;
+                return data;
+            }
+            
+            // Si es negocio, verificar si el nombre del barrio comienza con el término
+            if (esNegocio && nombreBarrio && nombreBarrio.indexOf(term) === 0) {
                 data.matchScore = 9500;
                 return data;
             }
@@ -643,6 +876,11 @@ function gofast_mensajero_cotizar_shortcode() {
                     data.matchScore = 7000;
                     return data;
                 }
+                // Si es negocio, buscar también en el nombre del barrio
+                if (esNegocio && nombreBarrio && nombreBarrio.indexOf(term) !== -1) {
+                    data.matchScore = 7000;
+                    return data;
+                }
                 return null;
             }
             
@@ -654,6 +892,24 @@ function gofast_mensajero_cotizar_shortcode() {
                 return text.indexOf(word) !== -1;
             });
             
+            // Si es negocio, también buscar palabras significativas en el nombre del barrio
+            if (esNegocio && nombreBarrio) {
+                const barrioMatches = searchWords.filter(word => {
+                    if (word.length <= 2) {
+                        return nombreBarrio.split(/\s+/).some(textWord => textWord.indexOf(word) === 0);
+                    }
+                    return nombreBarrio.indexOf(word) !== -1;
+                });
+                // Si hay coincidencias en el barrio, agregarlas a significantMatches
+                if (barrioMatches.length > 0) {
+                    barrioMatches.forEach(match => {
+                        if (!significantMatches.includes(match)) {
+                            significantMatches.push(match);
+                        }
+                    });
+                }
+            }
+            
             if (significantMatches.length === 0) return null;
             
             const allSignificantMatch = searchWords.length === significantMatches.length;
@@ -662,10 +918,24 @@ function gofast_mensajero_cotizar_shortcode() {
             if (isCompleteSearch && text !== term && text.indexOf(term) !== 0) {
                 // Solo mostrar si el término completo está presente (aunque no al inicio)
                 if (text.indexOf(term) === -1) {
-                    // Verificar si al menos todas las palabras significativas están presentes
-                    const allWordsPresent = searchWords.every(word => text.indexOf(word) !== -1);
-                    if (!allWordsPresent) {
-                        return null; // Filtrar si no están todas las palabras
+                    // Si es negocio, verificar también en el nombre del barrio
+                    let termFoundInBarrio = false;
+                    if (esNegocio && nombreBarrio && nombreBarrio.indexOf(term) !== -1) {
+                        termFoundInBarrio = true;
+                    }
+                    
+                    if (!termFoundInBarrio) {
+                        // Verificar si al menos todas las palabras significativas están presentes
+                        const allWordsPresent = searchWords.every(word => text.indexOf(word) !== -1);
+                        // Si es negocio, también verificar en el nombre del barrio
+                        if (!allWordsPresent && esNegocio && nombreBarrio) {
+                            const allWordsInBarrio = searchWords.every(word => nombreBarrio.indexOf(word) !== -1);
+                            if (!allWordsInBarrio) {
+                                return null; // Filtrar si no están todas las palabras
+                            }
+                        } else if (!allWordsPresent) {
+                            return null; // Filtrar si no están todas las palabras
+                        }
                     }
                 }
             }
@@ -694,6 +964,10 @@ function gofast_mensajero_cotizar_shortcode() {
             } 
             // El término completo está en cualquier parte
             else if (text.indexOf(term) !== -1) {
+                score = 6000;
+            }
+            // Si es negocio, verificar si el término está en el nombre del barrio
+            else if (esNegocio && nombreBarrio && nombreBarrio.indexOf(term) !== -1) {
                 score = 6000;
             } 
             // Coincidencias parciales
@@ -890,14 +1164,12 @@ function gofast_mensajero_cotizar_shortcode() {
                     if ($searchField.length) {
                         // Forzar actualización dinámica al escribir
                         $searchField.on('input.select2-dynamic', function() {
-                            const select2Instance = jQuery(e.target).data('select2');
-                            if (select2Instance) {
-                                const term = jQuery(this).val() || '';
-                                select2Instance.dataAdapter.query({ term: term }, function(data) {
-                                    select2Instance.updateResults(data);
-                                    
-                                    // Después de actualizar resultados, filtrar si hay coincidencias exactas
-                                    setTimeout(function() {
+                            // Select2 actualiza automáticamente los resultados cuando cambia el término
+                            // Solo necesitamos esperar a que se actualicen y luego filtrar
+                            const term = jQuery(this).val() || '';
+                            
+                            // Después de que Select2 actualice los resultados, filtrar si hay coincidencias exactas
+                            setTimeout(function() {
                                         const $results = $dropdown.find('.select2-results__options');
                                         const $items = $results.find('.select2-results__option[role="option"]:not(.select2-results__option--loading)');
                                         
@@ -980,8 +1252,6 @@ function gofast_mensajero_cotizar_shortcode() {
                                             }
                                         }
                                     }, 150);
-                                });
-                            }
                         });
                     }
                 }, 50);
@@ -1000,14 +1270,50 @@ function gofast_mensajero_cotizar_shortcode() {
 function gofast_mensajero_mostrar_resumen($origen, $destinos) {
     global $wpdb;
     
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
     // Obtener negocio_id de la sesión si existe
     $cotizacion = $_SESSION['gofast_mensajero_cotizacion'] ?? null;
     $negocio_id = isset($cotizacion['negocio_id']) ? intval($cotizacion['negocio_id']) : 0;
     $negocio_user_id = isset($cotizacion['negocio_user_id']) ? intval($cotizacion['negocio_user_id']) : null;
-    global $wpdb;
+    
+    // También verificar si viene del POST (por si acaso)
+    if ($negocio_id <= 0 && isset($_POST['negocio_id']) && intval($_POST['negocio_id']) > 0) {
+        $negocio_id = intval($_POST['negocio_id']);
+        if (isset($_POST['cliente_id']) && intval($_POST['cliente_id']) > 0) {
+            $negocio_user_id = intval($_POST['cliente_id']);
+        }
+    }
 
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+    // Obtener datos del negocio si existe
+    $negocio_seleccionado = null;
+    if ($negocio_id > 0) {
+        // Intentar primero con cliente_id si está disponible
+        if ($negocio_user_id && $negocio_user_id > 0) {
+            $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+                "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                 FROM negocios_gofast n
+                 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                 WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1
+                 LIMIT 1",
+                $negocio_id,
+                $negocio_user_id
+            ));
+        }
+        
+        // Si no se encontró con cliente_id específico, buscar solo por negocio_id
+        if (!$negocio_seleccionado) {
+            $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+                "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                 FROM negocios_gofast n
+                 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                 WHERE n.id = %d AND n.activo = 1 AND u.activo = 1
+                 LIMIT 1",
+                $negocio_id
+            ));
+        }
     }
 
     // Datos del origen
@@ -1103,7 +1409,35 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
                 <small>Puedes eliminar destinos o agregar nuevos antes de aceptar.</small>
             </div>
 
-            <h3 style="margin-top:0;">📍 Origen: <?= esc_html($nombre_origen) ?></h3>
+            <h3 style="margin-top:0;">
+                📍 Origen: <?= esc_html($nombre_origen) ?>
+                <?php if ($negocio_seleccionado && !empty($negocio_seleccionado->nombre)): ?>
+                    <span style="background:#4CAF50;color:#fff;padding:4px 12px;border-radius:12px;font-size:13px;margin-left:12px;font-weight:normal;vertical-align:middle;">
+                        🏪 Negocio: <?= esc_html($negocio_seleccionado->nombre) ?>
+                    </span>
+                <?php elseif ($negocio_id > 0): ?>
+                    <span style="background:#ff9800;color:#fff;padding:4px 12px;border-radius:12px;font-size:13px;margin-left:12px;font-weight:normal;vertical-align:middle;">
+                        🏪 Negocio ID: <?= esc_html($negocio_id) ?>
+                    </span>
+                <?php endif; ?>
+            </h3>
+            <?php if ($negocio_seleccionado && !empty($negocio_seleccionado->nombre)): ?>
+                <div style="background:#e8f5e9;border-left:4px solid #4CAF50;padding:10px;margin-bottom:16px;border-radius:6px;">
+                    <strong style="color:#2e7d32;">ℹ️ Servicio asociado a negocio</strong><br>
+                    <small style="color:#555;">
+                        Este servicio quedará asociado al cliente <strong><?= esc_html($negocio_seleccionado->cliente_nombre ?? 'Cliente') ?></strong> 
+                        (propietario del negocio <strong><?= esc_html($negocio_seleccionado->nombre) ?></strong>) 
+                        y aparecerá en su historial de pedidos.
+                    </small>
+                </div>
+            <?php elseif ($negocio_id > 0): ?>
+                <div style="background:#fff3cd;border-left:4px solid #ff9800;padding:10px;margin-bottom:16px;border-radius:6px;">
+                    <strong style="color:#856404;">⚠️ Negocio seleccionado pero no encontrado</strong><br>
+                    <small style="color:#555;">
+                        Se detectó un negocio seleccionado (ID: <?= esc_html($negocio_id) ?>) pero no se pudo obtener su información completa.
+                    </small>
+                </div>
+            <?php endif; ?>
 
             <div id="destinos-resumen">
                 <?php foreach ($detalle_envios as $idx => $d): ?>
@@ -1202,6 +1536,12 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
             <form method="post" id="form-aceptar-rechazar">
                 <input type="hidden" name="origen" id="input-origen" value="<?= esc_attr($origen) ?>">
                 <input type="hidden" name="destinos_finales" id="input-destinos" value="<?= esc_attr(implode(',', array_column($detalle_envios, 'id'))) ?>">
+                <?php if ($negocio_id > 0): ?>
+                    <input type="hidden" name="negocio_id" value="<?= esc_attr($negocio_id) ?>">
+                    <?php if ($negocio_user_id): ?>
+                        <input type="hidden" name="cliente_id" value="<?= esc_attr($negocio_user_id) ?>">
+                    <?php endif; ?>
+                <?php endif; ?>
                 <!-- Los recargos seleccionables se agregarán dinámicamente con JavaScript -->
 
                 <div class="gofast-btn-group" style="margin-top:24px;">
@@ -1382,6 +1722,25 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
                 form.appendChild(input);
             }
         });
+        
+        // Preservar negocio_id y cliente_id si existen (importante cuando se seleccionó un negocio)
+        const negocioIdInput = document.querySelector('#form-aceptar-rechazar input[name="negocio_id"]');
+        if (negocioIdInput && negocioIdInput.value && negocioIdInput.value !== '0') {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'negocio_id';
+            input.value = negocioIdInput.value;
+            form.appendChild(input);
+        }
+        
+        const clienteIdInput = document.querySelector('#form-aceptar-rechazar input[name="cliente_id"]');
+        if (clienteIdInput && clienteIdInput.value && clienteIdInput.value !== '0') {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'cliente_id';
+            input.value = clienteIdInput.value;
+            form.appendChild(input);
+        }
         
         const submit = document.createElement('input');
         submit.type = 'hidden';

@@ -94,20 +94,26 @@ function gofast_admin_cotizar_shortcode() {
                 return "<div class='gofast-box'>Error: El mensajero seleccionado no es válido.</div>";
             }
             
-            // Obtener negocio_id de la sesión o detectar por barrio_id
-            $negocio_id = isset($_SESSION['gofast_admin_cotizacion']['negocio_id']) ? intval($_SESSION['gofast_admin_cotizacion']['negocio_id']) : 0;
-            $negocio_user_id = isset($_SESSION['gofast_admin_cotizacion']['negocio_user_id']) ? intval($_SESSION['gofast_admin_cotizacion']['negocio_user_id']) : null;
+            // Obtener negocio_id SOLO si fue seleccionado explícitamente (NO detectar automáticamente por barrio_id)
+            $negocio_id = 0;
+            $negocio_user_id = null;
             
-            // Si no hay negocio_id en sesión, intentar detectarlo por barrio_id
-            if ($negocio_id == 0 && $origen > 0 && !empty($todos_negocios)) {
-                foreach ($todos_negocios as $neg) {
-                    if (intval($neg->barrio_id) === $origen) {
-                        $negocio_id = intval($neg->id);
-                        $negocio_user_id = intval($neg->user_id);
-                        break;
-                    }
+            // Prioridad 1: Si viene negocio_id del POST (cuando se selecciona explícitamente un negocio), usarlo
+            if (isset($_POST['negocio_id']) && intval($_POST['negocio_id']) > 0) {
+                $negocio_id = intval($_POST['negocio_id']);
+                // Si viene cliente_id del POST, usarlo
+                if (isset($_POST['cliente_id']) && intval($_POST['cliente_id']) > 0) {
+                    $negocio_user_id = intval($_POST['cliente_id']);
                 }
             }
+            // Prioridad 2: Si no viene del POST, verificar en sesión (solo si fue guardado explícitamente)
+            elseif (isset($_SESSION['gofast_admin_cotizacion']['negocio_id']) && intval($_SESSION['gofast_admin_cotizacion']['negocio_id']) > 0) {
+                $negocio_id = intval($_SESSION['gofast_admin_cotizacion']['negocio_id']);
+                if (isset($_SESSION['gofast_admin_cotizacion']['negocio_user_id']) && intval($_SESSION['gofast_admin_cotizacion']['negocio_user_id']) > 0) {
+                    $negocio_user_id = intval($_SESSION['gofast_admin_cotizacion']['negocio_user_id']);
+                }
+            }
+            // Si no hay negocio_id en POST ni en sesión, $negocio_id queda en 0 (barrio simple, sin negocio)
             
             $destinos_finales = array_map('intval', explode(',', $_POST['destinos_finales']));
             $destinos_finales = array_filter($destinos_finales);
@@ -337,7 +343,16 @@ function gofast_admin_cotizar_shortcode() {
         if (isset($_POST['gofast_admin_cotizar'])) {
             $mensajero_id = intval($_POST['mensajero_id'] ?? 0);
             $origen = intval($_POST['origen'] ?? 0);
-            $negocio_id = isset($_POST['negocio_id']) ? intval($_POST['negocio_id']) : 0;
+            // SOLO guardar negocio_id si viene explícitamente del POST (cuando se selecciona un negocio)
+            // Si no viene o es 0, NO guardar negocio_id (barrio simple)
+            $negocio_id = 0;
+            $negocio_user_id = null;
+            if (isset($_POST['negocio_id']) && intval($_POST['negocio_id']) > 0) {
+                $negocio_id = intval($_POST['negocio_id']);
+                if (isset($_POST['cliente_id']) && intval($_POST['cliente_id']) > 0) {
+                    $negocio_user_id = intval($_POST['cliente_id']);
+                }
+            }
             $destinos = array_map('intval', (array) ($_POST['destino'] ?? []));
             
             // Eliminar solo valores vacíos/cero (permitir duplicados)
@@ -369,7 +384,8 @@ function gofast_admin_cotizar_shortcode() {
                     'mensajero_id' => $mensajero_id,
                     'origen' => $origen,
                     'destinos' => $destinos,
-                    'negocio_id' => $negocio_id,
+                    'negocio_id' => $negocio_id, // Solo será > 0 si se seleccionó explícitamente un negocio
+                    'negocio_user_id' => $negocio_user_id, // Solo será != null si se seleccionó explícitamente un negocio
                     'recargos_seleccionables' => $recargos_seleccionables_guardar,
                 ];
             }
@@ -617,18 +633,173 @@ function gofast_admin_cotizar_shortcode() {
         }
 
         const form = document.getElementById('gofast-admin-form');
-        if (form) {
-            form.addEventListener('submit', function(e){
-                const mensajero = document.getElementById('mensajero_id').value;
-                const origen = document.getElementById('origen').value;
-                const destino = document.getElementById('destino-principal').value;
-                if (!mensajero || !origen || !destino){
-                    e.preventDefault();
-                    alert('Debes seleccionar mensajero, origen y al menos un destino ⚠️');
-                    return false;
+        if (!form) return;
+
+        // Función para actualizar campos hidden según la selección
+        function actualizarCamposNegocio() {
+            // SIEMPRE eliminar campos hidden anteriores primero (importante para barrios simples)
+            const existingNegocioId = document.getElementById('hidden-negocio-id');
+            const existingClienteId = document.getElementById('hidden-cliente-id');
+            if (existingNegocioId) existingNegocioId.remove();
+            if (existingClienteId) existingClienteId.remove();
+            
+            const origenSelect = document.getElementById('origen');
+            if (!origenSelect || !origenSelect.value) {
+                return;
+            }
+            
+            // Si está usando Select2, obtener el elemento seleccionado de otra manera
+            let selectedOption = null;
+            const selectedValue = origenSelect.value;
+            
+            if (window.jQuery && jQuery.fn.select2 && jQuery(origenSelect).data('select2')) {
+                // Select2 está activo
+                const select2Data = jQuery(origenSelect).select2('data');
+                if (select2Data && select2Data.length > 0) {
+                    // Buscar la opción por su valor
+                    selectedOption = origenSelect.querySelector('option[value="' + selectedValue + '"]');
+                    if (!selectedOption) {
+                        // Intentar buscar por el id de Select2
+                        const select2Id = select2Data[0].id;
+                        selectedOption = origenSelect.querySelector('option[value="' + select2Id + '"]');
+                    }
                 }
-            });
+            }
+            
+            // Si no se encontró con Select2, usar método normal
+            if (!selectedOption) {
+                selectedOption = origenSelect.querySelector('option[value="' + selectedValue + '"]');
+                if (!selectedOption && origenSelect.selectedIndex >= 0) {
+                    selectedOption = origenSelect.options[origenSelect.selectedIndex];
+                }
+            }
+            
+            // Buscar TODAS las opciones con ese valor y encontrar la que tenga atributos data
+            const todasOpciones = origenSelect.querySelectorAll('option[value="' + selectedValue + '"]');
+            
+            // Si está usando Select2, también buscar por el texto seleccionado
+            let textoSeleccionado = '';
+            let textoSeleccionadoTieneNegocio = false;
+            if (window.jQuery && jQuery.fn.select2 && jQuery(origenSelect).data('select2')) {
+                const select2Data = jQuery(origenSelect).select2('data');
+                if (select2Data && select2Data.length > 0) {
+                    textoSeleccionado = select2Data[0].text || '';
+                    textoSeleccionadoTieneNegocio = textoSeleccionado.includes('🏪');
+                }
+            }
+            
+            // SOLO buscar opción de negocio si el texto seleccionado contiene el emoji 🏪
+            // Si no tiene emoji, es un barrio simple y debemos usar la opción sin negocio
+            let opcionConNegocio = null;
+            let opcionSinNegocio = null;
+            
+            for (let i = 0; i < todasOpciones.length; i++) {
+                const opcion = todasOpciones[i];
+                const tieneAtributoNegocio = opcion.getAttribute('data-is-negocio') === 'true' || 
+                                             opcion.getAttribute('data-negocio-id') !== null;
+                const tieneEmojiNegocio = opcion.textContent.includes('🏪') || opcion.innerHTML.includes('🏪');
+                const textoCoincide = textoSeleccionado && (opcion.textContent.trim() === textoSeleccionado.trim() || opcion.innerHTML.includes(textoSeleccionado));
+                
+                // Si el texto seleccionado tiene emoji 🏪, buscar la opción con negocio
+                if (textoSeleccionadoTieneNegocio) {
+                    if (tieneAtributoNegocio || tieneEmojiNegocio) {
+                        if (textoCoincide || !opcionConNegocio) {
+                            opcionConNegocio = opcion;
+                            if (textoCoincide && tieneAtributoNegocio) break; // Coincidencia exacta con atributos
+                        }
+                    }
+                } else {
+                    // Si el texto seleccionado NO tiene emoji, es un barrio simple
+                    if (!tieneAtributoNegocio && !tieneEmojiNegocio) {
+                        opcionSinNegocio = opcion;
+                        if (textoCoincide) break; // Coincidencia exacta
+                    }
+                }
+            }
+            
+            // Usar la opción correcta según lo que se seleccionó
+            if (textoSeleccionadoTieneNegocio && opcionConNegocio) {
+                selectedOption = opcionConNegocio;
+            } else if (!textoSeleccionadoTieneNegocio && opcionSinNegocio) {
+                selectedOption = opcionSinNegocio;
+            } else if (todasOpciones.length > 0) {
+                // Fallback: usar la primera opción
+                selectedOption = todasOpciones[0];
+            }
+            
+            if (!selectedOption) {
+                return;
+            }
+            
+            const isNegocio = selectedOption.getAttribute('data-is-negocio') === 'true';
+            const negocioId = selectedOption.getAttribute('data-negocio-id');
+            const clienteId = selectedOption.getAttribute('data-cliente-id');
+            
+            // También intentar leer con dataset (por si acaso)
+            const isNegocioDataset = selectedOption.dataset.isNegocio === 'true';
+            const negocioIdDataset = selectedOption.dataset.negocioId;
+            const clienteIdDataset = selectedOption.dataset.clienteId;
+            
+            // Usar dataset si getAttribute no funcionó
+            const finalIsNegocio = isNegocio || isNegocioDataset;
+            const finalNegocioId = negocioId || negocioIdDataset;
+            const finalClienteId = clienteId || clienteIdDataset;
+            
+            // SOLO agregar campos hidden si es un negocio explícitamente seleccionado
+            if ((finalIsNegocio === true || finalIsNegocio === 'true') && finalNegocioId && finalNegocioId !== '' && finalNegocioId !== '0') {
+                // Agregar campos hidden para negocio_id y cliente_id
+                const negocioInput = document.createElement('input');
+                negocioInput.type = 'hidden';
+                negocioInput.name = 'negocio_id';
+                negocioInput.id = 'hidden-negocio-id';
+                negocioInput.value = finalNegocioId;
+                form.appendChild(negocioInput);
+                
+                if (finalClienteId && finalClienteId !== '' && finalClienteId !== '0') {
+                    const clienteInput = document.createElement('input');
+                    clienteInput.type = 'hidden';
+                    clienteInput.name = 'cliente_id';
+                    clienteInput.id = 'hidden-cliente-id';
+                    clienteInput.value = finalClienteId;
+                    form.appendChild(clienteInput);
+                }
+            }
         }
+
+        // Manejar cambio del select de origen para agregar campos hidden de negocio
+        const origenSelect = document.getElementById('origen');
+        if (origenSelect) {
+            // Evento change nativo
+            origenSelect.addEventListener('change', actualizarCamposNegocio);
+            
+            // Evento change de Select2 (si está usando Select2)
+            if (window.jQuery && jQuery.fn.select2) {
+                jQuery(origenSelect).on('select2:select', function() {
+                    setTimeout(actualizarCamposNegocio, 100);
+                });
+            }
+            
+            // Ejecutar al cargar la página si ya hay una opción seleccionada
+            if (origenSelect.value) {
+                setTimeout(actualizarCamposNegocio, 200);
+            }
+        }
+        
+        // Asegurar que los campos hidden estén presentes antes de enviar el formulario
+        form.addEventListener('submit', function(e) {
+            // PRIMERO: Actualizar campos hidden
+            actualizarCamposNegocio();
+            
+            // SEGUNDO: Validar campos requeridos
+            const mensajero = document.getElementById('mensajero_id').value;
+            const origen = document.getElementById('origen').value;
+            const destino = document.getElementById('destino-principal').value;
+            if (!mensajero || !origen || !destino){
+                e.preventDefault();
+                alert('Debes seleccionar mensajero, origen y al menos un destino ⚠️');
+                return false;
+            }
+        });
     });
 
     function addDestinoAdmin(){
@@ -752,13 +923,50 @@ function gofast_admin_cotizar_shortcode() {
 function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
     global $wpdb;
     
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
     // Obtener negocio_id de la sesión si existe
     $cotizacion = $_SESSION['gofast_admin_cotizacion'] ?? null;
     $negocio_id = isset($cotizacion['negocio_id']) ? intval($cotizacion['negocio_id']) : 0;
     $negocio_user_id = isset($cotizacion['negocio_user_id']) ? intval($cotizacion['negocio_user_id']) : null;
+    
+    // También verificar si viene del POST (por si acaso)
+    if ($negocio_id <= 0 && isset($_POST['negocio_id']) && intval($_POST['negocio_id']) > 0) {
+        $negocio_id = intval($_POST['negocio_id']);
+        if (isset($_POST['cliente_id']) && intval($_POST['cliente_id']) > 0) {
+            $negocio_user_id = intval($_POST['cliente_id']);
+        }
+    }
 
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+    // Obtener datos del negocio si existe
+    $negocio_seleccionado = null;
+    if ($negocio_id > 0) {
+        // Intentar buscar el negocio con cliente_id si se proporcionó
+        if ($negocio_user_id && $negocio_user_id > 0) {
+            $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+                "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                 FROM negocios_gofast n
+                 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                 WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1
+                 LIMIT 1",
+                $negocio_id,
+                $negocio_user_id
+            ));
+        }
+        
+        // Si no se encontró con cliente_id específico, buscar solo por negocio_id
+        if (!$negocio_seleccionado) {
+            $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+                "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                 FROM negocios_gofast n
+                 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                 WHERE n.id = %d AND n.activo = 1 AND u.activo = 1
+                 LIMIT 1",
+                $negocio_id
+            ));
+        }
     }
 
     // Obtener datos del mensajero
@@ -881,7 +1089,24 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
                 <small>Puedes eliminar destinos o agregar nuevos antes de aceptar.</small>
             </div>
 
-            <h3 style="margin-top:0;">📍 Origen: <?= esc_html($nombre_origen) ?></h3>
+            <h3 style="margin-top:0;">
+                📍 Origen: <?= esc_html($nombre_origen) ?>
+                <?php if ($negocio_seleccionado && !empty($negocio_seleccionado->nombre)): ?>
+                    <span style="background:#4CAF50;color:#fff;padding:4px 12px;border-radius:12px;font-size:13px;margin-left:12px;font-weight:normal;vertical-align:middle;">
+                        🏪 Negocio: <?= esc_html($negocio_seleccionado->nombre) ?>
+                    </span>
+                <?php endif; ?>
+            </h3>
+            <?php if ($negocio_seleccionado && !empty($negocio_seleccionado->nombre)): ?>
+                <div style="background:#e8f5e9;border-left:4px solid #4CAF50;padding:10px;margin-bottom:16px;border-radius:6px;">
+                    <strong style="color:#2e7d32;">ℹ️ Servicio asociado a negocio</strong><br>
+                    <small style="color:#555;">
+                        Este servicio quedará asociado al cliente <strong><?= esc_html($negocio_seleccionado->cliente_nombre ?? 'Cliente') ?></strong> 
+                        (propietario del negocio <strong><?= esc_html($negocio_seleccionado->nombre) ?></strong>) 
+                        y aparecerá en su historial de pedidos.
+                    </small>
+                </div>
+            <?php endif; ?>
 
             <div id="destinos-resumen">
                 <?php foreach ($detalle_envios as $idx => $d): ?>

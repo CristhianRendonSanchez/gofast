@@ -1302,11 +1302,12 @@ function gofast_finanzas_admin_shortcode() {
     }
 
     // Obtener lista de mensajeros para el filtro
+    // NOTA: No filtramos por activo=1 para incluir mensajeros deshabilitados en filtros de transferencias
     $mensajeros = [];
     $mensajeros = $wpdb->get_results(
         "SELECT id, nombre 
          FROM usuarios_gofast
-         WHERE rol = 'mensajero' AND activo = 1
+         WHERE rol = 'mensajero'
          ORDER BY nombre ASC
         "
     );
@@ -1371,6 +1372,18 @@ function gofast_finanzas_admin_shortcode() {
     $filtro_mensajero_historial = isset($_GET['filtro_mensajero_historial']) ? (int) $_GET['filtro_mensajero_historial'] : 0;
     $filtro_fecha_desde_historial = isset($_GET['filtro_fecha_desde_historial']) ? sanitize_text_field($_GET['filtro_fecha_desde_historial']) : '';
     $filtro_fecha_hasta_historial = isset($_GET['filtro_fecha_hasta_historial']) ? sanitize_text_field($_GET['filtro_fecha_hasta_historial']) : '';
+    
+    // Obtener lista de mensajeros para filtros de saldos (incluye deshabilitados)
+    // NOTA: Si $mensajeros ya está definida (desde transferencias), no la sobrescribimos
+    if (!isset($mensajeros) || empty($mensajeros)) {
+        $mensajeros = $wpdb->get_results(
+            "SELECT id, nombre 
+             FROM usuarios_gofast
+             WHERE rol = 'mensajero'
+             ORDER BY nombre ASC
+            "
+        );
+    }
 
     // Construir WHERE para saldos mensajeros
     $where_saldos = [];
@@ -1434,7 +1447,8 @@ function gofast_finanzas_admin_shortcode() {
     }
 
     // Obtener datos agrupados por mensajero
-    $where_mensajeros = "rol = 'mensajero' AND activo = 1";
+    // NOTA: No filtramos por activo=1 para incluir mensajeros deshabilitados en cálculos y saldos
+    $where_mensajeros = "rol = 'mensajero'";
     $params_mensajeros = [];
     
     if ($filtro_mensajero_saldos > 0) {

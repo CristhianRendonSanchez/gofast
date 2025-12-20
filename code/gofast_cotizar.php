@@ -192,6 +192,11 @@ function gofast_cotizar_shortcode() {
                             <?php endif; ?>
                         <?php endif; ?>
                     </select>
+                    <?php if ($es_mensajero_o_admin && !empty($todos_negocios)): ?>
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                            Si seleccionas un negocio, el servicio quedará asociado al cliente propietario y aparecerá en su historial.
+                        </small>
+                    <?php endif; ?>
                 </div>
 
                 <!-- PRIMER DESTINO -->
@@ -924,49 +929,161 @@ add_action('wp_footer', function () { ?>
 
     if (!form) return;
 
+    // Función para actualizar campos hidden según la selección
+    function actualizarCamposNegocio() {
+      // SIEMPRE eliminar campos hidden anteriores primero (importante para barrios simples)
+      const existingNegocioId = document.getElementById('hidden-negocio-id');
+      const existingClienteId = document.getElementById('hidden-cliente-id');
+      if (existingNegocioId) existingNegocioId.remove();
+      if (existingClienteId) existingClienteId.remove();
+      
+      const origenSelect = document.getElementById('origen');
+      if (!origenSelect || !origenSelect.value) {
+        return;
+      }
+      
+      // Si está usando Select2, obtener el elemento seleccionado de otra manera
+      let selectedOption = null;
+      const selectedValue = origenSelect.value;
+      
+      if (window.jQuery && jQuery.fn.select2 && jQuery(origenSelect).data('select2')) {
+        // Select2 está activo
+        const select2Data = jQuery(origenSelect).select2('data');
+        if (select2Data && select2Data.length > 0) {
+          // Buscar la opción por su valor
+          selectedOption = origenSelect.querySelector('option[value="' + selectedValue + '"]');
+          if (!selectedOption) {
+            // Intentar buscar por el id de Select2
+            const select2Id = select2Data[0].id;
+            selectedOption = origenSelect.querySelector('option[value="' + select2Id + '"]');
+          }
+        }
+      }
+      
+      // Si no se encontró con Select2, usar método normal
+      if (!selectedOption) {
+        selectedOption = origenSelect.querySelector('option[value="' + selectedValue + '"]');
+        if (!selectedOption && origenSelect.selectedIndex >= 0) {
+          selectedOption = origenSelect.options[origenSelect.selectedIndex];
+        }
+      }
+      
+      // Buscar TODAS las opciones con ese valor y encontrar la que tenga atributos data
+      const todasOpciones = origenSelect.querySelectorAll('option[value="' + selectedValue + '"]');
+      
+      // Si está usando Select2, también buscar por el texto seleccionado
+      let textoSeleccionado = '';
+      let textoSeleccionadoTieneNegocio = false;
+      if (window.jQuery && jQuery.fn.select2 && jQuery(origenSelect).data('select2')) {
+        const select2Data = jQuery(origenSelect).select2('data');
+        if (select2Data && select2Data.length > 0) {
+          textoSeleccionado = select2Data[0].text || '';
+          textoSeleccionadoTieneNegocio = textoSeleccionado.includes('🏪');
+        }
+      }
+      
+      // SOLO buscar opción de negocio si el texto seleccionado contiene el emoji 🏪
+      // Si no tiene emoji, es un barrio simple y debemos usar la opción sin negocio
+      let opcionConNegocio = null;
+      let opcionSinNegocio = null;
+      
+      for (let i = 0; i < todasOpciones.length; i++) {
+        const opcion = todasOpciones[i];
+        const tieneAtributoNegocio = opcion.getAttribute('data-is-negocio') === 'true' || 
+                                     opcion.getAttribute('data-negocio-id') !== null;
+        const tieneEmojiNegocio = opcion.textContent.includes('🏪') || opcion.innerHTML.includes('🏪');
+        const textoCoincide = textoSeleccionado && (opcion.textContent.trim() === textoSeleccionado.trim() || opcion.innerHTML.includes(textoSeleccionado));
+        
+        // Si el texto seleccionado tiene emoji 🏪, buscar la opción con negocio
+        if (textoSeleccionadoTieneNegocio) {
+          if (tieneAtributoNegocio || tieneEmojiNegocio) {
+            if (textoCoincide || !opcionConNegocio) {
+              opcionConNegocio = opcion;
+              if (textoCoincide && tieneAtributoNegocio) break; // Coincidencia exacta con atributos
+            }
+          }
+        } else {
+          // Si el texto seleccionado NO tiene emoji, es un barrio simple
+          if (!tieneAtributoNegocio && !tieneEmojiNegocio) {
+            opcionSinNegocio = opcion;
+            if (textoCoincide) break; // Coincidencia exacta
+          }
+        }
+      }
+      
+      // Usar la opción correcta según lo que se seleccionó
+      if (textoSeleccionadoTieneNegocio && opcionConNegocio) {
+        selectedOption = opcionConNegocio;
+      } else if (!textoSeleccionadoTieneNegocio && opcionSinNegocio) {
+        selectedOption = opcionSinNegocio;
+      } else if (todasOpciones.length > 0) {
+        // Fallback: usar la primera opción
+        selectedOption = todasOpciones[0];
+      }
+      
+      if (!selectedOption) {
+        return;
+      }
+      
+      const isNegocio = selectedOption.getAttribute('data-is-negocio') === 'true';
+      const negocioId = selectedOption.getAttribute('data-negocio-id');
+      const clienteId = selectedOption.getAttribute('data-cliente-id');
+      
+      // También intentar leer con dataset (por si acaso)
+      const isNegocioDataset = selectedOption.dataset.isNegocio === 'true';
+      const negocioIdDataset = selectedOption.dataset.negocioId;
+      const clienteIdDataset = selectedOption.dataset.clienteId;
+      
+      // Usar dataset si getAttribute no funcionó
+      const finalIsNegocio = isNegocio || isNegocioDataset;
+      const finalNegocioId = negocioId || negocioIdDataset;
+      const finalClienteId = clienteId || clienteIdDataset;
+      
+      // SOLO agregar campos hidden si es un negocio explícitamente seleccionado
+      if ((finalIsNegocio === true || finalIsNegocio === 'true') && finalNegocioId && finalNegocioId !== '' && finalNegocioId !== '0') {
+        // Agregar campos hidden para negocio_id y cliente_id
+        const negocioInput = document.createElement('input');
+        negocioInput.type = 'hidden';
+        negocioInput.name = 'negocio_id';
+        negocioInput.id = 'hidden-negocio-id';
+        negocioInput.value = finalNegocioId;
+        form.appendChild(negocioInput);
+        
+        if (finalClienteId && finalClienteId !== '' && finalClienteId !== '0') {
+          const clienteInput = document.createElement('input');
+          clienteInput.type = 'hidden';
+          clienteInput.name = 'cliente_id';
+          clienteInput.id = 'hidden-cliente-id';
+          clienteInput.value = finalClienteId;
+          form.appendChild(clienteInput);
+        }
+      }
+    }
+
     // Manejar cambio del select de origen para agregar campos hidden de negocio
     const origenSelect = document.getElementById('origen');
     if (origenSelect) {
-      origenSelect.addEventListener('change', function() {
-        // Eliminar campos hidden anteriores
-        const existingNegocioId = document.getElementById('hidden-negocio-id');
-        const existingClienteId = document.getElementById('hidden-cliente-id');
-        if (existingNegocioId) existingNegocioId.remove();
-        if (existingClienteId) existingClienteId.remove();
-        
-        // Obtener la opción seleccionada
-        const selectedOption = this.options[this.selectedIndex];
-        if (selectedOption) {
-          const isNegocio = selectedOption.getAttribute('data-is-negocio') === 'true';
-          const negocioId = selectedOption.getAttribute('data-negocio-id');
-          const clienteId = selectedOption.getAttribute('data-cliente-id');
-          
-          if (isNegocio && negocioId) {
-            // Agregar campos hidden para negocio_id y cliente_id
-            const negocioInput = document.createElement('input');
-            negocioInput.type = 'hidden';
-            negocioInput.name = 'negocio_id';
-            negocioInput.id = 'hidden-negocio-id';
-            negocioInput.value = negocioId;
-            form.appendChild(negocioInput);
-            
-            if (clienteId) {
-              const clienteInput = document.createElement('input');
-              clienteInput.type = 'hidden';
-              clienteInput.name = 'cliente_id';
-              clienteInput.id = 'hidden-cliente-id';
-              clienteInput.value = clienteId;
-              form.appendChild(clienteInput);
-            }
-          }
-        }
-      });
+      // Evento change nativo
+      origenSelect.addEventListener('change', actualizarCamposNegocio);
+      
+      // Evento change de Select2 (si está usando Select2)
+      if (window.jQuery && jQuery.fn.select2) {
+        jQuery(origenSelect).on('select2:select', function() {
+          setTimeout(actualizarCamposNegocio, 100);
+        });
+      }
       
       // Ejecutar al cargar la página si ya hay una opción seleccionada
       if (origenSelect.value) {
-        origenSelect.dispatchEvent(new Event('change'));
+        setTimeout(actualizarCamposNegocio, 200);
       }
     }
+    
+    // Asegurar que los campos hidden estén presentes antes de enviar el formulario
+    form.addEventListener('submit', function(e) {
+      // Actualizar campos hidden antes de enviar
+      actualizarCamposNegocio();
+    });
 
     form.addEventListener('submit', function(e){
       const origen = document.getElementById('origen').value;
