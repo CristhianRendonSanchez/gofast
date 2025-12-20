@@ -17,32 +17,15 @@ function gofast_resultado_cotizacion() {
     $origen   = intval($_POST['origen']);
     $destinos = array_map('intval', (array) $_POST['destino']);
     
-    // Detectar si el origen es un negocio (buscar en todos los negocios si es mensajero/admin)
+    // Obtener negocio_id SOLO si viene explícitamente del POST (cuando se selecciona un negocio)
+    // NO detectar automáticamente por barrio_id
     $negocio_id_cotizador = 0;
     $negocio_user_id_cotizador = null;
     
-    if (!empty($_SESSION['gofast_user_id'])) {
-        $user_id_temp = intval($_SESSION['gofast_user_id']);
-        $usuario_temp = $wpdb->get_row($wpdb->prepare(
-            "SELECT rol FROM usuarios_gofast WHERE id = %d AND activo = 1",
-            $user_id_temp
-        ));
-        
-        if ($usuario_temp && (strtolower($usuario_temp->rol) === 'mensajero' || strtolower($usuario_temp->rol) === 'admin')) {
-            // Si es mensajero/admin, buscar en todos los negocios
-            $todos_negocios_temp = $wpdb->get_results(
-                "SELECT n.id, n.barrio_id, n.user_id
-                 FROM negocios_gofast n
-                 WHERE n.activo = 1"
-            );
-            
-            foreach ($todos_negocios_temp as $neg) {
-                if (intval($neg->barrio_id) === $origen) {
-                    $negocio_id_cotizador = intval($neg->id);
-                    $negocio_user_id_cotizador = intval($neg->user_id);
-                    break;
-                }
-            }
+    if (isset($_POST['negocio_id']) && intval($_POST['negocio_id']) > 0) {
+        $negocio_id_cotizador = intval($_POST['negocio_id']);
+        if (isset($_POST['cliente_id']) && intval($_POST['cliente_id']) > 0) {
+            $negocio_user_id_cotizador = intval($_POST['cliente_id']);
         }
     }
 
@@ -76,11 +59,14 @@ function gofast_resultado_cotizacion() {
             $user_id
         ));
 
-        // 🔍 Detectar si el ORIGEN corresponde al barrio de un negocio
-        foreach ((array) $mis_negocios as $n) {
-            if (intval($n->barrio_id) === $origen) {
-                $negocio_usado = $n;
-                break;
+        // 🔍 Detectar si el ORIGEN corresponde al barrio de un negocio del usuario logueado
+        // SOLO si no se seleccionó explícitamente un negocio desde el cotizador
+        if ($negocio_id_cotizador <= 0) {
+            foreach ((array) $mis_negocios as $n) {
+                if (intval($n->barrio_id) === $origen) {
+                    $negocio_usado = $n;
+                    break;
+                }
             }
         }
 
@@ -245,21 +231,59 @@ function gofast_resultado_cotizacion() {
     }
 
     /* ==========================================================
-       ✅ 4) VALORES POR DEFECTO (NEGOCIO / USUARIO)
+       ✅ 4) OBTENER DATOS DEL NEGOCIO SELECCIONADO (si existe)
+    ========================================================== */
+    
+    // Obtener datos del negocio seleccionado explícitamente desde el cotizador
+    $negocio_seleccionado_cotizador = null;
+    if ($negocio_id_cotizador > 0) {
+        // Prioridad 1: Si hay negocio_user_id (cuando se seleccionó explícitamente un negocio)
+        if ($negocio_user_id_cotizador && $negocio_user_id_cotizador > 0) {
+            $negocio_seleccionado_cotizador = $wpdb->get_row($wpdb->prepare(
+                "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                 FROM negocios_gofast n
+                 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                 WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1
+                 LIMIT 1",
+                $negocio_id_cotizador,
+                $negocio_user_id_cotizador
+            ));
+        }
+        
+        // Prioridad 2: Si no se encontró con cliente_id específico, buscar solo por negocio_id
+        if (!$negocio_seleccionado_cotizador) {
+            $negocio_seleccionado_cotizador = $wpdb->get_row($wpdb->prepare(
+                "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                 FROM negocios_gofast n
+                 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                 WHERE n.id = %d AND n.activo = 1 AND u.activo = 1
+                 LIMIT 1",
+                $negocio_id_cotizador
+            ));
+        }
+    }
+
+    /* ==========================================================
+       ✅ 5) VALORES POR DEFECTO (NEGOCIO SELECCIONADO / NEGOCIO USUARIO / USUARIO)
     ========================================================== */
 
-    // Regla 1.C: whatsapp negocio si existe, si no teléfono usuario
+    // Prioridad: Negocio seleccionado explícitamente > Negocio del usuario > Usuario
     $nombre_default =
-        $negocio_usado ? $negocio_usado->nombre :
-        ($usuario ? $usuario->nombre : '');
+        ($negocio_seleccionado_cotizador && !empty($negocio_seleccionado_cotizador->nombre))
+            ? $negocio_seleccionado_cotizador->nombre
+            : ($negocio_usado ? $negocio_usado->nombre : ($usuario ? $usuario->nombre : ''));
 
     $telefono_default =
-        ($negocio_usado && !empty($negocio_usado->whatsapp))
-            ? $negocio_usado->whatsapp
-            : ($usuario ? $usuario->telefono : '');
+        ($negocio_seleccionado_cotizador && !empty($negocio_seleccionado_cotizador->whatsapp))
+            ? $negocio_seleccionado_cotizador->whatsapp
+            : (($negocio_usado && !empty($negocio_usado->whatsapp))
+                ? $negocio_usado->whatsapp
+                : ($usuario ? $usuario->telefono : ''));
 
     $dir_origen_default =
-        $negocio_usado ? $negocio_usado->direccion_full : '';
+        ($negocio_seleccionado_cotizador && !empty($negocio_seleccionado_cotizador->direccion_full))
+            ? $negocio_seleccionado_cotizador->direccion_full
+            : ($negocio_usado ? $negocio_usado->direccion_full : '');
 
     /* ==========================================================
 	   ✅ 5) SI CONFIRMA → GUARDAR SERVICIO Y REDIRIGIR
@@ -269,48 +293,48 @@ function gofast_resultado_cotizacion() {
 		$nombre = sanitize_text_field($_POST['nombre']);
 		$tel    = sanitize_text_field($_POST['telefono']);
 		
-		// Obtener negocio_id del POST (desde cotizador) o detectar por barrio_id
+		// Obtener negocio_id SOLO si fue seleccionado explícitamente (NO detectar automáticamente por barrio_id)
 		$negocio_id = $negocio_id_cotizador;
 		$negocio_user_id = $negocio_user_id_cotizador;
 		$negocio_seleccionado = null;
 		$cliente_propietario = null;
 		
-		// Si hay negocio detectado (ya sea desde POST o desde $negocio_usado), obtener datos
+		// Si hay negocio seleccionado explícitamente desde el cotizador, obtener datos
 		if ($negocio_id > 0) {
-			// Si es mensajero/admin y hay negocio_user_id, buscar por ese user_id
-			if ($negocio_user_id && $usuario && (strtolower($usuario->rol) === 'mensajero' || strtolower($usuario->rol) === 'admin')) {
+			// Prioridad 1: Si hay negocio_user_id (cuando se seleccionó explícitamente un negocio)
+			if ($negocio_user_id && $negocio_user_id > 0) {
 				$negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
 					"SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
 					 FROM negocios_gofast n
 					 INNER JOIN usuarios_gofast u ON n.user_id = u.id
-					 WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1",
+					 WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1
+					 LIMIT 1",
 					$negocio_id,
 					$negocio_user_id
 				));
-			} elseif ($negocio_usado && intval($negocio_usado->id) === $negocio_id) {
-				// Si ya tenemos el negocio_usado y coincide, usarlo
-				$negocio_seleccionado = $negocio_usado;
-			} else {
-				// Buscar negocio del usuario logueado
-				if ($usuario) {
-					$negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
-						"SELECT id, nombre, direccion_full, whatsapp, user_id
-						 FROM negocios_gofast
-						 WHERE id = %d AND user_id = %d AND activo = 1",
-						$negocio_id,
-						$usuario->id
-					));
-				}
 			}
 			
+			// Prioridad 2: Si no se encontró con cliente_id específico, buscar solo por negocio_id
+			if (!$negocio_seleccionado) {
+				$negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
+					"SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+					 FROM negocios_gofast n
+					 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+					 WHERE n.id = %d AND n.activo = 1 AND u.activo = 1
+					 LIMIT 1",
+					$negocio_id
+				));
+			}
+			
+			// Si se encontró el negocio, usar sus datos
 			if ($negocio_seleccionado) {
-				$cliente_propietario = $negocio_seleccionado->user_id;
+				$cliente_propietario = intval($negocio_seleccionado->user_id);
 				// Usar datos del NEGOCIO (no del cliente)
 				$nombre = $negocio_seleccionado->nombre; // Nombre del negocio
 				$tel = $negocio_seleccionado->whatsapp ?: ($negocio_seleccionado->cliente_telefono ?? ($usuario ? $usuario->telefono : '')); // WhatsApp del negocio primero
 			}
 		} elseif ($negocio_usado) {
-			// Si no hay negocio_id del POST pero hay negocio_usado detectado, usarlo
+			// Si no hay negocio_id del POST pero hay negocio_usado del usuario logueado, usarlo
 			$negocio_seleccionado = $negocio_usado;
 			$cliente_propietario = $negocio_usado->user_id;
 			// Usar datos del NEGOCIO (no del cliente)
@@ -550,9 +574,9 @@ function gofast_resultado_cotizacion() {
 
                 <label>Dirección origen</label>
 
-                <?php if ($negocio_usado): ?>
+                <?php if ($negocio_seleccionado_cotizador || $negocio_usado): ?>
 
-                    <!-- Origen desde negocio -->
+                    <!-- Origen desde negocio (seleccionado explícitamente o del usuario) -->
                     <input type="text" name="dir_origen"
                            value="<?= esc_attr($dir_origen_default) ?>" required>
 
