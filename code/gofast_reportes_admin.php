@@ -331,8 +331,8 @@ function gofast_reportes_admin_shortcode() {
         $params_transferencias[] = $hasta . ' 23:59:59';
     }
     
-    // Solo transferencias aprobadas
-    $where_transferencias .= " AND estado = 'aprobada'";
+    // Solo transferencias aprobadas y de tipo normal (excluir tipo pago)
+    $where_transferencias .= " AND estado = 'aprobada' AND (tipo = 'normal' OR tipo IS NULL)";
     
     // Sumar valor de transferencias aprobadas
     if (!empty($params_transferencias)) {
@@ -811,6 +811,7 @@ function gofast_reportes_admin_shortcode() {
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
                  WHERE mensajero_id = %d AND estado = 'aprobada' 
+                 AND (tipo = 'normal' OR tipo IS NULL)
                  AND DATE(fecha_creacion) <= %s",
                 $mensajero_id_saldo, $fecha_hasta_saldos
             )
@@ -901,11 +902,13 @@ function gofast_reportes_admin_shortcode() {
                     )
                 ) ?? 0);
                 
-                // Transferencias del día
+                // Transferencias del día (solo tipo normal)
                 $transferencias_dia = (float) ($wpdb->get_var(
                     $wpdb->prepare(
                         "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                         WHERE mensajero_id = %d AND estado = 'aprobada' AND DATE(fecha_creacion) = %s",
+                         WHERE mensajero_id = %d AND estado = 'aprobada' 
+                         AND (tipo = 'normal' OR tipo IS NULL)
+                         AND DATE(fecha_creacion) = %s",
                         $mensajero_id_saldo, $fecha_dia
                     )
                 ) ?? 0);

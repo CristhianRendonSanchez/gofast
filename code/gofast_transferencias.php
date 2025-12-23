@@ -84,11 +84,12 @@ function gofast_transferencias_shortcode() {
                         'mensajero_id' => $mensajero_id,
                         'valor' => $valor,
                         'estado' => $estado,
+                        'tipo' => 'normal',
                         'creado_por' => $user_id,
                         'observaciones' => null,
                         'fecha_creacion' => gofast_date_mysql()
                     ],
-                    ['%d', '%f', '%s', '%d', '%s', '%s']
+                    ['%d', '%f', '%s', '%s', '%d', '%s', '%s']
                 );
 
                 if ($insertado) {
@@ -183,6 +184,8 @@ function gofast_transferencias_shortcode() {
     $valor_min = isset($_GET['valor_min']) ? floatval($_GET['valor_min']) : 0;
     $valor_max = isset($_GET['valor_max']) ? floatval($_GET['valor_max']) : 0;
     $estado_filtro = isset($_GET['estado']) ? sanitize_text_field($_GET['estado']) : '';
+    $tipo_filtro = isset($_GET['tipo']) ? sanitize_text_field($_GET['tipo']) : '';
+    $mensajero_filtro_id = isset($_GET['mensajero_id']) ? (int) $_GET['mensajero_id'] : 0;
 
     // Valores por defecto según rol
     if (empty($_GET['fecha_desde']) && empty($_GET['fecha_hasta']) && empty($_GET['estado'])) {
@@ -215,10 +218,14 @@ function gofast_transferencias_shortcode() {
     $where_parts = [];
     $where_values = [];
 
-    // Filtro por rol
+    // Filtro por rol o mensajero seleccionado
     if ($rol === 'mensajero') {
         $where_parts[] = "t.mensajero_id = %d";
         $where_values[] = $user_id;
+    } elseif ($rol === 'admin' && $mensajero_filtro_id > 0) {
+        // Admin puede filtrar por mensajero específico
+        $where_parts[] = "t.mensajero_id = %d";
+        $where_values[] = $mensajero_filtro_id;
     }
 
     // Filtro por fecha
@@ -245,6 +252,12 @@ function gofast_transferencias_shortcode() {
     if (!empty($estado_filtro) && in_array($estado_filtro, ['pendiente', 'aprobada', 'rechazada'])) {
         $where_parts[] = "t.estado = %s";
         $where_values[] = $estado_filtro;
+    }
+
+    // Filtro por tipo
+    if (!empty($tipo_filtro) && in_array($tipo_filtro, ['normal', 'pago'])) {
+        $where_parts[] = "t.tipo = %s";
+        $where_values[] = $tipo_filtro;
     }
 
     // Construir consulta SQL
@@ -289,7 +302,9 @@ function gofast_transferencias_shortcode() {
             'aprobadas' => (int) $wpdb->get_var("SELECT COUNT(*) FROM transferencias_gofast WHERE estado = 'aprobada'"),
             'rechazadas' => (int) $wpdb->get_var("SELECT COUNT(*) FROM transferencias_gofast WHERE estado = 'rechazada'"),
             'total_valor_pendiente' => (float) $wpdb->get_var("SELECT SUM(valor) FROM transferencias_gofast WHERE estado = 'pendiente'"),
-            'total_valor_aprobado' => (float) $wpdb->get_var("SELECT SUM(valor) FROM transferencias_gofast WHERE estado = 'aprobada'")
+            'total_valor_aprobado' => (float) $wpdb->get_var("SELECT SUM(valor) FROM transferencias_gofast WHERE estado = 'aprobada'"),
+            'total_normales' => (int) $wpdb->get_var("SELECT COUNT(*) FROM transferencias_gofast WHERE tipo = 'normal'"),
+            'total_pagos' => (int) $wpdb->get_var("SELECT COUNT(*) FROM transferencias_gofast WHERE tipo = 'pago'")
         ];
     }
 
@@ -352,6 +367,18 @@ function gofast_transferencias_shortcode() {
                     </div>
                 </div>
             <?php endif; ?>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px;">
+                    <div style="text-align: center; padding: 12px; background: #e7f3ff; border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 700; color: #004085;"><?= $stats['total_normales'] ?></div>
+                        <div style="font-size: 12px; color: #666;">📋 Normales</div>
+                    </div>
+                    <div style="text-align: center; padding: 12px; background: #d1ecf1; border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 700; color: #0c5460;"><?= $stats['total_pagos'] ?></div>
+                        <div style="font-size: 12px; color: #666;">💳 Pagos</div>
+                    </div>
+                </div>
+            </div>
         </div>
     <?php endif; ?>
 
@@ -401,7 +428,7 @@ function gofast_transferencias_shortcode() {
         <form method="get" action="" class="gofast-filtros-form">
             <!-- Mantener otros parámetros GET si existen -->
             <?php foreach ($_GET as $key => $value): ?>
-                <?php if (!in_array($key, ['fecha_desde', 'fecha_hasta', 'valor_min', 'valor_max', 'estado'])): ?>
+                <?php if (!in_array($key, ['fecha_desde', 'fecha_hasta', 'valor_min', 'valor_max', 'estado', 'tipo', 'mensajero_id'])): ?>
                     <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                 <?php endif; ?>
             <?php endforeach; ?>
@@ -450,6 +477,27 @@ function gofast_transferencias_shortcode() {
                         <option value="rechazada" <?= $estado_filtro === 'rechazada' ? 'selected' : '' ?>>❌ Rechazada</option>
                     </select>
                 </div>
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Tipo</label>
+                    <select name="tipo" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <option value="">Todos</option>
+                        <option value="normal" <?= $tipo_filtro === 'normal' ? 'selected' : '' ?>>📋 Servicios</option>
+                        <option value="pago" <?= $tipo_filtro === 'pago' ? 'selected' : '' ?>>💳 Pagos</option>
+                    </select>
+                </div>
+                <?php if ($rol === 'admin'): ?>
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Mensajero</label>
+                    <select name="mensajero_id" class="gofast-select-filtro" id="mensajero-select-filtro" data-placeholder="Todos los mensajeros" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <option value="0">Todos</option>
+                        <?php foreach ($mensajeros as $m): ?>
+                            <option value="<?= esc_attr($m->id) ?>" <?= $mensajero_filtro_id === (int) $m->id ? 'selected' : '' ?>>
+                                <?= esc_html($m->nombre) ?> — <?= esc_html($m->telefono) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
             </div>
             
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -458,7 +506,7 @@ function gofast_transferencias_shortcode() {
                 </button>
                 <?php
                 // Construir URL sin los parámetros de filtro
-                $clean_url = remove_query_arg(['fecha_desde', 'fecha_hasta', 'valor_min', 'valor_max', 'estado']);
+                $clean_url = remove_query_arg(['fecha_desde', 'fecha_hasta', 'valor_min', 'valor_max', 'estado', 'tipo', 'mensajero_id']);
                 if (empty($clean_url) || $clean_url === home_url('/')) {
                     $clean_url = home_url('/transferencias');
                 }
@@ -471,7 +519,7 @@ function gofast_transferencias_shortcode() {
             </div>
         </form>
         
-        <?php if (!empty($transferencias) || !empty($fecha_desde) || !empty($fecha_hasta) || $valor_min > 0 || $valor_max > 0 || !empty($estado_filtro)): ?>
+        <?php if (!empty($transferencias) || !empty($fecha_desde) || !empty($fecha_hasta) || $valor_min > 0 || $valor_max > 0 || !empty($estado_filtro) || !empty($tipo_filtro) || $mensajero_filtro_id > 0): ?>
             <div style="margin-top: 12px; padding: 10px; background: #e7f3ff; border-radius: 6px; font-size: 13px;">
                 <strong>Resultados:</strong> 
                 <?= count($transferencias) ?> transferencia(s) encontrada(s)
@@ -504,6 +552,7 @@ function gofast_transferencias_shortcode() {
                                 <th>Creado por</th>
                             <?php endif; ?>
                             <th>Valor</th>
+                            <th>Tipo</th>
                             <th>Estado</th>
                             <?php if ($rol === 'admin'): ?>
                                 <th>Acciones</th>
@@ -523,6 +572,22 @@ function gofast_transferencias_shortcode() {
                                     <td><?= esc_html($t->creador_nombre) ?></td>
                                 <?php endif; ?>
                                 <td><strong>$<?= number_format($t->valor, 0, ',', '.') ?></strong></td>
+                                <td>
+                                    <?php
+                                    $tipo_display = '';
+                                    $tipo_icon = '';
+                                    switch ($t->tipo ?? 'normal') {
+                                        case 'pago':
+                                            $tipo_display = '💳 Pago';
+                                            break;
+                                        case 'normal':
+                                        default:
+                                            $tipo_display = '📋 Normal';
+                                            break;
+                                    }
+                                    ?>
+                                    <span style="font-size: 12px; color: #666;"><?= $tipo_display ?></span>
+                                </td>
                                 <td>
                                     <?php
                                     $estado_class = '';
@@ -624,6 +689,21 @@ function gofast_transferencias_shortcode() {
                         <div style="margin-bottom: 12px;">
                             <div style="font-size: 24px; font-weight: 700; color: #000;">
                                 $<?= number_format($t->valor, 0, ',', '.') ?>
+                            </div>
+                            <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                                <?php
+                                $tipo_display = '';
+                                switch ($t->tipo ?? 'normal') {
+                                    case 'pago':
+                                        $tipo_display = '💳 Tipo: Pago';
+                                        break;
+                                    case 'normal':
+                                    default:
+                                        $tipo_display = '📋 Tipo: Normal';
+                                        break;
+                                }
+                                ?>
+                                <?= $tipo_display ?>
                             </div>
                         </div>
 
@@ -814,6 +894,32 @@ function gofast_transferencias_shortcode() {
     });
     </script>
 <?php endif; ?>
+
+<script>
+// Inicializar Select2 para filtro de mensajero (solo admin)
+(function() {
+    if (window.jQuery && jQuery.fn.select2) {
+        jQuery('#mensajero-select-filtro').select2({
+            placeholder: 'Todos los mensajeros',
+            width: '100%',
+            allowClear: true,
+            minimumResultsForSearch: 0
+        });
+    } else {
+        // Reintentar después de un breve delay
+        setTimeout(function() {
+            if (window.jQuery && jQuery.fn.select2) {
+                jQuery('#mensajero-select-filtro').select2({
+                    placeholder: 'Todos los mensajeros',
+                    width: '100%',
+                    allowClear: true,
+                    minimumResultsForSearch: 0
+                });
+            }
+        }, 500);
+    }
+})();
+</script>
 
 <style>
 /* Los estilos de gofast-home ya están en css.css */

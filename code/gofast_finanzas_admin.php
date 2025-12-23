@@ -91,11 +91,12 @@ function gofast_finanzas_admin_shortcode() {
                             'mensajero_id' => $mensajero_id,
                             'valor' => $total_a_pagar,
                             'estado' => 'aprobada',
+                            'tipo' => 'pago',
                             'creado_por' => $user_id,
                             'observaciones' => 'Pago automático - Transferencia - Fecha: ' . $fecha,
                             'fecha_creacion' => gofast_date_mysql()
                         ],
-                        ['%d', '%f', '%s', '%d', '%s', '%s']
+                        ['%d', '%f', '%s', '%s', '%d', '%s', '%s']
                     );
                 }
                 
