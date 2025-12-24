@@ -354,6 +354,67 @@ function gofast_reportes_admin_shortcode() {
     $total_a_pagar = $comision_generada - $transferencias_aprobadas;
 
     /* ==========================================================
+       5.1. Estadísticas de Pagos Registrados
+    ========================================================== */
+    $tabla_pagos = 'pagos_mensajeros_gofast';
+    $where_pagos = "1=1";
+    $params_pagos = [];
+    
+    // Aplicar filtros de mensajero
+    if (!$es_admin) {
+        $where_pagos .= " AND mensajero_id = %d";
+        $params_pagos[] = $usuario->id;
+    } elseif ($mensajero_id > 0) {
+        $where_pagos .= " AND mensajero_id = %d";
+        $params_pagos[] = $mensajero_id;
+    }
+    
+    // Aplicar filtros de fecha
+    if ($desde !== '') {
+        $where_pagos .= " AND fecha >= %s";
+        $params_pagos[] = $desde;
+    }
+    if ($hasta !== '') {
+        $where_pagos .= " AND fecha <= %s";
+        $params_pagos[] = $hasta;
+    }
+    
+    // Pagos en efectivo
+    $where_pagos_efectivo = $where_pagos . " AND tipo_pago = 'efectivo'";
+    if (!empty($params_pagos)) {
+        $sql_pagos_efectivo = $wpdb->prepare(
+            "SELECT SUM(total_a_pagar) as total_pagos_efectivo
+             FROM $tabla_pagos 
+             WHERE $where_pagos_efectivo",
+            $params_pagos
+        );
+    } else {
+        $sql_pagos_efectivo = "SELECT SUM(total_a_pagar) as total_pagos_efectivo
+             FROM $tabla_pagos 
+             WHERE $where_pagos_efectivo";
+    }
+    $pagos_efectivo = (float) ($wpdb->get_var($sql_pagos_efectivo) ?? 0);
+    
+    // Pagos por transferencia
+    $where_pagos_transferencia = $where_pagos . " AND tipo_pago = 'transferencia'";
+    if (!empty($params_pagos)) {
+        $sql_pagos_transferencia = $wpdb->prepare(
+            "SELECT SUM(total_a_pagar) as total_pagos_transferencia
+             FROM $tabla_pagos 
+             WHERE $where_pagos_transferencia",
+            $params_pagos
+        );
+    } else {
+        $sql_pagos_transferencia = "SELECT SUM(total_a_pagar) as total_pagos_transferencia
+             FROM $tabla_pagos 
+             WHERE $where_pagos_transferencia";
+    }
+    $pagos_transferencia = (float) ($wpdb->get_var($sql_pagos_transferencia) ?? 0);
+    
+    // Total de pagos registrados
+    $total_pagos_registrados = $pagos_efectivo + $pagos_transferencia;
+
+    /* ==========================================================
        6. Pedidos del Día Actual
     ========================================================== */
     $fecha_hoy = gofast_current_time('Y-m-d');
@@ -1205,6 +1266,17 @@ function gofast_reportes_admin_shortcode() {
             <div style="font-size:32px;margin-bottom:8px;">💸</div>
             <div style="font-size:28px;font-weight:700;color:#FF9800;margin-bottom:4px;">$<?= number_format($transferencias_aprobadas, 0, ',', '.'); ?></div>
             <div style="font-size:13px;color:#666;">Transferencias Aprobadas</div>
+            <div style="font-size:11px;color:#999;margin-top:4px;">(Solo tipo normal)</div>
+        </div>
+
+        <div class="gofast-box" style="text-align:center;padding:20px;">
+            <div style="font-size:32px;margin-bottom:8px;">✅</div>
+            <div style="font-size:28px;font-weight:700;color:#28a745;margin-bottom:4px;">$<?= number_format($total_pagos_registrados, 0, ',', '.'); ?></div>
+            <div style="font-size:13px;color:#666;">Pagos Registrados</div>
+            <div style="font-size:11px;color:#999;margin-top:4px;border-top:1px solid #e0e0e0;padding-top:6px;margin-top:6px;">
+                <div style="margin-bottom:2px;">💵 Efectivo: $<?= number_format($pagos_efectivo, 0, ',', '.'); ?></div>
+                <div>💸 Transferencia: $<?= number_format($pagos_transferencia, 0, ',', '.'); ?></div>
+            </div>
         </div>
 
         <div class="gofast-box" style="text-align:center;padding:20px;">

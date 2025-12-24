@@ -401,20 +401,20 @@ function gofast_home_shortcode() {
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo $url_admin_usuarios; ?>" class="gofast-home-panel-link">
-                            <span class="gofast-home-panel-icon">👥</span>
+                        <a href="<?php echo $url_reportes; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">📊</span>
                             <span class="gofast-home-panel-text">
-                                <strong>Usuarios</strong>
-                                <small>Gestionar cuentas</small>
+                                <strong>Reportes</strong>
+                                <small>Ver estadísticas</small>
                             </span>
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo $url_recargos; ?>" class="gofast-home-panel-link">
-                            <span class="gofast-home-panel-icon">⚙️</span>
+                        <a href="<?php echo $url_admin_finanzas ?? home_url('/admin-finanzas'); ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">💹</span>
                             <span class="gofast-home-panel-text">
-                                <strong>Recargos</strong>
-                                <small>Configurar tarifas</small>
+                                <strong>Finanzas</strong>
+                                <small>Gestionar egresos y saldos</small>
                             </span>
                         </a>
                     </li>
@@ -438,9 +438,6 @@ function gofast_home_shortcode() {
                     </li>
 
                 <?php endif; ?>
-
-            </ul>
-        </div>
 
     </section>
 

@@ -11,7 +11,8 @@
  * - Tab Vales Personal: CRUD de vales del personal
  * - Tab Transferencias Entradas: Visualizar transferencias entrantes
  * - Tab Transferencias Salidas: CRUD de transferencias salientes
- * - Tab Saldos Mensajeros: Gestión de pagos y descuentos a mensajeros
+ * - Tab Registrar Pago: Visualización de saldos pendientes y registro de pagos a mensajeros
+ * - Tab Historial de Pagos: Historial de pagos registrados
  * - Bloque de Resultados Generales: Cálculos consolidados
  ***************************************************/
 function gofast_finanzas_admin_shortcode() {
@@ -36,7 +37,6 @@ function gofast_finanzas_admin_shortcode() {
     $mensaje = '';
     $mensaje_tipo = '';
     $tab_activo = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'ingresos';
-    $subtab_saldos = isset($_GET['subtab_saldos']) ? sanitize_text_field($_GET['subtab_saldos']) : 'saldos_pendientes';
     
     // Mostrar mensajes de éxito
     if (isset($_GET['mensaje'])) {
@@ -104,13 +104,8 @@ function gofast_finanzas_admin_shortcode() {
                 $current_url = remove_query_arg('mensaje', $_SERVER['REQUEST_URI']);
                 $redirect_url = add_query_arg([
                     'mensaje' => 'pago_registrado',
-                    'tab' => 'saldos_mensajeros'
+                    'tab' => 'registrar_pago'
                 ], $current_url);
-                
-                // Si no hay subtab_saldos en la URL, agregarlo
-                if (strpos($redirect_url, 'subtab_saldos') === false) {
-                    $redirect_url = add_query_arg('subtab_saldos', 'saldos_pendientes', $redirect_url);
-                }
                 
                 echo '<script>window.location.href = "' . esc_js($redirect_url) . '";</script>';
                 return '';
@@ -151,12 +146,72 @@ function gofast_finanzas_admin_shortcode() {
             );
 
             if ($actualizado !== false) {
-                // Si era transferencia, buscar y actualizar la transferencia asociada
-                if ($pago_anterior && $pago_anterior->tipo_pago === 'transferencia') {
-                    // Buscar transferencia con el mismo valor y fecha aproximada
+                // Si el pago es tipo "transferencia" (antes o ahora), buscar y actualizar la transferencia asociada
+                if ($tipo_pago === 'transferencia') {
+                    // Buscar transferencia asociada al pago
+                    // Primero intentar con el valor anterior
+                    $valor_buscar = $pago_anterior ? $pago_anterior->total_a_pagar : $total_a_pagar;
                     $transferencia_asociada = $wpdb->get_row($wpdb->prepare(
                         "SELECT id FROM transferencias_gofast 
                          WHERE mensajero_id = %d 
+                         AND tipo = 'pago'
+                         AND valor = %f 
+                         AND observaciones LIKE %s
+                         LIMIT 1",
+                        $pago_anterior->mensajero_id,
+                        $valor_buscar,
+                        '%Pago automático%' . $fecha . '%'
+                    ));
+                    
+                    // Si no se encuentra con el valor anterior, buscar con el nuevo valor
+                    if (!$transferencia_asociada) {
+                        $transferencia_asociada = $wpdb->get_row($wpdb->prepare(
+                            "SELECT id FROM transferencias_gofast 
+                             WHERE mensajero_id = %d 
+                             AND tipo = 'pago'
+                             AND valor = %f 
+                             AND observaciones LIKE %s
+                             LIMIT 1",
+                            $pago_anterior->mensajero_id,
+                            $total_a_pagar,
+                            '%Pago automático%' . $fecha . '%'
+                        ));
+                    }
+                    
+                    if ($transferencia_asociada) {
+                        // Actualizar valor de la transferencia
+                        $wpdb->update(
+                            'transferencias_gofast',
+                            [
+                                'valor' => $total_a_pagar,
+                                'fecha_actualizacion' => gofast_date_mysql()
+                            ],
+                            ['id' => $transferencia_asociada->id],
+                            ['%f', '%s'],
+                            ['%d']
+                        );
+                    } elseif ($pago_anterior && $pago_anterior->tipo_pago !== 'transferencia' && $tipo_pago === 'transferencia') {
+                        // Si cambió de efectivo a transferencia, crear la transferencia asociada
+                        $wpdb->insert(
+                            'transferencias_gofast',
+                            [
+                                'mensajero_id' => $pago_anterior->mensajero_id,
+                                'valor' => $total_a_pagar,
+                                'estado' => 'aprobada',
+                                'tipo' => 'pago',
+                                'creado_por' => $user_id,
+                                'observaciones' => 'Pago automático - Transferencia - Fecha: ' . $fecha,
+                                'fecha_creacion' => gofast_date_mysql()
+                            ],
+                            ['%d', '%f', '%s', '%s', '%d', '%s', '%s']
+                        );
+                    }
+                } elseif ($pago_anterior && $pago_anterior->tipo_pago === 'transferencia' && $tipo_pago === 'efectivo') {
+                    // Si cambió de transferencia a efectivo, eliminar la transferencia asociada
+                    $transferencia_asociada = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id FROM transferencias_gofast 
+                         WHERE mensajero_id = %d 
+                         AND tipo = 'pago'
                          AND valor = %f 
                          AND observaciones LIKE %s
                          LIMIT 1",
@@ -166,12 +221,9 @@ function gofast_finanzas_admin_shortcode() {
                     ));
                     
                     if ($transferencia_asociada) {
-                        // Actualizar valor de la transferencia
-                        $wpdb->update(
+                        $wpdb->delete(
                             'transferencias_gofast',
-                            ['valor' => $total_a_pagar],
                             ['id' => $transferencia_asociada->id],
-                            ['%f'],
                             ['%d']
                         );
                     }
@@ -179,8 +231,7 @@ function gofast_finanzas_admin_shortcode() {
                 
                 $mensaje = '✅ Pago actualizado correctamente.';
                 $mensaje_tipo = 'success';
-                $tab_activo = 'saldos_mensajeros';
-                $subtab_saldos = 'historial_pagos';
+                $tab_activo = 'historial_pagos';
             } else {
                 $mensaje = 'Error al actualizar el pago: ' . $wpdb->last_error;
                 $mensaje_tipo = 'error';
@@ -196,13 +247,42 @@ function gofast_finanzas_admin_shortcode() {
             $mensaje = 'ID de pago inválido.';
             $mensaje_tipo = 'error';
         } else {
+            // Obtener datos del pago antes de eliminarlo para buscar la transferencia asociada
+            $pago_eliminar = $wpdb->get_row($wpdb->prepare(
+                "SELECT mensajero_id, tipo_pago, total_a_pagar, fecha FROM pagos_mensajeros_gofast WHERE id = %d",
+                $pago_id
+            ));
+            
             $eliminado = $wpdb->delete('pagos_mensajeros_gofast', ['id' => $pago_id], ['%d']);
 
             if ($eliminado) {
+                // Si el pago eliminado era de tipo "transferencia", eliminar también la transferencia asociada
+                if ($pago_eliminar && $pago_eliminar->tipo_pago === 'transferencia') {
+                    // Buscar la transferencia asociada al pago eliminado
+                    $transferencia_asociada = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id FROM transferencias_gofast 
+                         WHERE mensajero_id = %d 
+                         AND tipo = 'pago'
+                         AND valor = %f 
+                         AND observaciones LIKE %s
+                         LIMIT 1",
+                        $pago_eliminar->mensajero_id,
+                        $pago_eliminar->total_a_pagar,
+                        '%Pago automático - Transferencia - Fecha: ' . $pago_eliminar->fecha . '%'
+                    ));
+                    
+                    if ($transferencia_asociada) {
+                        $wpdb->delete(
+                            'transferencias_gofast',
+                            ['id' => $transferencia_asociada->id],
+                            ['%d']
+                        );
+                    }
+                }
+                
                 $mensaje = '✅ Pago eliminado correctamente.';
                 $mensaje_tipo = 'success';
-                $tab_activo = 'saldos_mensajeros';
-                $subtab_saldos = 'historial_pagos';
+                $tab_activo = 'historial_pagos';
             } else {
                 $mensaje = 'Error al eliminar el pago.';
                 $mensaje_tipo = 'error';
@@ -672,13 +752,42 @@ function gofast_finanzas_admin_shortcode() {
      *********************************************/
     $fecha_desde = isset($_GET['fecha_desde']) ? sanitize_text_field($_GET['fecha_desde']) : '';
     $fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize_text_field($_GET['fecha_hasta']) : '';
+    $periodo_mes = isset($_GET['periodo_mes']) ? sanitize_text_field($_GET['periodo_mes']) : '';
 
-    // Valores por defecto: día actual
+    // Valores por defecto: dividir mes en dos períodos (1-15 y 16-fin de mes)
     $fecha_actual = gofast_current_time('Y-m-d');
+    $dia_actual = (int) gofast_current_time('d');
+    $mes_actual = gofast_current_time('Y-m');
+    $anio_actual = (int) gofast_current_time('Y');
+    $mes_numero = (int) gofast_current_time('m');
+    
+    // Calcular último día del mes
+    $ultimo_dia_mes = (int) gofast_current_time('t'); // 't' devuelve el número de días del mes
     
     if (empty($fecha_desde) && empty($fecha_hasta)) {
-        $fecha_desde = $fecha_actual;
-        $fecha_hasta = $fecha_actual;
+        // Si hay periodo_mes seleccionado, usarlo
+        if (!empty($periodo_mes)) {
+            if ($periodo_mes === 'primera_quincena') {
+                $fecha_desde = $mes_actual . '-01';
+                $fecha_hasta = $mes_actual . '-15';
+            } elseif ($periodo_mes === 'segunda_quincena') {
+                $fecha_desde = $mes_actual . '-16';
+                $fecha_hasta = $mes_actual . '-' . str_pad($ultimo_dia_mes, 2, '0', STR_PAD_LEFT);
+            }
+        } else {
+            // Determinar automáticamente según el día actual
+            if ($dia_actual <= 15) {
+                // Estamos en la primera quincena, mostrar del 1 al 15
+                $fecha_desde = $mes_actual . '-01';
+                $fecha_hasta = $mes_actual . '-15';
+                $periodo_mes = 'primera_quincena';
+            } else {
+                // Estamos en la segunda quincena, mostrar del 16 al fin de mes
+                $fecha_desde = $mes_actual . '-16';
+                $fecha_hasta = $mes_actual . '-' . str_pad($ultimo_dia_mes, 2, '0', STR_PAD_LEFT);
+                $periodo_mes = 'segunda_quincena';
+            }
+        }
     }
     
     // Determinar si es un rango específico (fechas diferentes) o acumulado hasta fecha_hasta
@@ -797,6 +906,7 @@ function gofast_finanzas_admin_shortcode() {
         ) ?? 0);
 
         // Total Transferencias Ingresos (aprobadas)
+        // Solo incluir: transferencias tipo "normal" y transferencias tipo "pago" asociadas a pagos registrados
         $where_transf_entradas = ["estado = 'aprobada'"];
         $params_transf_entradas = [];
         
@@ -809,10 +919,31 @@ function gofast_finanzas_admin_shortcode() {
             $params_transf_entradas[] = $fecha_hasta . ' 23:59:59';
         }
 
+        // Construir la consulta: solo transferencias tipo "normal" y tipo "pago" asociadas a pagos registrados
+        // Las transferencias tipo "pago" solo se crean cuando se registra un pago por transferencia
+        // Verificamos que exista un pago registrado (efectivo o transferencia) que coincida
+        $sql_transf_entradas = "
+            SELECT COALESCE(SUM(t.valor), 0) 
+            FROM transferencias_gofast t
+            WHERE " . implode(' AND ', $where_transf_entradas) . "
+            AND (
+                (t.tipo = 'normal' OR t.tipo IS NULL)
+                OR (
+                    t.tipo = 'pago' 
+                    AND EXISTS (
+                        SELECT 1 FROM pagos_mensajeros_gofast p
+                        WHERE p.mensajero_id = t.mensajero_id
+                        AND p.total_a_pagar = t.valor
+                        AND p.tipo_pago IN ('efectivo', 'transferencia')
+                    )
+                )
+            )
+        ";
+
         $total_transferencias_ingresos = (float) ($wpdb->get_var(
             !empty($params_transf_entradas)
-                ? $wpdb->prepare("SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE " . implode(' AND ', $where_transf_entradas), $params_transf_entradas)
-                : "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE estado = 'aprobada'"
+                ? $wpdb->prepare($sql_transf_entradas, $params_transf_entradas)
+                : str_replace(implode(' AND ', $where_transf_entradas), "1=1", $sql_transf_entradas)
         ) ?? 0);
 
         // Total Transferencias Salidas
@@ -899,10 +1030,25 @@ function gofast_finanzas_admin_shortcode() {
         ) ?? 0);
         
         // Total Transferencias Ingresos hasta fecha_hasta
+        // Solo incluir: transferencias tipo "normal" y tipo "pago" asociadas a pagos registrados
         $total_transferencias_ingresos = (float) ($wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                 WHERE estado = 'aprobada' AND DATE(fecha_creacion) <= %s",
+                "SELECT COALESCE(SUM(t.valor), 0) 
+                 FROM transferencias_gofast t
+                 WHERE t.estado = 'aprobada' 
+                 AND DATE(t.fecha_creacion) <= %s
+                 AND (
+                     (t.tipo = 'normal' OR t.tipo IS NULL)
+                     OR (
+                         t.tipo = 'pago' 
+                         AND EXISTS (
+                             SELECT 1 FROM pagos_mensajeros_gofast p
+                             WHERE p.mensajero_id = t.mensajero_id
+                             AND p.total_a_pagar = t.valor
+                             AND p.tipo_pago IN ('efectivo', 'transferencia')
+                         )
+                     )
+                 )",
                 $fecha_hasta
             )
         ) ?? 0);
@@ -936,7 +1082,9 @@ function gofast_finanzas_admin_shortcode() {
     
     // Cálculos finales
     $subtotal = $total_comisiones - $total_egresos - $total_vales_empresa - $total_descuentos;
-    $efectivo = $subtotal - $saldo_transferencias - $total_saldos_pendientes;
+    // Nota: $efectivo se recalcula más abajo después de calcular $total_saldos_pendientes
+    // Fórmula final: $efectivo = $subtotal - $saldo_transferencias - $total_saldos_pendientes - $total_vales_personal
+    $efectivo = 0; // Temporal, se recalcula después
     $utilidad_total = $subtotal;
     $utilidad_individual = $utilidad_total > 0 ? ($utilidad_total / 2) : 0;
 
@@ -1429,7 +1577,7 @@ function gofast_finanzas_admin_shortcode() {
         
         $pagos_en_rango_raw = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT fecha, fecha_pago, total_a_pagar 
+                "SELECT fecha, fecha_pago, total_a_pagar, tipo_pago 
                  FROM pagos_mensajeros_gofast 
                  WHERE mensajero_id = %d 
                  AND tipo_pago IN ('efectivo', 'transferencia')
@@ -1507,23 +1655,23 @@ function gofast_finanzas_admin_shortcode() {
         $ingresos_totales = $ingresos_servicios + $ingresos_compras;
 
         // Transferencias aprobadas - calcular directamente en el rango de fechas
-        $where_transf = "mensajero_id = %d AND estado = 'aprobada'";
+        // Solo incluir: transferencias tipo "normal" (excluir tipo "pago")
+        // Las transferencias tipo "pago" se contabilizan en los pagos
+        // IMPORTANTE: Usar fecha_creacion con hora para coincidir con reportes_admin.php
+        $where_transf = "mensajero_id = %d AND estado = 'aprobada' AND (tipo = 'normal' OR tipo IS NULL)";
         $params_transf = [$mensajero_id];
         
         if (!empty($fecha_desde)) {
-            $where_transf .= " AND DATE(fecha_creacion) >= %s";
-            $params_transf[] = $fecha_desde;
+            $where_transf .= " AND fecha_creacion >= %s";
+            $params_transf[] = $fecha_desde . ' 00:00:00';
         }
         if (!empty($fecha_hasta)) {
-            $where_transf .= " AND DATE(fecha_creacion) <= %s";
-            $params_transf[] = $fecha_hasta;
+            $where_transf .= " AND fecha_creacion <= %s";
+            $params_transf[] = $fecha_hasta . ' 23:59:59';
         }
         
         $transferencias_aprobadas = (float) ($wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE $where_transf",
-                $params_transf
-            ) ?? 0)
+            $wpdb->prepare("SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE $where_transf", $params_transf) ?? 0)
         );
 
         // Descuentos - calcular directamente en el rango de fechas
@@ -1549,14 +1697,29 @@ function gofast_finanzas_admin_shortcode() {
         $comision_generada = $ingresos_totales * 0.20;
         $utilidad_neta = $ingresos_totales - $comision_generada;
         
-        // Para el total a pagar, usar el cálculo basado en todo el historial
-        // Esto asegura consistencia con el desglose por día
-        $total_pagos_en_rango = 0;
+        // Pagos en el rango de fechas - separar efectivo y transferencia
+        $total_pagos_efectivo_rango = 0;
+        $total_pagos_transferencia_rango = 0;
         foreach ($pagos_en_rango_raw as $pago_rango) {
-            $total_pagos_en_rango += (float) $pago_rango->total_a_pagar;
+            if ($pago_rango->tipo_pago === 'efectivo') {
+                $total_pagos_efectivo_rango += (float) $pago_rango->total_a_pagar;
+            } elseif ($pago_rango->tipo_pago === 'transferencia') {
+                $total_pagos_transferencia_rango += (float) $pago_rango->total_a_pagar;
+            }
+        }
+        $total_pagos_en_rango = $total_pagos_efectivo_rango + $total_pagos_transferencia_rango;
+        
+        // Calcular total_a_pagar basado en el RANGO de fechas del filtro
+        // Fórmula: Comisión del rango - Transferencias del rango - Descuentos del rango - Pagos del rango
+        $total_a_pagar = $comision_generada - $transferencias_aprobadas - $total_descuentos_mensajero - $total_pagos_en_rango;
+        if ($total_a_pagar < 0) {
+            $total_a_pagar = 0;
         }
         
-        // Calcular total_a_pagar basado en historial completo
+        // Para compatibilidad y debug, mantener también el cálculo del rango con otro nombre
+        $total_a_pagar_rango = $total_a_pagar;
+        
+        // Calcular valores históricos SOLO para debug (opcional)
         // Obtener total de comisiones históricas hasta fecha_hasta
         $comision_historica = (float) ($wpdb->get_var(
             $wpdb->prepare(
@@ -1576,11 +1739,16 @@ function gofast_finanzas_admin_shortcode() {
             )
         ) ?? 0);
         
+        // Transferencias históricas: solo tipo "normal" (excluir tipo "pago")
+        // Las transferencias tipo "pago" se contabilizan en pagos_historicos
         $transferencias_historicas = (float) ($wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                 WHERE mensajero_id = %d AND estado = 'aprobada' 
-                 AND DATE(fecha_creacion) <= %s",
+                "SELECT COALESCE(SUM(valor), 0) 
+                 FROM transferencias_gofast
+                 WHERE mensajero_id = %d 
+                 AND estado = 'aprobada' 
+                 AND DATE(fecha_creacion) <= %s
+                 AND (tipo = 'normal' OR tipo IS NULL)",
                 $mensajero_id, $fecha_hasta
             )
         ) ?? 0);
@@ -1593,54 +1761,85 @@ function gofast_finanzas_admin_shortcode() {
             )
         ) ?? 0);
         
+        // Pagos históricos: pagos en efectivo y por transferencia hasta fecha_hasta
+        // Los pagos por transferencia crean transferencias tipo "pago", pero se restan aquí como pagos
         $pagos_historicos = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
-                 WHERE mensajero_id = %d AND tipo_pago IN ('efectivo', 'transferencia')",
-                $mensajero_id
+                 WHERE mensajero_id = %d AND tipo_pago IN ('efectivo', 'transferencia')
+                 AND fecha <= %s",
+                $mensajero_id, $fecha_hasta
             )
         ) ?? 0);
         
-        // Total pendiente histórico hasta la fecha seleccionada
-        $total_a_pagar = ($comision_historica + $comision_compras_historica) - $transferencias_historicas - $descuentos_historicos - $pagos_historicos;
+        // Total pendiente histórico (solo para debug)
+        $total_a_pagar_historico = ($comision_historica + $comision_compras_historica) - $transferencias_historicas - $descuentos_historicos - $pagos_historicos;
+        
+        // DEBUG: Guardar valores para mostrar en debug (histórico y rango)
+        $debug_valores_mensajero = [
+            'mensajero_id' => $mensajero_id,
+            'mensajero_nombre' => $mensajero->nombre,
+            'fecha_desde' => $fecha_desde,
+            'fecha_hasta' => $fecha_hasta,
+            // Valores HISTÓRICOS (acumulados hasta fecha_hasta)
+            'comision_historica_servicios' => $comision_historica,
+            'comision_historica_compras' => $comision_compras_historica,
+            'comision_total_historica' => $comision_historica + $comision_compras_historica,
+            'transferencias_historicas' => $transferencias_historicas,
+            'descuentos_historicos' => $descuentos_historicos,
+            'pagos_historicos' => $pagos_historicos,
+            'total_a_pagar_historico' => $total_a_pagar_historico,
+            'formula_historica' => "($comision_historica + $comision_compras_historica) - $transferencias_historicas - $descuentos_historicos - $pagos_historicos = $total_a_pagar_historico",
+            // Valores del RANGO (solo en el rango de fechas seleccionado)
+            'comision_rango_servicios' => $ingresos_servicios * 0.20,
+            'comision_rango_compras' => $ingresos_compras * 0.20,
+            'comision_total_rango' => $comision_generada,
+            'transferencias_rango' => $transferencias_aprobadas,
+            'descuentos_rango' => $total_descuentos_mensajero,
+            'pagos_efectivo_rango' => $total_pagos_efectivo_rango,
+            'pagos_transferencia_rango' => $total_pagos_transferencia_rango,
+            'pagos_rango' => $total_pagos_en_rango,
+            'total_a_pagar_rango' => $total_a_pagar_rango,
+            'formula_rango' => "$comision_generada - $transferencias_aprobadas - $total_descuentos_mensajero - $total_pagos_en_rango = $total_a_pagar_rango"
+        ];
 
-        // Calcular desglose por día considerando TODO el historial (sin importar rango de fechas)
+        // Calcular desglose por día SOLO dentro del rango de fechas seleccionado
+        // Esto asegura que el desglose coincida con el "Total a Pagar" del resumen
         $desglose_dias = [];
         
-        // Obtener la primera fecha con actividad del mensajero
-        $primera_fecha = $wpdb->get_var($wpdb->prepare(
-            "SELECT MIN(fecha_actividad) FROM (
-                SELECT DATE(fecha) as fecha_actividad FROM servicios_gofast 
-                WHERE mensajero_id = %d AND tracking_estado != 'cancelado'
-                UNION ALL
-                SELECT DATE(fecha_creacion) as fecha_actividad FROM compras_gofast 
-                WHERE mensajero_id = %d AND estado != 'cancelada'
-            ) as fechas",
-            $mensajero_id, $mensajero_id
-        ));
-        
-        if ($primera_fecha) {
-            // Calcular desde la primera actividad hasta hoy
-            $fecha_inicio_historico = new DateTime($primera_fecha);
-            $fecha_fin = new DateTime(); // Hoy
-            $fecha_fin->modify('+1 day');
-            $intervalo = new DateInterval('P1D');
-            $periodo = new DatePeriod($fecha_inicio_historico, $intervalo, $fecha_fin);
+        if (!empty($fecha_desde) && !empty($fecha_hasta)) {
+            // Calcular solo días dentro del rango seleccionado
+            $fecha_hoy = gofast_current_time('Y-m-d');
+            $fecha_inicio = new DateTime($fecha_desde);
             
-            // Obtener TODOS los pagos del mensajero
+            // Determinar la fecha final del periodo
+            // Si fecha_hasta >= hoy, incluir hasta hoy
+            $fecha_fin_periodo = $fecha_hasta;
+            if ($fecha_hasta >= $fecha_hoy) {
+                $fecha_fin_periodo = $fecha_hoy;
+            }
+            
+            $fecha_fin = new DateTime($fecha_fin_periodo);
+            $fecha_fin->modify('+1 day'); // +1 day para incluir el último día en el DatePeriod
+            $intervalo = new DateInterval('P1D');
+            $periodo = new DatePeriod($fecha_inicio, $intervalo, $fecha_fin);
+            
+            // Obtener pagos SOLO dentro del rango de fechas seleccionado
+            // Esto asegura que los pagos aplicados coincidan con el cálculo del resumen
             $todos_pagos = $wpdb->get_results(
                 $wpdb->prepare(
                     "SELECT fecha, total_a_pagar FROM pagos_mensajeros_gofast 
                      WHERE mensajero_id = %d AND tipo_pago IN ('efectivo', 'transferencia')
+                     AND fecha >= %s AND fecha <= %s
                      ORDER BY fecha ASC, fecha_pago ASC",
-                    $mensajero_id
+                    $mensajero_id, $fecha_desde, $fecha_hasta
                 )
             );
             
-            // Sumar todos los pagos
-            $total_pagos_historico = 0;
+            // Sumar todos los pagos dentro del rango
+            $total_pagos_rango = 0;
             foreach ($todos_pagos as $pago) {
-                $total_pagos_historico += (float) $pago->total_a_pagar;
+                $total_pagos_rango += (float) $pago->total_a_pagar;
             }
             
             // Calcular todos los días con sus valores
@@ -1665,12 +1864,19 @@ function gofast_finanzas_admin_shortcode() {
                     )
                 ) ?? 0);
                 
-                // Transferencias del día
+                // Transferencias del día: solo tipo "normal" (excluir tipo "pago")
+                // Las transferencias tipo "pago" se contabilizan en los pagos del día
+                // IMPORTANTE: Usar fecha_creacion con hora para coincidir con reportes_admin.php
                 $transferencias_dia = (float) ($wpdb->get_var(
                     $wpdb->prepare(
-                        "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                         WHERE mensajero_id = %d AND estado = 'aprobada' AND DATE(fecha_creacion) = %s",
-                        $mensajero_id, $fecha_dia
+                        "SELECT COALESCE(SUM(valor), 0) 
+                         FROM transferencias_gofast
+                         WHERE mensajero_id = %d 
+                         AND estado = 'aprobada' 
+                         AND fecha_creacion >= %s
+                         AND fecha_creacion <= %s
+                         AND (tipo = 'normal' OR tipo IS NULL)",
+                        $mensajero_id, $fecha_dia . ' 00:00:00', $fecha_dia . ' 23:59:59'
                     )
                 ) ?? 0);
                 
@@ -1702,8 +1908,8 @@ function gofast_finanzas_admin_shortcode() {
                 }
             }
             
-            // Distribuir pagos del día más antiguo al más reciente
-            $pagos_restantes = $total_pagos_historico;
+            // Distribuir pagos del día más antiguo al más reciente (solo dentro del rango)
+            $pagos_restantes = $total_pagos_rango;
             for ($i = 0; $i < count($dias_historico) && $pagos_restantes > 0; $i++) {
                 if ($dias_historico[$i]['pendiente'] > 0) {
                     $aplicar = min($pagos_restantes, $dias_historico[$i]['pendiente']);
@@ -1713,12 +1919,113 @@ function gofast_finanzas_admin_shortcode() {
                 }
             }
             
-            // Agregar días con saldo pendiente hasta la fecha_hasta seleccionada
+            // Agregar días con actividad dentro del rango fecha_desde a fecha_hasta
+            // Solo mostrar días que están dentro del rango seleccionado
+            $mostrar_hoy_siempre = ($fecha_hasta >= $fecha_hoy);
+            
             foreach ($dias_historico as $dia) {
-                if ($dia['pendiente'] > 0 && $dia['fecha'] <= $fecha_hasta) {
-                    $desglose_dias[] = (object) $dia;
+                // Solo mostrar días dentro del rango seleccionado
+                if ($dia['fecha'] >= $fecha_desde && $dia['fecha'] <= $fecha_hasta) {
+                    // Mostrar días con pendiente > 0
+                    if ($dia['pendiente'] > 0) {
+                        $desglose_dias[] = (object) $dia;
+                    } elseif ($mostrar_hoy_siempre && $dia['fecha'] === $fecha_hoy && $dia['ingresos'] > 0) {
+                        // Mostrar hoy incluso si ya fue pagado, para ver la actividad del día
+                        $desglose_dias[] = (object) $dia;
+                    }
                 }
             }
+            
+            // Asegurar que el día de hoy esté en el desglose si está dentro del rango y tiene actividad
+            // Solo si fecha_hasta >= hoy Y fecha_desde <= hoy (hoy está dentro del rango)
+            if ($mostrar_hoy_siempre && $fecha_hoy >= $fecha_desde && $fecha_hoy <= $fecha_hasta) {
+                // Verificar si hoy ya está en el desglose
+                $hoy_en_desglose = false;
+                foreach ($desglose_dias as $dia) {
+                    if ($dia->fecha === $fecha_hoy) {
+                        $hoy_en_desglose = true;
+                        break;
+                    }
+                }
+                
+                // Si hoy no está en el desglose pero tiene actividad, calcularlo y agregarlo
+                if (!$hoy_en_desglose) {
+                    $ingresos_hoy = (float) ($wpdb->get_var(
+                        $wpdb->prepare(
+                            "SELECT COALESCE(SUM(total), 0) FROM servicios_gofast 
+                             WHERE mensajero_id = %d AND tracking_estado != 'cancelado' AND DATE(fecha) = %s",
+                            $mensajero_id, $fecha_hoy
+                        )
+                    ) ?? 0);
+                    
+                    $ingresos_compras_hoy = (float) ($wpdb->get_var(
+                        $wpdb->prepare(
+                            "SELECT COALESCE(SUM(valor), 0) FROM compras_gofast 
+                             WHERE mensajero_id = %d AND estado != 'cancelada' AND DATE(fecha_creacion) = %s",
+                            $mensajero_id, $fecha_hoy
+                        )
+                    ) ?? 0);
+                    
+                    if ($ingresos_hoy > 0 || $ingresos_compras_hoy > 0) {
+                        $ingresos_total_hoy = $ingresos_hoy + $ingresos_compras_hoy;
+                        $comision_hoy = $ingresos_total_hoy * 0.20;
+                        
+                        $transferencias_hoy = (float) ($wpdb->get_var(
+                            $wpdb->prepare(
+                                "SELECT COALESCE(SUM(valor), 0) 
+                                 FROM transferencias_gofast
+                                 WHERE mensajero_id = %d 
+                                 AND estado = 'aprobada' 
+                                 AND fecha_creacion >= %s
+                                 AND fecha_creacion <= %s
+                                 AND (tipo = 'normal' OR tipo IS NULL)",
+                                $mensajero_id, $fecha_hoy . ' 00:00:00', $fecha_hoy . ' 23:59:59'
+                            )
+                        ) ?? 0);
+                        
+                        $descuentos_hoy = (float) ($wpdb->get_var(
+                            $wpdb->prepare(
+                                "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast 
+                                 WHERE mensajero_id = %d AND fecha = %s",
+                                $mensajero_id, $fecha_hoy
+                            )
+                        ) ?? 0);
+                        
+                        $a_pagar_hoy = $comision_hoy - $transferencias_hoy - $descuentos_hoy;
+                        $pendiente_hoy = max(0, $a_pagar_hoy);
+                        
+                        // Aplicar pagos del día de hoy si existen (solo dentro del rango)
+                        $pagos_hoy = 0;
+                        foreach ($todos_pagos as $pago) {
+                            if ($pago->fecha === $fecha_hoy) {
+                                $aplicar_hoy = min((float) $pago->total_a_pagar, $pendiente_hoy);
+                                $pagos_hoy += $aplicar_hoy;
+                                $pendiente_hoy -= $aplicar_hoy;
+                                if ($pendiente_hoy < 0) $pendiente_hoy = 0;
+                            }
+                        }
+                        
+                        // Agregar hoy al desglose si tiene actividad
+                        if ($ingresos_total_hoy > 0) {
+                            $desglose_dias[] = (object) [
+                                'fecha' => $fecha_hoy,
+                                'ingresos' => $ingresos_total_hoy,
+                                'comision' => $comision_hoy,
+                                'transferencias' => $transferencias_hoy,
+                                'descuentos' => $descuentos_hoy,
+                                'a_pagar' => max(0, $a_pagar_hoy),
+                                'pagado' => $pagos_hoy,
+                                'pendiente' => max(0, $pendiente_hoy)
+                            ];
+                        }
+                    }
+                }
+            }
+            
+            // Ordenar desglose_dias por fecha (más antiguo primero)
+            usort($desglose_dias, function($a, $b) {
+                return strcmp($a->fecha, $b->fecha);
+            });
         }
 
         // Agregar mensajero a la lista (incluso si todos los valores son 0)
@@ -1734,8 +2041,10 @@ function gofast_finanzas_admin_shortcode() {
             'transferencias_aprobadas' => $transferencias_aprobadas,
             'total_descuentos' => $total_descuentos_mensajero,
             'total_pagos_rango' => $total_pagos_en_rango,
-            'total_a_pagar' => $total_a_pagar,
-            'desglose_dias' => $desglose_dias
+            'total_a_pagar' => $total_a_pagar, // Del rango de fechas (valor principal)
+            'total_a_pagar_rango' => $total_a_pagar_rango, // Alias del mismo valor (para compatibilidad)
+            'desglose_dias' => $desglose_dias,
+            'debug_valores' => $debug_valores_mensajero // Agregar debug
         ];
     }
     
@@ -1743,7 +2052,7 @@ function gofast_finanzas_admin_shortcode() {
     // Fórmula: Comisión(20% de ingresos) - Transferencias Ingresos - Descuentos - Pagos realizados
     // Esto representa lo que se debe a los mensajeros
     
-    // Total de pagos en efectivo realizados a mensajeros (solo efectivo, no transferencia)
+    // Total de pagos en efectivo realizados a mensajeros (solo efectivo, no transferencia) en el rango de fechas
     if ($es_rango_especifico) {
         $total_pagos_mensajeros = (float) ($wpdb->get_var(
             $wpdb->prepare(
@@ -1754,21 +2063,42 @@ function gofast_finanzas_admin_shortcode() {
             )
         ) ?? 0);
     } else {
+        // Para acumulado histórico, también filtrar por fecha hasta fecha_hasta
         $total_pagos_mensajeros = (float) ($wpdb->get_var(
-            "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
-             WHERE tipo_pago = 'efectivo'"
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
+                 WHERE tipo_pago = 'efectivo' 
+                 AND fecha <= %s",
+                $fecha_hasta
+            )
         ) ?? 0);
     }
     
-    // Saldos Pendientes = Comisión - Transferencias Ingresos - Descuentos - Pagos
+    // Saldos Pendientes = Comisión - Transferencias Ingresos - Descuentos - Pagos (en efectivo, en rango de fecha)
     $total_saldos_pendientes = $total_comisiones - $total_transferencias_ingresos - $total_descuentos - $total_pagos_mensajeros;
     if ($total_saldos_pendientes < 0) {
         $total_saldos_pendientes = 0;
     }
     
+    // DEBUG: Valores para el cálculo total de saldos pendientes
+    $debug_saldos_pendientes_total = [
+        'fecha_desde' => $fecha_desde,
+        'fecha_hasta' => $fecha_hasta,
+        'es_rango_especifico' => $es_rango_especifico,
+        'total_comisiones' => $total_comisiones,
+        'total_transferencias_ingresos' => $total_transferencias_ingresos,
+        'total_descuentos' => $total_descuentos,
+        'total_pagos_mensajeros' => $total_pagos_mensajeros,
+        'total_saldos_pendientes_calculado' => $total_saldos_pendientes,
+        'formula' => "$total_comisiones - $total_transferencias_ingresos - $total_descuentos - $total_pagos_mensajeros = $total_saldos_pendientes"
+    ];
+    
     // Recalcular efectivo ahora que tenemos el valor real de saldos pendientes
-    // Efectivo = Subtotal - Saldo Transferencias - Saldos Pendientes
-    $efectivo = $subtotal - $saldo_transferencias - $total_saldos_pendientes;
+    // Efectivo = Subtotal - Saldo Transferencias - Saldos Pendientes - Vales Personal
+    $efectivo = $subtotal - $saldo_transferencias - $total_saldos_pendientes - $total_vales_personal;
+    
+    // Guardar una copia completa de saldos_mensajeros ANTES del filtro (para debug)
+    $saldos_mensajeros_completos = $saldos_mensajeros;
     
     // Filtrar solo mensajeros con saldo pendiente (total_a_pagar > 0)
     $saldos_mensajeros = array_filter($saldos_mensajeros, function($saldo) {
@@ -1778,12 +2108,22 @@ function gofast_finanzas_admin_shortcode() {
     $saldos_mensajeros = array_values($saldos_mensajeros);
     
     // Paginación para saldos pendientes
+    // Si hay un filtro de mensajero activo, no aplicar paginación (mostrar todos los resultados)
     $por_pagina_saldos = 15;
     $total_saldos_count = count($saldos_mensajeros);
-    $pg_saldos = isset($_GET['pg_saldos']) ? max(1, (int) $_GET['pg_saldos']) : 1;
-    $total_paginas_saldos = max(1, (int) ceil($total_saldos_count / $por_pagina_saldos));
-    $offset_saldos = ($pg_saldos - 1) * $por_pagina_saldos;
-    $saldos_mensajeros_paginados = array_slice($saldos_mensajeros, $offset_saldos, $por_pagina_saldos);
+    
+    if ($filtro_mensajero_saldos > 0) {
+        // Si hay filtro de mensajero, mostrar todos los resultados sin paginación
+        $saldos_mensajeros_paginados = $saldos_mensajeros;
+        $total_paginas_saldos = 1;
+        $pg_saldos = 1;
+    } else {
+        // Si no hay filtro, aplicar paginación normal
+        $total_paginas_saldos = max(1, (int) ceil($total_saldos_count / $por_pagina_saldos));
+        $pg_saldos = isset($_GET['pg_saldos']) ? max(1, min((int) $_GET['pg_saldos'], $total_paginas_saldos)) : 1;
+        $offset_saldos = ($pg_saldos - 1) * $por_pagina_saldos;
+        $saldos_mensajeros_paginados = array_slice($saldos_mensajeros, $offset_saldos, $por_pagina_saldos);
+    }
 
     // Contar pedidos sin asignar (es el mismo para todos los mensajeros)
     $where_pedidos_sin_asignar = "tracking_estado != 'cancelado' AND mensajero_id IS NULL";
@@ -1862,7 +2202,8 @@ function gofast_finanzas_admin_shortcode() {
     $comision_generada_saldos = array_sum(array_column($saldos_mensajeros, 'comision_generada'));
     $utilidad_neta_saldos = array_sum(array_column($saldos_mensajeros, 'utilidad_neta'));
     $transferencias_aprobadas_saldos = array_sum(array_column($saldos_mensajeros, 'transferencias_aprobadas'));
-    $total_a_pagar_saldos = array_sum(array_column($saldos_mensajeros, 'total_a_pagar'));
+    $total_a_pagar_saldos = array_sum(array_column($saldos_mensajeros, 'total_a_pagar')); // Histórico acumulado
+    $total_a_pagar_rango_saldos = array_sum(array_column($saldos_mensajeros, 'total_a_pagar_rango')); // Del rango de fechas
 
     // Calcular totales por día
     $transferencias_por_dia = [];
@@ -1885,41 +2226,32 @@ function gofast_finanzas_admin_shortcode() {
 
 <div class="gofast-home">
     <script>
-    // Función global para cambiar sub-tabs de saldos mensajeros
-    window.mostrarSubTabSaldos = function(subtab, element) {
-        // Ocultar todos los sub-tabs
-        document.querySelectorAll('.gofast-subtab-content').forEach(function(content) {
-            content.style.display = 'none';
-        });
-        
-        // Remover clase activa de todos los botones de sub-tab
-        document.querySelectorAll('.gofast-subtab-btn').forEach(function(btn) {
-            btn.classList.remove('gofast-subtab-active');
-            btn.style.background = '#f0f0f0';
-            btn.style.fontWeight = '400';
-            btn.style.color = '#666';
-        });
-        
-        // Mostrar el sub-tab seleccionado
-        const subtabContent = document.getElementById('subtab-' + subtab);
-        if (subtabContent) {
-            subtabContent.style.display = 'block';
-        }
-        
-        // Agregar clase activa al botón
-        if (element) {
-            element.classList.add('gofast-subtab-active');
-            element.style.background = 'var(--gofast-yellow)';
-            element.style.fontWeight = '600';
-            element.style.color = '#000';
-        }
-        
-        // Actualizar URL sin recargar
-        const url = new URL(window.location);
-        url.searchParams.set('subtab_saldos', subtab);
-        window.history.pushState({}, '', url);
-    };
 
+    // Función para actualizar fechas según el período seleccionado
+    function actualizarFechasPorPeriodo() {
+        const periodoSelect = document.getElementById('periodo_mes_select');
+        const fechaDesdeInput = document.getElementById('fecha_desde_input');
+        const fechaHastaInput = document.getElementById('fecha_hasta_input');
+        
+        if (!periodoSelect || !fechaDesdeInput || !fechaHastaInput) return;
+        
+        const periodo = periodoSelect.value;
+        const ahora = new Date();
+        const anio = ahora.getFullYear();
+        const mes = ahora.getMonth() + 1; // getMonth() devuelve 0-11
+        const mesStr = String(mes).padStart(2, '0');
+        
+        if (periodo === 'primera_quincena') {
+            fechaDesdeInput.value = anio + '-' + mesStr + '-01';
+            fechaHastaInput.value = anio + '-' + mesStr + '-15';
+        } else if (periodo === 'segunda_quincena') {
+            // Obtener último día del mes
+            const ultimoDia = new Date(anio, mes, 0).getDate();
+            fechaDesdeInput.value = anio + '-' + mesStr + '-16';
+            fechaHastaInput.value = anio + '-' + mesStr + '-' + String(ultimoDia).padStart(2, '0');
+        }
+    }
+    
     // Función global para cambiar tabs - debe estar disponible inmediatamente
     window.mostrarTabFinanzas = function(tab, element) {
         // Ocultar todos los tabs
@@ -1950,8 +2282,10 @@ function gofast_finanzas_admin_shortcode() {
                                              tab === 'vales_personal' ? 'Vales Personal' : 
                                              tab === 'transferencias_entradas' ? 'Transferencias Entradas' : 
                                              tab === 'transferencias_salidas' ? 'Transferencias Salidas' : 
-                                             tab === 'descuentos' ? 'Descuentos' :
-                                             'Saldos Mensajeros')) {
+                                             tab === 'descuentos' ? 'Descuentos' : 
+                                             tab === 'registrar_pago' ? 'Registrar Pago' :
+                                             tab === 'historial_pagos' ? 'Historial de Pagos' :
+                                             '')) {
                     btn.classList.add('gofast-config-tab-active');
                 }
             });
@@ -1996,171 +2330,6 @@ function gofast_finanzas_admin_shortcode() {
         </div>
     <?php endif; ?>
 
-
-    <!-- BLOQUE DE RESULTADOS GENERALES -->
-    <div class="gofast-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-            <h3 style="margin-top: 0; color: #fff; margin-bottom: 0;">📊 Resultados Generales</h3>
-            <div style="background: rgba(255,255,255,0.2); padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;">
-                📅 Rango de fechas: 
-                <strong><?= gofast_date_format($fecha_desde, 'd/m/Y') ?></strong> 
-                <?php if ($fecha_desde !== $fecha_hasta): ?>
-                    hasta <strong><?= gofast_date_format($fecha_hasta, 'd/m/Y') ?></strong>
-                <?php endif; ?>
-            </div>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px;">
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Ingresos
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_comisiones, 0, ',', '.') ?></div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    • Servicios: $<?= number_format($total_ingresos_servicios, 0, ',', '.') ?><br>
-                    • Compras: $<?= number_format($total_ingresos_compras, 0, ',', '.') ?><br>
-                    • Total: $<?= number_format($total_ingresos, 0, ',', '.') ?> × 20%
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Total Egresos
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_egresos, 0, ',', '.') ?></div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    Suma de egresos registrados
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Vales Empresa
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_vales_empresa, 0, ',', '.') ?></div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    Suma de vales de empresa
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Vales Personal
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_vales_personal, 0, ',', '.') ?></div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    Suma de vales del personal
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Transf. Ingresos
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_transferencias_ingresos, 0, ',', '.') ?></div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    Transferencias aprobadas
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Transf. Salidas
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_transferencias_salidas, 0, ',', '.') ?></div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    Transferencias salientes
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Saldo Transferencias
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($saldo_transferencias, 0, ',', '.') ?></div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    Ingresos - Salidas<br>
-                    <small style="opacity: 0.7;">$<?= number_format($total_transferencias_ingresos, 0, ',', '.') ?> - $<?= number_format($total_transferencias_salidas, 0, ',', '.') ?></small>
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Saldos Pendientes
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_saldos_pendientes, 0, ',', '.') ?></div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    Comisión - Transf. - Desc. - Pagos
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
-                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
-                    Total Descuentos
-                </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px; color: <?= $total_descuentos < 0 ? '#28a745' : '#fff' ?>;">
-                    $<?= number_format(abs($total_descuentos), 0, ',', '.') ?>
-                    <?php if ($total_descuentos < 0): ?>
-                        <small style="font-size: 12px; opacity: 0.8;">(Bonificación)</small>
-                    <?php endif; ?>
-                </div>
-                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
-                    <strong>Detalle:</strong><br>
-                    Descuentos a mensajeros
-                    <?php if (!empty($fecha_desde) && !empty($fecha_hasta)): ?>
-                        <br><small style="opacity: 0.7;">Rango: <?= gofast_date_format($fecha_desde, 'd/m/Y') ?> - <?= gofast_date_format($fecha_hasta, 'd/m/Y') ?></small>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2);">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-                <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
-                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
-                        Subtotal
-                    </div>
-                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($subtotal, 0, ',', '.') ?></div>
-                    <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
-                        <strong>Detalle:</strong><br>
-                        Ingresos (20%) - Egresos - Vales Empresa - Descuentos<br>
-                        <small style="opacity: 0.7;">$<?= number_format($total_comisiones, 0, ',', '.') ?> - $<?= number_format($total_egresos, 0, ',', '.') ?> - $<?= number_format($total_vales_empresa, 0, ',', '.') ?> - $<?= number_format($total_descuentos, 0, ',', '.') ?></small>
-                    </div>
-                </div>
-                <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
-                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
-                        Efectivo
-                    </div>
-                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($efectivo, 0, ',', '.') ?></div>
-                    <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
-                        <strong>Detalle:</strong><br>
-                        Subtotal - Transferencias - Pendientes<br>
-                        <small style="opacity: 0.7;">$<?= number_format($subtotal, 0, ',', '.') ?> - $<?= number_format($saldo_transferencias, 0, ',', '.') ?> - $<?= number_format($total_saldos_pendientes, 0, ',', '.') ?></small>
-                    </div>
-                </div>
-                <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
-                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
-                        Utilidad Total
-                    </div>
-                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($utilidad_total, 0, ',', '.') ?></div>
-                    <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
-                        <strong>Detalle:</strong><br>
-                        Utilidad Total = Subtotal
-                    </div>
-                </div>
-                <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
-                    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
-                        Utilidad Individual
-                    </div>
-                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($utilidad_individual, 0, ',', '.') ?></div>
-                    <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
-                        <strong>Detalle:</strong><br>
-                        Utilidad Total ÷ 2<br>
-                        <small style="opacity: 0.7;">$<?= number_format($utilidad_total, 0, ',', '.') ?> ÷ 2</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Tabs de navegación -->
     <div class="gofast-box" style="margin-bottom: 20px;">
         <div style="display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 2px solid #ddd; margin-bottom: 20px;">
@@ -2200,9 +2369,14 @@ function gofast_finanzas_admin_shortcode() {
                 ➖ Descuentos
             </button>
             <button type="button" 
-                    class="gofast-config-tab <?= $tab_activo === 'saldos_mensajeros' ? 'gofast-config-tab-active' : '' ?>"
-                    onclick="mostrarTabFinanzas('saldos_mensajeros', this)">
-                💵 Saldos Mensajeros
+                    class="gofast-config-tab <?= $tab_activo === 'registrar_pago' ? 'gofast-config-tab-active' : '' ?>"
+                    onclick="mostrarTabFinanzas('registrar_pago', this)">
+                💳 Registrar Pago
+            </button>
+            <button type="button" 
+                    class="gofast-config-tab <?= $tab_activo === 'historial_pagos' ? 'gofast-config-tab-active' : '' ?>"
+                    onclick="mostrarTabFinanzas('historial_pagos', this)">
+                📋 Historial de Pagos
             </button>
         </div>
 
@@ -2212,7 +2386,7 @@ function gofast_finanzas_admin_shortcode() {
             <form method="get" action="" id="form-filtros-generales" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
                 <!-- Mantener otros parámetros GET (excepto los que vamos a actualizar) -->
                 <?php foreach ($_GET as $key => $value): ?>
-                    <?php if (!in_array($key, ['fecha_desde', 'fecha_hasta', 'tab', 'filtro_descripcion', 'filtro_mensajero', 'filtro_origen', 'filtro_mensajero_descuentos', 'filtro_descripcion_descuentos'])): ?>
+                    <?php if (!in_array($key, ['fecha_desde', 'fecha_hasta', 'tab', 'periodo_mes', 'filtro_descripcion', 'filtro_mensajero', 'filtro_origen', 'filtro_mensajero_descuentos', 'filtro_descripcion_descuentos'])): ?>
                         <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                     <?php endif; ?>
                 <?php endforeach; ?>
@@ -2221,17 +2395,32 @@ function gofast_finanzas_admin_shortcode() {
                 <input type="hidden" name="tab" id="filtro-tab-activo" value="<?= esc_attr($tab_activo) ?>">
                 
                 <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Período del Mes</label>
+                    <select name="periodo_mes" 
+                            id="periodo_mes_select"
+                            onchange="actualizarFechasPorPeriodo()"
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <option value="">Personalizado</option>
+                        <option value="primera_quincena" <?= $periodo_mes === 'primera_quincena' ? 'selected' : '' ?>>📅 Primera Quincena (1-15)</option>
+                        <option value="segunda_quincena" <?= $periodo_mes === 'segunda_quincena' ? 'selected' : '' ?>>📅 Segunda Quincena (16-fin de mes)</option>
+                    </select>
+                </div>
+                <div>
                     <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha desde</label>
                     <input type="date" 
                            name="fecha_desde" 
+                           id="fecha_desde_input"
                            value="<?= esc_attr($fecha_desde) ?>"
+                           onchange="document.getElementById('periodo_mes_select').value = '';"
                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                 </div>
                 <div>
                     <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha hasta</label>
                     <input type="date" 
                            name="fecha_hasta" 
+                           id="fecha_hasta_input"
                            value="<?= esc_attr($fecha_hasta) ?>"
+                           onchange="document.getElementById('periodo_mes_select').value = '';"
                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                 </div>
                 <div>
@@ -3561,31 +3750,12 @@ function gofast_finanzas_admin_shortcode() {
         }
         </script>
 
-        <!-- TAB: SALDOS MENSAJEROS -->
-        <div id="tab-saldos_mensajeros" class="gofast-config-tab-content" style="display: <?= $tab_activo === 'saldos_mensajeros' ? 'block' : 'none' ?>;">
-            <h3>💵 Saldos Mensajeros</h3>
+        <!-- TAB: REGISTRAR PAGO -->
+        <div id="tab-registrar_pago" class="gofast-config-tab-content" style="display: <?= $tab_activo === 'registrar_pago' ? 'block' : 'none' ?>;">
+            <h3>💳 Registrar Pago</h3>
             <p style="font-size:13px;color:#666;margin:8px 0 16px;">
-                Gestiona los pagos a mensajeros, descuentos y estados de pago (efectivo, transferencia, pendiente).
+                Visualiza los saldos pendientes de pago a mensajeros y registra pagos en efectivo o por transferencia.
             </p>
-
-            <!-- Sub-tabs para Saldos Mensajeros -->
-            <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #ddd;">
-                <button type="button" 
-                        class="gofast-subtab-btn <?= $subtab_saldos === 'saldos_pendientes' ? 'gofast-subtab-active' : '' ?>" 
-                        onclick="mostrarSubTabSaldos('saldos_pendientes', this)"
-                        style="padding: 10px 20px; background: <?= $subtab_saldos === 'saldos_pendientes' ? 'var(--gofast-yellow)' : '#f0f0f0' ?>; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-weight: <?= $subtab_saldos === 'saldos_pendientes' ? '600' : '400' ?>; color: <?= $subtab_saldos === 'saldos_pendientes' ? '#000' : '#666' ?>;">
-                    📊 Saldos Pendientes
-                </button>
-                <button type="button" 
-                        class="gofast-subtab-btn <?= $subtab_saldos === 'historial_pagos' ? 'gofast-subtab-active' : '' ?>" 
-                        onclick="mostrarSubTabSaldos('historial_pagos', this)"
-                        style="padding: 10px 20px; background: <?= $subtab_saldos === 'historial_pagos' ? 'var(--gofast-yellow)' : '#f0f0f0' ?>; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-weight: <?= $subtab_saldos === 'historial_pagos' ? '600' : '400' ?>; color: <?= $subtab_saldos === 'historial_pagos' ? '#000' : '#666' ?>;">
-                    📋 Historial de Pagos
-                </button>
-            </div>
-
-            <!-- SUB-TAB: SALDOS PENDIENTES -->
-            <div id="subtab-saldos_pendientes" class="gofast-subtab-content" style="display: <?= $subtab_saldos === 'saldos_pendientes' ? 'block' : 'none' ?>;">
             <!-- Filtros adicionales -->
             <div class="gofast-box" style="background: #f8f9fa; margin-bottom: 20px;">
                 <style>
@@ -3607,7 +3777,7 @@ function gofast_finanzas_admin_shortcode() {
                             <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                         <?php endif; ?>
                     <?php endforeach; ?>
-                    <input type="hidden" name="subtab_saldos" value="<?= esc_attr($subtab_saldos) ?>">
+                    <input type="hidden" name="tab" value="registrar_pago">
                     
                     <div class="filtro-saldos-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
                         <div style="width: 220px;">
@@ -3650,8 +3820,100 @@ function gofast_finanzas_admin_shortcode() {
             <div class="gofast-box">
                 <h4 style="margin-top: 0;">📋 Saldos por Mensajero <small style="font-weight: normal; color: #666;">(<?= $total_saldos_count ?> mensajeros)</small></h4>
                 <p style="font-size: 12px; color: #666; margin: 8px 0 16px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
-                    ℹ️ <strong>Nota:</strong> Total a Pagar = Comisión - Transferencias - Descuentos - Pagos Registrados (en el rango de fechas)
+                    ℹ️ <strong>Nota:</strong> Los valores mostrados corresponden al <strong>rango de fechas seleccionado</strong> (quincena).<br>
+                    <small style="color: #856404;">📊 <strong>Total a Pagar (Rango):</strong> Comisión del rango - Transferencias del rango - Descuentos del rango - Pagos del rango</small><br>
+                    <small style="color: #0c5460;">💡 <strong>Nota:</strong> Para ver el saldo pendiente histórico acumulado, consulta el desglose por días.</small>
                 </p>
+                
+                <!-- Debug en console.log -->
+                <?php if (defined('WP_DEBUG') && WP_DEBUG === true): ?>
+                <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (typeof console !== 'undefined' && console.group) {
+                        console.group('🔍 DEBUG - Cálculo de Saldos Pendientes');
+                        
+                        // Debug Total General
+                        console.group('📊 TOTAL GENERAL DE SALDOS PENDIENTES');
+                        console.log('Fecha Desde:', '<?= esc_js($debug_saldos_pendientes_total['fecha_desde'] ?: 'N/A') ?>');
+                        console.log('Fecha Hasta:', '<?= esc_js($debug_saldos_pendientes_total['fecha_hasta']) ?>');
+                        console.log('Es Rango Específico:', <?= $debug_saldos_pendientes_total['es_rango_especifico'] ? 'true' : 'false' ?>);
+                        console.log('Total Comisiones:', <?= $debug_saldos_pendientes_total['total_comisiones'] ?>);
+                        console.log('Total Transferencias Ingresos:', <?= $debug_saldos_pendientes_total['total_transferencias_ingresos'] ?>);
+                        console.log('Total Descuentos:', <?= $debug_saldos_pendientes_total['total_descuentos'] ?>);
+                        console.log('Total Pagos Mensajeros (Efectivo):', <?= $debug_saldos_pendientes_total['total_pagos_mensajeros'] ?>);
+                        console.log('Fórmula:', '<?= esc_js($debug_saldos_pendientes_total['formula']) ?>');
+                        console.log('Total Saldos Pendientes:', <?= $debug_saldos_pendientes_total['total_saldos_pendientes_calculado'] ?>);
+                        console.groupEnd();
+                        
+                        // Debug por Mensajero
+                        <?php if (isset($saldos_mensajeros_paginados)): ?>
+                            <?php foreach ($saldos_mensajeros_paginados as $saldo): ?>
+                                <?php if (isset($saldo->debug_valores)): ?>
+                                    console.group('👤 <?= esc_js($saldo->debug_valores['mensajero_nombre']) ?> (ID: <?= $saldo->debug_valores['mensajero_id'] ?>)');
+                                    
+                                    // Valores del RANGO
+                                    console.group('📊 VALORES DEL RANGO QUINCENAL');
+                                    console.log('Rango:', '<?= esc_js($saldo->debug_valores['fecha_desde'] ?? 'Inicio') ?> hasta <?= esc_js($saldo->debug_valores['fecha_hasta']) ?>');
+                                    console.log('Comisión Rango (Servicios):', <?= $saldo->debug_valores['comision_rango_servicios'] ?? 0 ?>);
+                                    console.log('Comisión Rango (Compras):', <?= $saldo->debug_valores['comision_rango_compras'] ?? 0 ?>);
+                                    console.log('Comisión Total (Rango):', <?= $saldo->debug_valores['comision_total_rango'] ?? 0 ?>);
+                                    console.log('Transferencias Rango (Solo Normales):', <?= $saldo->debug_valores['transferencias_rango'] ?? 0 ?>);
+                                    console.log('Descuentos Rango:', <?= $saldo->debug_valores['descuentos_rango'] ?? 0 ?>);
+                                    console.log('Pagos Efectivo Rango:', <?= $saldo->debug_valores['pagos_efectivo_rango'] ?? 0 ?>);
+                                    console.log('Pagos Transferencia Rango:', <?= $saldo->debug_valores['pagos_transferencia_rango'] ?? 0 ?>);
+                                    console.log('Pagos Total Rango:', <?= $saldo->debug_valores['pagos_rango'] ?? 0 ?>);
+                                    console.log('Fórmula (Rango):', '<?= esc_js($saldo->debug_valores['formula_rango'] ?? 'N/A') ?>');
+                                    console.log('Total a Pagar (RANGO):', <?= $saldo->debug_valores['total_a_pagar_rango'] ?? $saldo->total_a_pagar ?? 0 ?>);
+                                    console.groupEnd();
+                                    
+                                    // Valores HISTÓRICOS
+                                    console.group('📊 VALORES HISTÓRICOS ACUMULADOS');
+                                    console.log('Hasta:', '<?= esc_js($saldo->debug_valores['fecha_hasta']) ?>');
+                                    console.log('Comisión Histórica (Servicios):', <?= $saldo->debug_valores['comision_historica_servicios'] ?? 0 ?>);
+                                    console.log('Comisión Histórica (Compras):', <?= $saldo->debug_valores['comision_historica_compras'] ?? 0 ?>);
+                                    console.log('Comisión Total (Histórica):', <?= ($saldo->debug_valores['comision_total_historica'] ?? ($saldo->debug_valores['comision_historica_servicios'] ?? 0) + ($saldo->debug_valores['comision_historica_compras'] ?? 0)) ?>);
+                                    console.log('Transferencias Históricas (Solo Normales):', <?= $saldo->debug_valores['transferencias_historicas'] ?? 0 ?>);
+                                    console.log('Descuentos Históricos:', <?= $saldo->debug_valores['descuentos_historicos'] ?? 0 ?>);
+                                    console.log('Pagos Históricos (Efectivo + Transferencia):', <?= $saldo->debug_valores['pagos_historicos'] ?? 0 ?>);
+                                    console.log('Fórmula (Histórica):', '<?= esc_js($saldo->debug_valores['formula_historica'] ?? $saldo->debug_valores['formula'] ?? 'N/A') ?>');
+                                    console.log('Total a Pagar (Histórico):', <?= $saldo->debug_valores['total_a_pagar_historico'] ?? $saldo->debug_valores['total_a_pagar_calculado'] ?? 0 ?>);
+                                    console.groupEnd();
+                                    
+                                    console.groupEnd();
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        
+                        // Debug Mensajero Seleccionado (si aplica)
+                        <?php if ($filtro_mensajero_saldos > 0): ?>
+                            <?php 
+                            $mensajero_seleccionado = $wpdb->get_row($wpdb->prepare(
+                                "SELECT nombre FROM usuarios_gofast WHERE id = %d",
+                                $filtro_mensajero_saldos
+                            ));
+                            $saldo_mensajero_seleccionado = null;
+                            if (isset($saldos_mensajeros_completos)) {
+                                foreach ($saldos_mensajeros_completos as $saldo) {
+                                    if ($saldo->mensajero_id == $filtro_mensajero_saldos) {
+                                        $saldo_mensajero_seleccionado = $saldo;
+                                        break;
+                                    }
+                                }
+                            }
+                            ?>
+                            <?php if ($saldo_mensajero_seleccionado && isset($saldo_mensajero_seleccionado->debug_valores)): ?>
+                                console.group('📌 MENSAJERO SELECCIONADO: <?= esc_js($mensajero_seleccionado->nombre ?? 'N/A') ?> (ID: <?= $filtro_mensajero_saldos ?>)');
+                                console.log('Valores del Rango:', <?= json_encode($saldo_mensajero_seleccionado->debug_valores, JSON_PRETTY_PRINT) ?>);
+                                console.log('Total a Pagar (Objeto):', <?= $saldo_mensajero_seleccionado->total_a_pagar ?? 0 ?>);
+                                console.groupEnd();
+                            <?php endif; ?>
+                        <?php endif; ?>
+                        
+                        console.groupEnd();
+                    }
+                });
+                </script>
+                <?php endif; ?>
                 
                 <?php if (empty($saldos_mensajeros_paginados)): ?>
                     <p style="text-align: center; color: #666; padding: 20px;">
@@ -3695,9 +3957,12 @@ function gofast_finanzas_admin_shortcode() {
                                             <strong style="color: #28a745;">$<?= number_format($saldo->total_pagos_rango ?? 0, 0, ',', '.') ?></strong>
                                         </td>
                                         <td style="text-align: right;">
-                                            <strong style="color: <?= $saldo->total_a_pagar >= 0 ? '#4CAF50' : '#f44336'; ?>; font-size: 16px;">
-                                                $<?= number_format($saldo->total_a_pagar, 0, ',', '.') ?>
+                                            <strong style="color: <?= ($saldo->total_a_pagar_rango ?? $saldo->total_a_pagar) >= 0 ? '#4CAF50' : '#f44336'; ?>; font-size: 16px;">
+                                                $<?= number_format($saldo->total_a_pagar_rango ?? $saldo->total_a_pagar, 0, ',', '.') ?>
                                             </strong>
+                                            <?php if (isset($saldo->total_a_pagar_rango) && $saldo->total_a_pagar_rango != $saldo->total_a_pagar): ?>
+                                                <br><small style="color: #666; font-size: 10px;">Histórico: $<?= number_format($saldo->total_a_pagar, 0, ',', '.') ?></small>
+                                            <?php endif; ?>
                                         </td>
                                         <td style="white-space:nowrap;">
                                             <button type="button" 
@@ -3833,11 +4098,11 @@ function gofast_finanzas_admin_shortcode() {
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
-            </div>
-            <!-- FIN SUB-TAB: SALDOS PENDIENTES -->
+        </div>
+        <!-- FIN TAB: REGISTRAR PAGO -->
 
-            <!-- SUB-TAB: HISTORIAL DE PAGOS -->
-            <div id="subtab-historial_pagos" class="gofast-subtab-content" style="display: <?= $subtab_saldos === 'historial_pagos' ? 'block' : 'none' ?>;">
+        <!-- TAB: HISTORIAL DE PAGOS -->
+        <div id="tab-historial_pagos" class="gofast-config-tab-content" style="display: <?= $tab_activo === 'historial_pagos' ? 'block' : 'none' ?>;">
                 <!-- Filtro por mensajero para historial de pagos -->
                 <div class="gofast-box" style="background: #f8f9fa; margin-bottom: 20px;">
                     <h4 style="margin-top: 0;">🔍 Filtrar por Mensajero</h4>
@@ -3848,8 +4113,7 @@ function gofast_finanzas_admin_shortcode() {
                                 <input type="hidden" name="<?= esc_attr($key) ?>" value="<?= esc_attr($value) ?>">
                             <?php endif; ?>
                         <?php endforeach; ?>
-                        <input type="hidden" name="tab" value="saldos_mensajeros">
-                        <input type="hidden" name="subtab_saldos" value="historial_pagos">
+                        <input type="hidden" name="tab" value="historial_pagos">
                         
                         <div style="min-width: 200px;">
                             <label style="display: block; margin-bottom: 4px;">Mensajero</label>
@@ -3869,7 +4133,7 @@ function gofast_finanzas_admin_shortcode() {
                         </div>
                         <?php if ($filtro_mensajero_historial > 0): ?>
                             <div>
-                                <a href="<?= esc_url(add_query_arg(['tab' => 'saldos_mensajeros', 'subtab_saldos' => 'historial_pagos'], remove_query_arg(['filtro_mensajero_historial']))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 20px;">
+                                <a href="<?= esc_url(add_query_arg(['tab' => 'historial_pagos'], remove_query_arg(['filtro_mensajero_historial']))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 20px;">
                                     🔄 Limpiar
                                 </a>
                             </div>
@@ -3976,10 +4240,166 @@ function gofast_finanzas_admin_shortcode() {
                         <?php endif; ?>
                     <?php endif; ?>
                 </div>
-            </div>
-            <!-- FIN SUB-TAB: HISTORIAL DE PAGOS -->
         </div>
+        <!-- FIN TAB: HISTORIAL DE PAGOS -->
 
+    </div>
+
+    <!-- BLOQUE DE RESULTADOS GENERALES -->
+    <div class="gofast-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+            <h3 style="margin-top: 0; color: #fff; margin-bottom: 0;">📊 Resultados Generales</h3>
+            <div style="background: rgba(255,255,255,0.2); padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+                📅 Rango de fechas: 
+                <strong><?= gofast_date_format($fecha_desde, 'd/m/Y') ?></strong> 
+                <?php if ($fecha_desde !== $fecha_hasta): ?>
+                    hasta <strong><?= gofast_date_format($fecha_hasta, 'd/m/Y') ?></strong>
+                <?php endif; ?>
+                <?php if (!empty($periodo_mes)): ?>
+                    <br><small style="font-size: 12px; opacity: 0.9; font-weight: 400;">
+                        <?= $periodo_mes === 'primera_quincena' ? '📅 Primera Quincena (1-15)' : '📅 Segunda Quincena (16-fin de mes)' ?>
+                    </small>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px;">
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Ingresos
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_comisiones, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    • Servicios: $<?= number_format($total_ingresos_servicios, 0, ',', '.') ?><br>
+                    • Compras: $<?= number_format($total_ingresos_compras, 0, ',', '.') ?><br>
+                    • Total: $<?= number_format($total_ingresos, 0, ',', '.') ?> × 20%
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Total Egresos
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_egresos, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Suma de egresos registrados
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Vales Empresa
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_vales_empresa, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Suma de vales de empresa
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Vales Personal
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_vales_personal, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Suma de vales del personal
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Transferencias Ingresos
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_transferencias_ingresos, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Transferencias aprobadas
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Transferencias Salidas
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_transferencias_salidas, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Suma de transferencias salientes
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Saldo Transferencias
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($saldo_transferencias, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Ingresos - Salidas<br>
+                    <small style="opacity: 0.7;">$<?= number_format($total_transferencias_ingresos, 0, ',', '.') ?> - $<?= number_format($total_transferencias_salidas, 0, ',', '.') ?></small>
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Saldos Pendientes
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_saldos_pendientes, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Comisión - Transf. - Desc. - Pagos (Efectivo)
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Total Descuentos
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_descuentos, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Suma de descuentos aplicados
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Subtotal
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($subtotal, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Ingresos (20%) - Egresos - Vales Empresa - Descuentos<br>
+                    <small style="opacity: 0.7;">$<?= number_format($total_comisiones, 0, ',', '.') ?> - $<?= number_format($total_egresos, 0, ',', '.') ?> - $<?= number_format($total_vales_empresa, 0, ',', '.') ?> - $<?= number_format($total_descuentos, 0, ',', '.') ?></small>
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 8px;">
+                <div style="font-size: 13px; opacity: 0.9; margin-bottom: 6px;">
+                    Efectivo
+                </div>
+                <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($efectivo, 0, ',', '.') ?></div>
+                <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
+                    <strong>Detalle:</strong><br>
+                    Subtotal - Transferencias - Pendientes - Vales Personal<br>
+                    <small style="opacity: 0.7;">$<?= number_format($subtotal, 0, ',', '.') ?> - $<?= number_format($saldo_transferencias, 0, ',', '.') ?> - $<?= number_format($total_saldos_pendientes, 0, ',', '.') ?> - $<?= number_format($total_vales_personal, 0, ',', '.') ?></small>
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Utilidad Total
+                </div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($utilidad_total, 0, ',', '.') ?></div>
+                <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
+                    <strong>Detalle:</strong><br>
+                    Igual al Subtotal
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
+                    Utilidad Individual
+                </div>
+                <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">$<?= number_format($utilidad_individual, 0, ',', '.') ?></div>
+                <div style="font-size: 11px; opacity: 0.85; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px; margin-top: 8px;">
+                    <strong>Detalle:</strong><br>
+                    Utilidad Total ÷ 2<br>
+                    <small style="opacity: 0.7;">$<?= number_format($utilidad_total, 0, ',', '.') ?> ÷ 2</small>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Botón de descarga al final de la página -->
@@ -4022,8 +4442,7 @@ function gofast_finanzas_admin_shortcode() {
             <form id="form-editar-pago" method="post" action="" style="display: flex; gap: 12px; width: 100%;">
                 <?php wp_nonce_field('gofast_editar_pago_mensajero', 'gofast_editar_pago_nonce'); ?>
                 <input type="hidden" name="pago_id" id="editar-pago-id">
-                <input type="hidden" name="tab" value="saldos_mensajeros">
-                <input type="hidden" name="subtab_saldos" value="historial_pagos">
+                <input type="hidden" name="tab" value="historial_pagos">
                 
                 <button type="submit" name="gofast_editar_pago_mensajero" class="gofast-btn" style="flex: 1; background: #ffc107; color: #000; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
                     💾 Guardar Cambios
@@ -4051,8 +4470,7 @@ function gofast_finanzas_admin_shortcode() {
             <form method="post" action="" style="display: flex; gap: 12px; width: 100%;">
                 <?php wp_nonce_field('gofast_eliminar_pago_mensajero', 'gofast_eliminar_pago_nonce'); ?>
                 <input type="hidden" name="pago_id" id="eliminar-pago-id">
-                <input type="hidden" name="tab" value="saldos_mensajeros">
-                <input type="hidden" name="subtab_saldos" value="historial_pagos">
+                <input type="hidden" name="tab" value="historial_pagos">
                 
                 <button type="submit" name="gofast_eliminar_pago_mensajero" class="gofast-btn" style="flex: 1; background: #dc3545; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
                     🗑️ Sí, Eliminar
