@@ -407,15 +407,14 @@ function gofast_resultado_cotizacion() {
 
 		// JSON de destinos
 		$destinos_completos = [];
-		$total_montos_adicionales = 0; // Sumar montos adicionales que el cliente agregó
 		
 		foreach ($destinos as $i => $dest_id) {
 
 			$barrio_nombre = $wpdb->get_var("SELECT nombre FROM barrios WHERE id = $dest_id");
 			$sector_id     = intval($wpdb->get_var("SELECT sector_id FROM barrios WHERE id = $dest_id"));
 			
+			// Monto adicional: solo se guarda para los mensajes, NO se suma al total
 			$monto_adicional = !empty($montos_dest[$i]) ? $montos_dest[$i] : 0;
-			$total_montos_adicionales += $monto_adicional;
 
 			$destinos_completos[] = [
 				"barrio_id"     => $dest_id,
@@ -423,7 +422,7 @@ function gofast_resultado_cotizacion() {
 				"sector_id"     => $sector_id,
 				"direccion"     => !empty($dirs_dest[$i]) ? sanitize_text_field($dirs_dest[$i]) : "",
 				"whatsapp"      => !empty($whatsapp_dest[$i]) ? sanitize_text_field($whatsapp_dest[$i]) : "",
-				"monto"         => $monto_adicional,
+				"monto"         => $monto_adicional, // Solo para mensajes, no se usa en cálculos
 			];
 		}
 
@@ -441,8 +440,8 @@ function gofast_resultado_cotizacion() {
 			$user_id_servicio = $cliente_propietario; // Asociar al cliente propietario del negocio
 		}
 		
-		// Sumar los montos adicionales al total
-		$total_final = $total + $total_montos_adicionales;
+		// El total es solo el valor del servicio (precio base + recargos), NO incluye el monto adicional
+		$total_final = $total;
 		
 		// Guardar servicio
 		$insertado = $wpdb->insert("servicios_gofast", [

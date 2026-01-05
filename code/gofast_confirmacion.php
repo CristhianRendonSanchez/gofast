@@ -220,29 +220,50 @@ add_shortcode("gofast_confirmacion", function() {
         $mensaje .= "🚫 IMPORTANTE:\n";
         $mensaje .= "Si ya no necesitas el servicio, recuerda cancelarlo antes de que el mensajero llegue al punto de recogida. En caso contrario, se aplicará un recargo por desplazamiento.\n\n";
         
-        // Agregar información de cada destino con su dirección y monto
+        // Agregar información de cada destino con su dirección, monto adicional, valor del envío y total
         if (!empty($destinos) && !empty($detalle_envios)) {
             foreach ($destinos as $idx => $dest) {
                 $dir_destino = !empty($dest['direccion']) ? trim($dest['direccion']) : '';
                 $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
                 $whatsapp_destino = !empty($dest['whatsapp']) ? trim($dest['whatsapp']) : '';
                 
-                // Obtener el monto del detalle de envíos correspondiente
-                $monto_destino_individual = 0;
+                // Obtener valores del detalle de envíos correspondiente
+                $monto_adicional = 0;
+                $valor_envio = 0;
+                $total_destino = 0;
+                
                 if (isset($detalle_envios[$idx])) {
-                    $monto_destino_individual = $detalle_envios[$idx]['total'];
+                    $detalle = $detalle_envios[$idx];
+                    // Monto adicional manual (lo que el cliente ingresó)
+                    $monto_adicional = !empty($detalle['monto_adicional']) ? intval($detalle['monto_adicional']) : 0;
+                    
+                    // Valor del envío (precio base + recargos automáticos + recargo seleccionable)
+                    $precio_base = !empty($detalle['precio']) ? intval($detalle['precio']) : 0;
+                    $recargo_automatico = !empty($detalle['recargo']) ? intval($detalle['recargo']) : 0;
+                    $recargo_seleccionable = !empty($detalle['recargo_seleccionable_valor']) ? intval($detalle['recargo_seleccionable_valor']) : 0;
+                    $valor_envio = $precio_base + $recargo_automatico + $recargo_seleccionable;
+                    
+                    // Total a pagar (monto adicional + valor del envío)
+                    $total_destino = $monto_adicional + $valor_envio;
                 } else {
                     // Si no hay en detalle_envios, calcular desde el JSON
-                    $monto_base = !empty($dest['monto']) ? intval($dest['monto']) : 0;
-                    if ($monto_base == 0 && !empty($origen_data['sector_id']) && !empty($dest['sector_id'])) {
+                    $monto_adicional = !empty($dest['monto']) ? intval($dest['monto']) : 0;
+                    
+                    $precio_base = 0;
+                    if (!empty($origen_data['sector_id']) && !empty($dest['sector_id'])) {
                         $precio = $wpdb->get_var($wpdb->prepare(
                             "SELECT precio FROM tarifas WHERE origen_sector_id=%d AND destino_sector_id=%d",
                             intval($origen_data['sector_id']),
                             intval($dest['sector_id'])
                         ));
-                        $monto_base = $precio ? intval($precio) : 0;
+                        $precio_base = $precio ? intval($precio) : 0;
                     }
-                    $monto_destino_individual = $monto_base;
+                    
+                    $recargo_variable = $calcular_recargos_variables($precio_base);
+                    $recargo_automatico = $recargo_fijo_por_envio + $recargo_variable;
+                    $recargo_seleccionable = !empty($dest['recargo_seleccionable_valor']) ? intval($dest['recargo_seleccionable_valor']) : 0;
+                    $valor_envio = $precio_base + $recargo_automatico + $recargo_seleccionable;
+                    $total_destino = $monto_adicional + $valor_envio;
                 }
                 
                 if ($idx > 0) {
@@ -265,8 +286,14 @@ add_shortcode("gofast_confirmacion", function() {
                     $mensaje .= "   📱 WhatsApp: $whatsapp_destino\n";
                 }
                 
-                // Monto individual para este destino
-                $mensaje .= "   💰 Monto: $" . number_format($monto_destino_individual, 0, ',', '.') . "\n";
+                // Monto adicional (lo que el cliente ingresó manualmente)
+                $mensaje .= "   💰 Monto: $" . number_format($monto_adicional, 0, ',', '.') . "\n";
+                
+                // Valor del envío (domicilio)
+                $mensaje .= "   💸 Valor del envío: $" . number_format($valor_envio, 0, ',', '.') . "\n";
+                
+                // Total a pagar (monto + valor del envío)
+                $mensaje .= "\n💲 Total a pagar: $" . number_format($total_destino, 0, ',', '.') . "\n";
             }
         } elseif (!empty($destinos)) {
             // Si hay destinos pero no detalle_envios, mostrar sin monto
@@ -295,9 +322,6 @@ add_shortcode("gofast_confirmacion", function() {
             // Si no hay destinos en el JSON, usar datos básicos
             $mensaje .= "📍 Destino: No especificado\n";
         }
-        
-        // Mostrar total general al final
-        $mensaje .= "\n💲 Total a pagar: $" . number_format($total_para_mensaje, 0, ',', '.') . "\n";
     }
 
     /* ==========================================================

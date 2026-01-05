@@ -88,15 +88,36 @@ function gofast_generar_mensaje_whatsapp_mensajero($pedido, $wpdb) {
         $mensaje .= "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n";
         $mensaje .= "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n";
         
-        // Agregar información de cada destino con su dirección y monto adicional
+        // Agregar información de cada destino con su dirección, monto adicional, valor del envío y total
         if (!empty($destinos)) {
             foreach ($destinos as $idx => $dest) {
                 $dir_destino = !empty($dest['direccion']) ? trim($dest['direccion']) : '';
                 $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
                 $whatsapp_destino = !empty($dest['whatsapp']) ? trim($dest['whatsapp']) : '';
                 
-                // Obtener el monto adicional manual (el campo 'monto' es el monto adicional que el cliente agregó)
+                // Calcular valores para este destino
+                $precio_base = 0;
+                if (!empty($origen_data['sector_id']) && !empty($dest['sector_id'])) {
+                    $precio = $wpdb->get_var($wpdb->prepare(
+                        "SELECT precio FROM tarifas WHERE origen_sector_id=%d AND destino_sector_id=%d",
+                        intval($origen_data['sector_id']),
+                        intval($dest['sector_id'])
+                    ));
+                    $precio_base = $precio ? intval($precio) : 0;
+                }
+                
+                $recargo_variable = $calcular_recargos_variables($precio_base);
+                $recargo_automatico = $recargo_fijo_por_envio + $recargo_variable;
+                $recargo_seleccionable_valor = !empty($dest['recargo_seleccionable_valor']) ? intval($dest['recargo_seleccionable_valor']) : 0;
+                
+                // Monto adicional manual (lo que el cliente ingresó)
                 $monto_adicional = !empty($dest['monto']) ? intval($dest['monto']) : 0;
+                
+                // Valor del envío (domicilio: precio base + recargos automáticos + recargo seleccionable)
+                $valor_envio = $precio_base + $recargo_automatico + $recargo_seleccionable_valor;
+                
+                // Total a pagar (monto adicional + valor del envío)
+                $total_destino = $monto_adicional + $valor_envio;
                 
                 if ($idx > 0) {
                     $mensaje .= "\n";
@@ -118,38 +139,16 @@ function gofast_generar_mensaje_whatsapp_mensajero($pedido, $wpdb) {
                     $mensaje .= "   📱 WhatsApp: $whatsapp_destino\n";
                 }
                 
-                // Monto adicional: mostrar solo si el cliente agregó un monto adicional manual
-                if ($monto_adicional > 0) {
-                    $mensaje .= "   💰 Monto adicional: $" . number_format($monto_adicional, 0, ',', '.') . "\n";
-                }
-            }
-        } elseif (!empty($destinos)) {
-            // Si hay destinos pero no detalle_envios, mostrar sin monto
-            foreach ($destinos as $idx => $dest) {
-                $dir_destino = !empty($dest['direccion']) ? trim($dest['direccion']) : '';
-                $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
-                $whatsapp_destino = !empty($dest['whatsapp']) ? trim($dest['whatsapp']) : '';
+                // Monto adicional (lo que el cliente ingresó manualmente)
+                $mensaje .= "   💰 Monto: $" . number_format($monto_adicional, 0, ',', '.') . "\n";
                 
-                if ($idx > 0) {
-                    $mensaje .= "\n";
-                }
+                // Valor del envío (domicilio)
+                $mensaje .= "   💸 Valor del envío: $" . number_format($valor_envio, 0, ',', '.') . "\n";
                 
-                $mensaje .= "📍 Destino " . ($idx + 1) . ":\n";
-                $destino_display = $dir_destino ?: ($barrio_destino ?: 'No especificado');
-                $mensaje .= "   📍 Dirección: $destino_display\n";
-                
-                if ($barrio_destino && $barrio_destino !== $dir_destino && $dir_destino) {
-                    $mensaje .= "   🏙 Barrio: $barrio_destino\n";
-                }
-                
-                if (!empty($whatsapp_destino)) {
-                    $mensaje .= "   📱 WhatsApp: $whatsapp_destino\n";
-                }
+                // Total a pagar (monto + valor del envío)
+                $mensaje .= "\n💲 Total a pagar: $" . number_format($total_destino, 0, ',', '.') . "\n";
             }
         }
-        
-        // Mostrar total al final
-        $mensaje .= "\n💲 Total: $" . number_format($total_para_mensaje, 0, ',', '.');
     }
     
     return $mensaje;
@@ -306,6 +305,7 @@ function gofast_pedidos_shortcode() {
                                 $sector_origen, $sector_destino
                             ));
                             
+                            // Monto adicional: solo se guarda para los mensajes, NO se suma al total
                             $monto_extra = isset($dest['monto']) ? (int) $dest['monto'] : 0;
                             
                             // Buscar recargos del destino original por índice
@@ -321,8 +321,8 @@ function gofast_pedidos_shortcode() {
                             $recargos_detalle = $orig['recargos_detalle'] ?? [];
                             $recargo_seleccionable = $orig['recargo_seleccionable'] ?? null;
                             
-                            // Sumar al total: precio base + monto extra + recargos
-                            $total_nuevo += $precio + $monto_extra + $recargo_seleccionable_valor + $recargo_total_auto + $recargo_global_valor;
+                            // Sumar al total: precio base + recargos (NO incluir monto adicional)
+                            $total_nuevo += $precio + $recargo_seleccionable_valor + $recargo_total_auto + $recargo_global_valor;
                             
                             // Construir destino final conservando TODOS los campos originales de recargos
                             $destino_final = [
