@@ -1250,13 +1250,12 @@ function gofast_finanzas_admin_shortcode() {
     /*********************************************
      * DATOS PARA TAB DE VALES PERSONAL
      *********************************************/
-    // Obtener las 4 personas activas (usuarios admin activos, limitado a 4)
+    // Obtener todos los administradores (incluye activos e inactivos para permitir vales históricos)
     $personas_activas = $wpdb->get_results(
-        "SELECT id, nombre 
+        "SELECT id, nombre, activo
          FROM usuarios_gofast
-         WHERE rol = 'admin' AND activo = 1
-         ORDER BY nombre ASC
-         LIMIT 4
+         WHERE rol = 'admin'
+         ORDER BY activo DESC, nombre ASC
         "
     );
 
@@ -1711,10 +1710,8 @@ function gofast_finanzas_admin_shortcode() {
         
         // Calcular total_a_pagar basado en el RANGO de fechas del filtro
         // Fórmula: Comisión del rango - Transferencias del rango - Descuentos del rango - Pagos del rango
+        // NOTA: Se permiten saldos negativos y saldos 0 para permitir bonificaciones mediante descuentos negativos
         $total_a_pagar = $comision_generada - $transferencias_aprobadas - $total_descuentos_mensajero - $total_pagos_en_rango;
-        if ($total_a_pagar < 0) {
-            $total_a_pagar = 0;
-        }
         
         // Para compatibilidad y debug, mantener también el cálculo del rango con otro nombre
         $total_a_pagar_rango = $total_a_pagar;
@@ -2075,10 +2072,8 @@ function gofast_finanzas_admin_shortcode() {
     }
     
     // Saldos Pendientes = Comisión - Transferencias Ingresos - Descuentos - Pagos (en efectivo, en rango de fecha)
+    // NOTA: Se permiten saldos negativos y saldos 0 para permitir bonificaciones mediante descuentos negativos
     $total_saldos_pendientes = $total_comisiones - $total_transferencias_ingresos - $total_descuentos - $total_pagos_mensajeros;
-    if ($total_saldos_pendientes < 0) {
-        $total_saldos_pendientes = 0;
-    }
     
     // DEBUG: Valores para el cálculo total de saldos pendientes
     $debug_saldos_pendientes_total = [
@@ -2100,9 +2095,11 @@ function gofast_finanzas_admin_shortcode() {
     // Guardar una copia completa de saldos_mensajeros ANTES del filtro (para debug)
     $saldos_mensajeros_completos = $saldos_mensajeros;
     
-    // Filtrar solo mensajeros con saldo pendiente (total_a_pagar > 0)
+    // Filtrar mensajeros: mostrar solo los que tienen saldo diferente de 0
+    // Incluye saldos positivos y negativos, pero excluye saldos en 0
+    // Esto permite mostrar bonificaciones mediante descuentos negativos
     $saldos_mensajeros = array_filter($saldos_mensajeros, function($saldo) {
-        return $saldo->total_a_pagar > 0;
+        return $saldo->total_a_pagar != 0;
     });
     // Reindexar el array después del filtro
     $saldos_mensajeros = array_values($saldos_mensajeros);
@@ -2909,7 +2906,7 @@ function gofast_finanzas_admin_shortcode() {
         <div id="tab-vales_personal" class="gofast-config-tab-content" style="display: <?= $tab_activo === 'vales_personal' ? 'block' : 'none' ?>;">
             <h3>👥 Vales del Personal</h3>
             <p style="font-size:13px;color:#666;margin:8px 0 16px;">
-                Gestiona los vales del personal (4 personas activas). Puedes crear, editar y eliminar registros.
+                Gestiona los vales del personal (todos los administradores). Puedes crear, editar y eliminar registros.
             </p>
 
             <!-- Formulario crear vale personal -->
@@ -2931,7 +2928,9 @@ function gofast_finanzas_admin_shortcode() {
                             <select name="persona_id" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                                 <option value="">Seleccione una persona</option>
                                 <?php foreach ($personas_activas as $persona): ?>
-                                    <option value="<?= (int) $persona->id; ?>"><?= esc_html($persona->nombre); ?></option>
+                                    <option value="<?= (int) $persona->id; ?>">
+                                        <?= esc_html($persona->nombre); ?><?= ($persona->activo == 0) ? ' (Inactivo)' : ''; ?>
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -2976,7 +2975,7 @@ function gofast_finanzas_admin_shortcode() {
                             <option value="0">Todas las personas</option>
                             <?php foreach ($personas_activas as $persona): ?>
                                 <option value="<?= (int) $persona->id; ?>"<?php selected($filtro_persona, $persona->id); ?>>
-                                    <?= esc_html($persona->nombre); ?>
+                                    <?= esc_html($persona->nombre); ?><?= ($persona->activo == 0) ? ' (Inactivo)' : ''; ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -3086,7 +3085,9 @@ function gofast_finanzas_admin_shortcode() {
                         <select name="persona_id" id="editar-vale-personal-persona-id" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
                             <option value="">Seleccione una persona</option>
                             <?php foreach ($personas_activas as $persona): ?>
-                                <option value="<?= (int) $persona->id; ?>"><?= esc_html($persona->nombre); ?></option>
+                                <option value="<?= (int) $persona->id; ?>">
+                                    <?= esc_html($persona->nombre); ?><?= ($persona->activo == 0) ? ' (Inactivo)' : ''; ?>
+                                </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -3917,7 +3918,7 @@ function gofast_finanzas_admin_shortcode() {
                 
                 <?php if (empty($saldos_mensajeros_paginados)): ?>
                     <p style="text-align: center; color: #666; padding: 20px;">
-                        No hay mensajeros con saldo pendiente en el rango de fechas seleccionado.
+                        No hay mensajeros registrados en el rango de fechas seleccionado.
                     </p>
                 <?php else: ?>
                     <div class="gofast-table-wrap">
@@ -4085,7 +4086,14 @@ function gofast_finanzas_admin_shortcode() {
                     <?php if ($total_paginas_saldos > 1): ?>
                         <div class="gofast-pagination" style="margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
                             <?php
-                            $url_base = remove_query_arg('pg_saldos');
+                            // Construir URL base preservando todos los parámetros GET excepto pg_saldos
+                            $url_params = $_GET;
+                            unset($url_params['pg_saldos']);
+                            // Asegurar que el tab siempre esté presente
+                            if (!isset($url_params['tab']) && !empty($tab_activo)) {
+                                $url_params['tab'] = $tab_activo;
+                            }
+                            $url_base = add_query_arg($url_params, '');
                             for ($i = 1; $i <= $total_paginas_saldos; $i++):
                             ?>
                                 <a href="<?= esc_url(add_query_arg('pg_saldos', $i, $url_base)) ?>" 
@@ -4227,7 +4235,14 @@ function gofast_finanzas_admin_shortcode() {
                         <?php if ($total_paginas_historial > 1): ?>
                             <div class="gofast-pagination" style="margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
                                 <?php
-                                $url_base_historial = remove_query_arg('pg_historial');
+                                // Construir URL base preservando todos los parámetros GET excepto pg_historial
+                                $url_params_historial = $_GET;
+                                unset($url_params_historial['pg_historial']);
+                                // Asegurar que el tab siempre esté presente
+                                if (!isset($url_params_historial['tab']) && !empty($tab_activo)) {
+                                    $url_params_historial['tab'] = $tab_activo;
+                                }
+                                $url_base_historial = add_query_arg($url_params_historial, '');
                                 for ($i = 1; $i <= $total_paginas_historial; $i++):
                                 ?>
                                     <a href="<?= esc_url(add_query_arg('pg_historial', $i, $url_base_historial)) ?>" 
@@ -4340,10 +4355,16 @@ function gofast_finanzas_admin_shortcode() {
                 <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">
                     Saldos Pendientes
                 </div>
-                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">$<?= number_format($total_saldos_pendientes, 0, ',', '.') ?></div>
+                <div style="font-size: 20px; font-weight: 700; margin-bottom: 6px; color: <?= $total_saldos_pendientes >= 0 ? '#fff' : '#ff6b6b'; ?>;">
+                    $<?= number_format($total_saldos_pendientes, 0, ',', '.') ?>
+                    <?php if ($total_saldos_pendientes < 0): ?>
+                        <small style="font-size: 12px; opacity: 0.8;">(Bonificación)</small>
+                    <?php endif; ?>
+                </div>
                 <div style="font-size: 10px; opacity: 0.8; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px; margin-top: 6px;">
                     <strong>Detalle:</strong><br>
-                    Comisión - Transf. - Desc. - Pagos (Efectivo)
+                    Comisión - Transf. - Desc. - Pagos (Efectivo)<br>
+                    <small style="opacity: 0.7;">Incluye saldos negativos (bonificaciones)</small>
                 </div>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
