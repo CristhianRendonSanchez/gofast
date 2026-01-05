@@ -399,13 +399,10 @@ function gofast_pedidos_shortcode() {
     $params = [];
 
     if ($rol === 'admin') {
-        // ve todo
+        // Admin ve todo (incluyendo pedidos sin asignar)
     } elseif ($rol === 'mensajero') {
-        // Mensajero solo ve pendientes SIN mensajero asignado O asignados a él
-        // Pedidos pendientes sin mensajero: (tracking_estado = 'pendiente' AND (mensajero_id IS NULL OR mensajero_id = 0))
-        // O pedidos asignados a él: mensajero_id = user_id
-        $where   .= " AND ((tracking_estado = %s AND (mensajero_id IS NULL OR mensajero_id = 0)) OR mensajero_id = %d)";
-        $params[] = 'pendiente';
+        // Mensajero solo ve pedidos asignados a él (NO ve pedidos sin asignar)
+        $where   .= " AND mensajero_id = %d";
         $params[] = $user_id;
     } else {
         // Cliente: ver servicios que creó O servicios de sus negocios
@@ -1289,9 +1286,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         $estado_actual = $p->tracking_estado;
                         $estado_class  = 'gofast-badge-estado-' . esc_attr($estado_actual);
                         $detalle_url   = esc_url( home_url('/servicio-registrado?id=' . $p->id) );
+                        
+                        // Detectar si el pedido está sin asignar (solo para admin)
+                        $sin_asignar = ($rol === 'admin' && (empty($p->mensajero_id) || $p->mensajero_id == 0));
+                        $clase_sin_asignar = $sin_asignar ? 'gofast-pedido-sin-asignar' : '';
                         ?>
-                        <tr>
-                            <td>#<?php echo (int) $p->id; ?></td>
+                        <tr class="<?= $clase_sin_asignar ?>">
+                            <td>
+                                #<?php echo (int) $p->id; ?>
+                                <?php if ($sin_asignar): ?>
+                                    <br><span style="display:inline-block;background:#ffc107;color:#000;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;margin-top:2px;" title="Pedido sin asignar">⚠️ SIN ASIGNAR</span>
+                                <?php endif; ?>
+                            </td>
                             <td><?php echo esc_html( gofast_date_format($p->fecha, 'Y-m-d H:i') ); ?></td>
                             <td><?php echo esc_html($p->nombre_cliente ?: '—'); ?></td>
                             <td><?php echo esc_html($p->telefono_cliente ?: '—'); ?></td>
@@ -1539,6 +1545,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     $estado_class  = 'gofast-badge-estado-' . esc_attr($estado_actual);
                     $detalle_url   = esc_url( home_url('/servicio-registrado?id=' . $p->id) );
                     
+                    // Detectar si el pedido está sin asignar (solo para admin)
+                    $sin_asignar = ($rol === 'admin' && (empty($p->mensajero_id) || $p->mensajero_id == 0));
+                    
                     // Colores según estado
                     $estado_color = '';
                     $estado_text = '';
@@ -1568,7 +1577,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             $estado_text = esc_html($estado_opts[$estado_actual] ?? $estado_actual);
                     }
                     ?>
-                    <div class="gofast-pedido-card" style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid <?= $estado_color ?>;">
+                    <div class="gofast-pedido-card <?= $sin_asignar ? 'gofast-pedido-sin-asignar' : '' ?>" style="background: <?= $sin_asignar ? '#fff3cd' : '#fff' ?>; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid <?= $estado_color ?>;">
+                        <?php if ($sin_asignar): ?>
+                            <div style="background: #ffc107; color: #000; padding: 8px; border-radius: 6px; margin-bottom: 12px; font-weight: 700; text-align: center; font-size: 13px;">
+                                ⚠️ PEDIDO SIN ASIGNAR
+                            </div>
+                        <?php endif; ?>
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                             <div>
                                 <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
@@ -2558,6 +2572,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <style>
 /* Los estilos de gofast-home ya están en css.css */
+
+/* Estilos para resaltar pedidos sin asignar (solo admin) - Solo color de fondo */
+.gofast-pedido-sin-asignar {
+    background-color: #fff3cd !important;
+}
+
+.gofast-pedido-sin-asignar td {
+    background-color: #fff3cd !important;
+}
 
 /* Estilos para modal editar destinos */
 #modal-editar-destinos {
