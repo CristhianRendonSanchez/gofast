@@ -2,6 +2,159 @@
  * GOFAST – LISTADO DE PEDIDOS (CLIENTE / ADMIN / MENSAJERO)
  * Shortcode: [gofast_pedidos]
  *******************************************************/
+
+/**
+ * Función helper para generar mensaje de WhatsApp para mensajeros
+ */
+function gofast_generar_mensaje_whatsapp_mensajero($pedido, $wpdb) {
+    if (empty($pedido->destinos)) {
+        return '';
+    }
+    
+    $json = json_decode($pedido->destinos, true);
+    if (!is_array($json)) {
+        return '';
+    }
+    
+    $destinos = $json['destinos'] ?? [];
+    $origen_data = $json['origen'] ?? [];
+    
+    // Detectar si es servicio intermunicipal
+    $es_intermunicipal = !empty($json['tipo_servicio']) && $json['tipo_servicio'] === 'intermunicipal';
+    
+    // Obtener datos del origen
+    $direccion_recogida = $pedido->direccion_origen;
+    if (!empty($origen_data['direccion']) && $origen_data['direccion'] !== $pedido->direccion_origen) {
+        $direccion_recogida = $origen_data['direccion'];
+    }
+    
+    // Cargar recargos para calcular totales
+    $recargos_fijos = $wpdb->get_results("SELECT id, nombre, valor_fijo FROM recargos WHERE activo = 1 AND tipo = 'fijo'");
+    $recargo_fijo_por_envio = 0;
+    foreach ((array) $recargos_fijos as $r) {
+        $monto = intval($r->valor_fijo);
+        if ($monto > 0) {
+            $recargo_fijo_por_envio += $monto;
+        }
+    }
+    
+    $recargos_variables = $wpdb->get_results("SELECT r.id, r.nombre, rr.monto_min, rr.monto_max, rr.recargo FROM recargos r JOIN recargos_rangos rr ON rr.recargo_id = r.id WHERE r.activo = 1 AND r.tipo = 'por_valor' ORDER BY rr.monto_min ASC");
+    $calcular_recargos_variables = function($valor) use ($recargos_variables) {
+        $valor = intval($valor);
+        $total_variable = 0;
+        foreach ((array) $recargos_variables as $r) {
+            $min = intval($r->monto_min);
+            $max = intval($r->monto_max);
+            $rec = intval($r->recargo);
+            $cumple_min = ($valor >= $min);
+            $cumple_max = ($max <= 0) ? true : ($valor <= $max);
+            if ($cumple_min && $cumple_max && $rec > 0) {
+                $total_variable += $rec;
+            }
+        }
+        return $total_variable;
+    };
+    
+    // Calcular total
+    $total_para_mensaje = ($pedido->total > 0) ? $pedido->total : 0;
+    
+    if ($es_intermunicipal) {
+        $dir_destino_inter = !empty($destinos[0]['direccion']) ? trim($destinos[0]['direccion']) : '';
+        $barrio_destino_inter = !empty($destinos[0]['barrio_nombre']) ? trim($destinos[0]['barrio_nombre']) : '';
+        $whatsapp_destino_inter = !empty($destinos[0]['whatsapp']) ? trim($destinos[0]['whatsapp']) : '';
+        $destino_display_inter = $dir_destino_inter ?: ($barrio_destino_inter ?: 'No especificado');
+        
+        $mensaje = "🚚 Servicio INTERMUNICIPAL #{$pedido->id}\n\n" .
+            "📦 Servicio: #{$pedido->id}\n" .
+            "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n" .
+            "👤 Cliente: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n" .
+            "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n" .
+            "📍 Destino: $destino_display_inter\n";
+        
+        if ($barrio_destino_inter && $barrio_destino_inter !== $dir_destino_inter && $dir_destino_inter) {
+            $mensaje .= "🏙 Barrio: $barrio_destino_inter\n";
+        }
+        
+        if (!empty($whatsapp_destino_inter)) {
+            $mensaje .= "📱 WhatsApp destino: $whatsapp_destino_inter\n";
+        }
+        
+        $mensaje .= "\n💲 Total: $" . number_format($total_para_mensaje, 0, ',', '.');
+    } else {
+        // Mensaje para servicios normales (múltiples destinos posibles) - formato idéntico a confirmacion.php
+        $mensaje = "🚀 Servicio #{$pedido->id}\n\n";
+        $mensaje .= "📦 Servicio: #{$pedido->id}\n";
+        $mensaje .= "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n";
+        $mensaje .= "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n";
+        $mensaje .= "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n";
+        
+        // Agregar información de cada destino con su dirección y monto adicional
+        if (!empty($destinos)) {
+            foreach ($destinos as $idx => $dest) {
+                $dir_destino = !empty($dest['direccion']) ? trim($dest['direccion']) : '';
+                $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
+                $whatsapp_destino = !empty($dest['whatsapp']) ? trim($dest['whatsapp']) : '';
+                
+                // Obtener el monto adicional manual (el campo 'monto' es el monto adicional que el cliente agregó)
+                $monto_adicional = !empty($dest['monto']) ? intval($dest['monto']) : 0;
+                
+                if ($idx > 0) {
+                    $mensaje .= "\n";
+                }
+                
+                $mensaje .= "📍 Destino " . ($idx + 1) . ":\n";
+                
+                // Dirección: usar dirección si existe, sino el barrio
+                $destino_display = $dir_destino ?: ($barrio_destino ?: 'No especificado');
+                $mensaje .= "   📍 Dirección: $destino_display\n";
+                
+                // Barrio: solo mostrar si es diferente de la dirección
+                if ($barrio_destino && $barrio_destino !== $dir_destino && $dir_destino) {
+                    $mensaje .= "   🏙 Barrio: $barrio_destino\n";
+                }
+                
+                // WhatsApp de destino: mostrar solo si existe
+                if (!empty($whatsapp_destino)) {
+                    $mensaje .= "   📱 WhatsApp: $whatsapp_destino\n";
+                }
+                
+                // Monto adicional: mostrar solo si el cliente agregó un monto adicional manual
+                if ($monto_adicional > 0) {
+                    $mensaje .= "   💰 Monto adicional: $" . number_format($monto_adicional, 0, ',', '.') . "\n";
+                }
+            }
+        } elseif (!empty($destinos)) {
+            // Si hay destinos pero no detalle_envios, mostrar sin monto
+            foreach ($destinos as $idx => $dest) {
+                $dir_destino = !empty($dest['direccion']) ? trim($dest['direccion']) : '';
+                $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
+                $whatsapp_destino = !empty($dest['whatsapp']) ? trim($dest['whatsapp']) : '';
+                
+                if ($idx > 0) {
+                    $mensaje .= "\n";
+                }
+                
+                $mensaje .= "📍 Destino " . ($idx + 1) . ":\n";
+                $destino_display = $dir_destino ?: ($barrio_destino ?: 'No especificado');
+                $mensaje .= "   📍 Dirección: $destino_display\n";
+                
+                if ($barrio_destino && $barrio_destino !== $dir_destino && $dir_destino) {
+                    $mensaje .= "   🏙 Barrio: $barrio_destino\n";
+                }
+                
+                if (!empty($whatsapp_destino)) {
+                    $mensaje .= "   📱 WhatsApp: $whatsapp_destino\n";
+                }
+            }
+        }
+        
+        // Mostrar total al final
+        $mensaje .= "\n💲 Total: $" . number_format($total_para_mensaje, 0, ',', '.');
+    }
+    
+    return $mensaje;
+}
+
 function gofast_pedidos_shortcode() {
     global $wpdb;
 
@@ -1157,7 +1310,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         // Decodificar JSON
                         $origen_barrio   = '';
-                        $destinos_barris = [];
+                        $destinos_detalle = [];
 
                         if (!empty($p->destinos)) {
                             $json = json_decode($p->destinos, true);
@@ -1166,10 +1319,33 @@ document.addEventListener('DOMContentLoaded', function() {
                                     $origen_barrio = $json['origen']['barrio_nombre'];
                                 }
                                 if (!empty($json['destinos']) && is_array($json['destinos'])) {
-                                    foreach ($json['destinos'] as $d) {
+                                    foreach ($json['destinos'] as $idx => $d) {
+                                        $destino_info = [];
                                         if (!empty($d['barrio_nombre'])) {
-                                            $destinos_barris[] = $d['barrio_nombre'];
+                                            $destino_info['barrio'] = $d['barrio_nombre'];
                                         }
+                                        if (!empty($d['direccion'])) {
+                                            $destino_info['direccion'] = $d['direccion'];
+                                        }
+                                        if (!empty($d['whatsapp'])) {
+                                            $destino_info['whatsapp'] = $d['whatsapp'];
+                                        }
+                                        // Calcular monto individual
+                                        $monto_individual = 0;
+                                        if (!empty($json['origen']['sector_id']) && !empty($d['sector_id'])) {
+                                            $precio = $wpdb->get_var($wpdb->prepare(
+                                                "SELECT precio FROM tarifas WHERE origen_sector_id=%d AND destino_sector_id=%d",
+                                                intval($json['origen']['sector_id']),
+                                                intval($d['sector_id'])
+                                            ));
+                                            $monto_base = $precio ? intval($precio) : 0;
+                                            $recargo_seleccionable = !empty($d['recargo_seleccionable_valor']) ? intval($d['recargo_seleccionable_valor']) : 0;
+                                            $recargo_total = !empty($d['recargo_total']) ? intval($d['recargo_total']) : 0;
+                                            $monto_adicional = !empty($d['monto']) ? intval($d['monto']) : 0;
+                                            $monto_individual = $monto_base + $recargo_seleccionable + $recargo_total + $monto_adicional;
+                                        }
+                                        $destino_info['monto'] = $monto_individual;
+                                        $destinos_detalle[] = $destino_info;
                                     }
                                 }
                             }
@@ -1178,8 +1354,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         if ($origen_barrio === '') {
                             $origen_barrio = $p->direccion_origen ?: '—';
                         }
-                        $destinos_text = !empty($destinos_barris)
-                            ? implode(', ', array_unique($destinos_barris))
+                        
+                        // Generar texto de destinos (sin montos para que sea más compacto)
+                        $destinos_text_parts = [];
+                        foreach ($destinos_detalle as $idx => $dest) {
+                            $part = ($idx + 1) . '. ';
+                            if (!empty($dest['direccion'])) {
+                                $part .= $dest['direccion'];
+                            } elseif (!empty($dest['barrio'])) {
+                                $part .= $dest['barrio'];
+                            } else {
+                                $part .= 'No especificado';
+                            }
+                            $destinos_text_parts[] = $part;
+                        }
+                        $destinos_text = !empty($destinos_text_parts)
+                            ? implode(' | ', $destinos_text_parts)
                             : '—';
                         
                         // Detectar si es servicio intermunicipal
@@ -1390,7 +1580,27 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <?php endif; ?>
                             </td>
 
-                            <td><a href="<?php echo $detalle_url; ?>" class="gofast-link-ver">Ver</a></td>
+                            <td>
+                                <a href="<?php echo $detalle_url; ?>" class="gofast-link-ver">Ver</a>
+                                <?php if ($rol === 'admin' || $rol === 'mensajero'): ?>
+                                    <?php 
+                                    $mensaje_whatsapp = gofast_generar_mensaje_whatsapp_mensajero($p, $wpdb);
+                                    if (!empty($mensaje_whatsapp)):
+                                        $telefono_mensajero = !empty($p->mensajero_id) ? $wpdb->get_var($wpdb->prepare("SELECT telefono FROM usuarios_gofast WHERE id = %d", $p->mensajero_id)) : '';
+                                        $telefono_empresa = "573194642513";
+                                        $telefono_destino = !empty($telefono_mensajero) ? preg_replace('/[^0-9]/', '', $telefono_mensajero) : $telefono_empresa;
+                                    ?>
+                                    <br>
+                                    <a href="#" 
+                                       class="gofast-link-ver btn-whatsapp-msg" 
+                                       data-phone="<?php echo esc_attr($telefono_destino); ?>"
+                                       data-msg="<?php echo htmlspecialchars(json_encode($mensaje_whatsapp, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>"
+                                       style="color:#25D366;font-size:11px;margin-top:4px;display:inline-block;">
+                                        💬 Mensaje
+                                    </a>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                            </td>
                             
                             <?php if ($rol === 'admin'): ?>
                                 <td style="white-space:nowrap;">
@@ -1419,7 +1629,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <?php foreach ($pedidos as $p): 
                     // Reutilizar la misma lógica de decodificación que en la tabla
                     $origen_barrio   = '';
-                    $destinos_barris = [];
+                    $destinos_detalle_mobile = [];
 
                     if (!empty($p->destinos)) {
                         $json = json_decode($p->destinos, true);
@@ -1428,10 +1638,33 @@ document.addEventListener('DOMContentLoaded', function() {
                                 $origen_barrio = $json['origen']['barrio_nombre'];
                             }
                             if (!empty($json['destinos']) && is_array($json['destinos'])) {
-                                foreach ($json['destinos'] as $d) {
+                                foreach ($json['destinos'] as $idx => $d) {
+                                    $destino_info = [];
                                     if (!empty($d['barrio_nombre'])) {
-                                        $destinos_barris[] = $d['barrio_nombre'];
+                                        $destino_info['barrio'] = $d['barrio_nombre'];
                                     }
+                                    if (!empty($d['direccion'])) {
+                                        $destino_info['direccion'] = $d['direccion'];
+                                    }
+                                    if (!empty($d['whatsapp'])) {
+                                        $destino_info['whatsapp'] = $d['whatsapp'];
+                                    }
+                                    // Calcular monto individual
+                                    $monto_individual = 0;
+                                    if (!empty($json['origen']['sector_id']) && !empty($d['sector_id'])) {
+                                        $precio = $wpdb->get_var($wpdb->prepare(
+                                            "SELECT precio FROM tarifas WHERE origen_sector_id=%d AND destino_sector_id=%d",
+                                            intval($json['origen']['sector_id']),
+                                            intval($d['sector_id'])
+                                        ));
+                                        $monto_base = $precio ? intval($precio) : 0;
+                                        $recargo_seleccionable = !empty($d['recargo_seleccionable_valor']) ? intval($d['recargo_seleccionable_valor']) : 0;
+                                        $recargo_total = !empty($d['recargo_total']) ? intval($d['recargo_total']) : 0;
+                                        $monto_adicional = !empty($d['monto']) ? intval($d['monto']) : 0;
+                                        $monto_individual = $monto_base + $recargo_seleccionable + $recargo_total + $monto_adicional;
+                                    }
+                                    $destino_info['monto'] = $monto_individual;
+                                    $destinos_detalle_mobile[] = $destino_info;
                                 }
                             }
                         }
@@ -1440,8 +1673,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     if ($origen_barrio === '') {
                         $origen_barrio = $p->direccion_origen ?: '—';
                     }
-                    $destinos_text = !empty($destinos_barris)
-                        ? implode(', ', array_unique($destinos_barris))
+                    
+                    // Generar texto de destinos (sin montos para que sea más compacto)
+                    $destinos_text_parts_mobile = [];
+                    foreach ($destinos_detalle_mobile as $idx => $dest) {
+                        $part = ($idx + 1) . '. ';
+                        if (!empty($dest['direccion'])) {
+                            $part .= $dest['direccion'];
+                        } elseif (!empty($dest['barrio'])) {
+                            $part .= $dest['barrio'];
+                        } else {
+                            $part .= 'No especificado';
+                        }
+                        $destinos_text_parts_mobile[] = $part;
+                    }
+                    $destinos_text = !empty($destinos_text_parts_mobile)
+                        ? implode(' | ', $destinos_text_parts_mobile)
                         : '—';
                     
                     // Detectar si es servicio intermunicipal
@@ -1633,6 +1880,25 @@ document.addEventListener('DOMContentLoaded', function() {
                             <div style="font-size: 14px; font-weight: 600; color: #000;">
                                 <?= esc_html($destinos_text) ?>
                             </div>
+                            <?php if ($rol === 'admin' || $rol === 'mensajero'): ?>
+                                <?php 
+                                $mensaje_whatsapp_mobile = gofast_generar_mensaje_whatsapp_mensajero($p, $wpdb);
+                                if (!empty($mensaje_whatsapp_mobile)):
+                                    $telefono_mensajero_mobile = !empty($p->mensajero_id) ? $wpdb->get_var($wpdb->prepare("SELECT telefono FROM usuarios_gofast WHERE id = %d", $p->mensajero_id)) : '';
+                                    $telefono_empresa_mobile = "573194642513";
+                                    $telefono_destino_mobile = !empty($telefono_mensajero_mobile) ? preg_replace('/[^0-9]/', '', $telefono_mensajero_mobile) : $telefono_empresa_mobile;
+                                ?>
+                                <div style="margin-top: 8px;">
+                                    <a href="#" 
+                                       class="btn-whatsapp-msg-mobile"
+                                       data-phone="<?php echo esc_attr($telefono_destino_mobile); ?>"
+                                       data-msg="<?php echo htmlspecialchars(json_encode($mensaje_whatsapp_mobile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>"
+                                       style="display:inline-block;background:#25D366;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-size:12px;">
+                                        💬 Enviar mensaje WhatsApp
+                                    </a>
+                                </div>
+                                <?php endif; ?>
+                            <?php endif; ?>
                         </div>
 
                         <div style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
@@ -2567,6 +2833,59 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     }
 })();
+
+// Manejar clics en botones de WhatsApp (mismo método que en confirmacion.php)
+document.addEventListener('DOMContentLoaded', function() {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    // Manejar botones de WhatsApp en la tabla
+    document.querySelectorAll('.btn-whatsapp-msg').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const phone = this.getAttribute('data-phone');
+            const msgJson = this.getAttribute('data-msg');
+            
+            if (!phone || !msgJson) return;
+            
+            try {
+                // El mensaje viene como JSON string escapado, parsearlo y luego codificar (mismo método que confirmacion.php)
+                const msg = JSON.parse(msgJson);
+                // Codificar el mensaje correctamente para WhatsApp (maneja emojis Unicode)
+                const msgEncoded = encodeURIComponent(msg);
+                const url = isMobile
+                    ? `https://wa.me/${phone}?text=${msgEncoded}`
+                    : `https://web.whatsapp.com/send?phone=${phone}&text=${msgEncoded}`;
+                window.open(url, '_blank');
+            } catch(e) {
+                console.error('Error al procesar mensaje WhatsApp:', e);
+            }
+        });
+    });
+    
+    // Manejar botones de WhatsApp en cards móviles
+    document.querySelectorAll('.btn-whatsapp-msg-mobile').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const phone = this.getAttribute('data-phone');
+            const msgJson = this.getAttribute('data-msg');
+            
+            if (!phone || !msgJson) return;
+            
+            try {
+                // El mensaje viene como JSON string escapado, parsearlo y luego codificar (mismo método que confirmacion.php)
+                const msg = JSON.parse(msgJson);
+                // Codificar el mensaje correctamente para WhatsApp (maneja emojis Unicode)
+                const msgEncoded = encodeURIComponent(msg);
+                const url = isMobile
+                    ? `https://wa.me/${phone}?text=${msgEncoded}`
+                    : `https://web.whatsapp.com/send?phone=${phone}&text=${msgEncoded}`;
+                window.open(url, '_blank');
+            } catch(e) {
+                console.error('Error al procesar mensaje WhatsApp:', e);
+            }
+        });
+    });
+});
 </script>
 <?php endif; ?>
 

@@ -103,21 +103,19 @@ add_shortcode("gofast_confirmacion", function() {
         
         if (empty($nombre_destino)) continue;
         
-        // Obtener monto (si está en el JSON)
-        $monto_destino = !empty($d['monto']) ? intval($d['monto']) : 0;
-        
-        // Si no hay monto en el JSON, intentar calcularlo
-        if ($monto_destino == 0 && !empty($origen_data['sector_id']) && !empty($d['sector_id'])) {
+        // Obtener precio base desde tarifas (para calcular recargos)
+        $precio_base = 0;
+        if (!empty($origen_data['sector_id']) && !empty($d['sector_id'])) {
             $precio = $wpdb->get_var($wpdb->prepare(
                 "SELECT precio FROM tarifas WHERE origen_sector_id=%d AND destino_sector_id=%d",
                 intval($origen_data['sector_id']),
                 intval($d['sector_id'])
             ));
-            $monto_destino = $precio ? intval($precio) : 0;
+            $precio_base = $precio ? intval($precio) : 0;
         }
         
-        // Calcular recargos automáticos (fijos + variables)
-        $recargo_variable = $calcular_recargos_variables($monto_destino);
+        // Calcular recargos automáticos (fijos + variables) sobre el precio base
+        $recargo_variable = $calcular_recargos_variables($precio_base);
         $recargo_automatico = $recargo_fijo_por_envio + $recargo_variable;
         
         // Obtener recargo seleccionable del JSON
@@ -125,13 +123,18 @@ add_shortcode("gofast_confirmacion", function() {
         $recargo_seleccionable_nombre = !empty($d['recargo_seleccionable_nombre']) ? $d['recargo_seleccionable_nombre'] : null;
         $recargo_seleccionable_id = !empty($d['recargo_seleccionable_id']) ? intval($d['recargo_seleccionable_id']) : null;
         
-        $total_trayecto = $monto_destino + $recargo_automatico + $recargo_seleccionable_valor;
+        // Monto adicional manual que el cliente agregó (campo monto_destino del formulario)
+        $monto_adicional_manual = !empty($d['monto']) ? intval($d['monto']) : 0;
+        
+        // Total del trayecto: precio base + recargos automáticos + recargo seleccionable + monto adicional manual
+        $total_trayecto = $precio_base + $recargo_automatico + $recargo_seleccionable_valor + $monto_adicional_manual;
         
         $detalle_envios[] = [
             'id' => !empty($d['barrio_id']) ? intval($d['barrio_id']) : 0,
             'nombre' => $nombre_destino,
-            'precio' => $monto_destino,
+            'precio' => $precio_base,
             'recargo' => $recargo_automatico,
+            'monto_adicional' => $monto_adicional_manual,
             'recargo_seleccionable_valor' => $recargo_seleccionable_valor,
             'recargo_seleccionable_nombre' => $recargo_seleccionable_nombre,
             'recargo_seleccionable_id' => $recargo_seleccionable_id,
@@ -159,6 +162,9 @@ add_shortcode("gofast_confirmacion", function() {
     if (!empty($json['tipo_servicio']) && $json['tipo_servicio'] === 'intermunicipal') {
         $es_intermunicipal = true;
     }
+    
+    // Usar el total calculado si el total del pedido es 0 o inválido
+    $total_para_mensaje = ($pedido->total > 0) ? $pedido->total : $total_calculado;
     
     $telefono_empresa = "573194642513"; // +57 319 4642513
     
@@ -188,6 +194,7 @@ add_shortcode("gofast_confirmacion", function() {
         
         $dir_destino_inter = !empty($destinos[0]['direccion']) ? trim($destinos[0]['direccion']) : '';
         $barrio_destino_inter = !empty($destinos[0]['barrio_nombre']) ? trim($destinos[0]['barrio_nombre']) : '';
+        $whatsapp_destino_inter = !empty($destinos[0]['whatsapp']) ? trim($destinos[0]['whatsapp']) : '';
         
         $destino_display_inter = $dir_destino_inter ?: ($barrio_destino_inter ?: 'No especificado');
         
@@ -197,11 +204,12 @@ add_shortcode("gofast_confirmacion", function() {
             "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n" .
             "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n" .
             "💲 Monto a pagar:\n" .
-            "💰 Costo del envío: $" . number_format($pedido->total, 0, ',', '.') . "\n\n" .
+            "💰 Costo del envío: $" . number_format($total_para_mensaje, 0, ',', '.') . "\n\n" .
             "🚫 IMPORTANTE:\n" .
             "Si ya no necesitas el servicio, recuerda cancelarlo antes de que el mensajero llegue al punto de recogida. En caso contrario, se aplicará un recargo por desplazamiento.\n\n" .
             "📍 Destino: $destino_display_inter\n" .
-            ($barrio_destino_inter && $barrio_destino_inter !== $dir_destino_inter && $dir_destino_inter ? "🏙 Barrio: $barrio_destino_inter\n" : "");
+            ($barrio_destino_inter && $barrio_destino_inter !== $dir_destino_inter && $dir_destino_inter ? "🏙 Barrio: $barrio_destino_inter\n" : "") .
+            (!empty($whatsapp_destino_inter) ? "📱 WhatsApp destino: $whatsapp_destino_inter\n" : "");
     } else {
         // Mensaje para servicios normales (múltiples destinos posibles)
         $mensaje = "🚀 Hola! He solicitado un servicio en GoFast.\n\n";
@@ -209,40 +217,87 @@ add_shortcode("gofast_confirmacion", function() {
         $mensaje .= "📍 Recogida: " . ($direccion_recogida ?: 'No especificada') . "\n";
         $mensaje .= "👤 Envía: " . ($pedido->nombre_cliente ?: 'No especificado') . "\n";
         $mensaje .= "📞 Contacto: " . ($pedido->telefono_cliente ?: 'No especificado') . "\n\n";
-        $mensaje .= "💲 Monto a pagar:\n";
-        $mensaje .= "💰 Costo del envío: $" . number_format($pedido->total, 0, ',', '.') . "\n\n";
         $mensaje .= "🚫 IMPORTANTE:\n";
         $mensaje .= "Si ya no necesitas el servicio, recuerda cancelarlo antes de que el mensajero llegue al punto de recogida. En caso contrario, se aplicará un recargo por desplazamiento.\n\n";
         
-        // Agregar información de cada destino
-        if (!empty($destinos)) {
+        // Agregar información de cada destino con su dirección y monto
+        if (!empty($destinos) && !empty($detalle_envios)) {
             foreach ($destinos as $idx => $dest) {
                 $dir_destino = !empty($dest['direccion']) ? trim($dest['direccion']) : '';
                 $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
+                $whatsapp_destino = !empty($dest['whatsapp']) ? trim($dest['whatsapp']) : '';
+                
+                // Obtener el monto del detalle de envíos correspondiente
+                $monto_destino_individual = 0;
+                if (isset($detalle_envios[$idx])) {
+                    $monto_destino_individual = $detalle_envios[$idx]['total'];
+                } else {
+                    // Si no hay en detalle_envios, calcular desde el JSON
+                    $monto_base = !empty($dest['monto']) ? intval($dest['monto']) : 0;
+                    if ($monto_base == 0 && !empty($origen_data['sector_id']) && !empty($dest['sector_id'])) {
+                        $precio = $wpdb->get_var($wpdb->prepare(
+                            "SELECT precio FROM tarifas WHERE origen_sector_id=%d AND destino_sector_id=%d",
+                            intval($origen_data['sector_id']),
+                            intval($dest['sector_id'])
+                        ));
+                        $monto_base = $precio ? intval($precio) : 0;
+                    }
+                    $monto_destino_individual = $monto_base;
+                }
                 
                 if ($idx > 0) {
                     $mensaje .= "\n";
                 }
                 
-                // Destino: usar dirección si existe, sino el barrio
+                $mensaje .= "📍 Destino " . ($idx + 1) . ":\n";
+                
+                // Dirección: usar dirección si existe, sino el barrio
                 $destino_display = $dir_destino ?: ($barrio_destino ?: 'No especificado');
-                $mensaje .= "📍 Destino: $destino_display\n";
+                $mensaje .= "   📍 Dirección: $destino_display\n";
                 
                 // Barrio: solo mostrar si es diferente de la dirección
                 if ($barrio_destino && $barrio_destino !== $dir_destino && $dir_destino) {
-                    $mensaje .= "🏙 Barrio: $barrio_destino\n";
-                } elseif ($barrio_destino && !$dir_destino) {
-                    // Si solo hay barrio, no duplicar en Destino y Barrio
-                    // Ya está en Destino, así que no lo repetimos
+                    $mensaje .= "   🏙 Barrio: $barrio_destino\n";
                 }
                 
-                // Indicaciones: por ahora vacío, pero se puede agregar si hay un campo específico en el futuro
-                // Si en el futuro se agrega un campo 'indicaciones' al JSON, se mostraría aquí
+                // WhatsApp de destino: mostrar solo si existe
+                if (!empty($whatsapp_destino)) {
+                    $mensaje .= "   📱 WhatsApp: $whatsapp_destino\n";
+                }
+                
+                // Monto individual para este destino
+                $mensaje .= "   💰 Monto: $" . number_format($monto_destino_individual, 0, ',', '.') . "\n";
+            }
+        } elseif (!empty($destinos)) {
+            // Si hay destinos pero no detalle_envios, mostrar sin monto
+            foreach ($destinos as $idx => $dest) {
+                $dir_destino = !empty($dest['direccion']) ? trim($dest['direccion']) : '';
+                $barrio_destino = !empty($dest['barrio_nombre']) ? trim($dest['barrio_nombre']) : '';
+                $whatsapp_destino = !empty($dest['whatsapp']) ? trim($dest['whatsapp']) : '';
+                
+                if ($idx > 0) {
+                    $mensaje .= "\n";
+                }
+                
+                $mensaje .= "📍 Destino " . ($idx + 1) . ":\n";
+                $destino_display = $dir_destino ?: ($barrio_destino ?: 'No especificado');
+                $mensaje .= "   📍 Dirección: $destino_display\n";
+                
+                if ($barrio_destino && $barrio_destino !== $dir_destino && $dir_destino) {
+                    $mensaje .= "   🏙 Barrio: $barrio_destino\n";
+                }
+                
+                if (!empty($whatsapp_destino)) {
+                    $mensaje .= "   📱 WhatsApp: $whatsapp_destino\n";
+                }
             }
         } else {
             // Si no hay destinos en el JSON, usar datos básicos
             $mensaje .= "📍 Destino: No especificado\n";
         }
+        
+        // Mostrar total general al final
+        $mensaje .= "\n💲 Total a pagar: $" . number_format($total_para_mensaje, 0, ',', '.') . "\n";
     }
 
     /* ==========================================================
