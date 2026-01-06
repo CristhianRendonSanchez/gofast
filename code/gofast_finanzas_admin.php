@@ -1306,6 +1306,29 @@ function gofast_finanzas_admin_shortcode() {
     }
 
     /*********************************************
+     * RESUMEN DE VALES POR PERSONA
+     *********************************************/
+    // Consulta para obtener la suma de vales agrupados por persona
+    $sql_resumen_vales_personal = "SELECT v.persona_id, 
+                                           p.nombre as persona_nombre,
+                                           COUNT(v.id) as cantidad_vales,
+                                           COALESCE(SUM(v.valor), 0) as total_valor
+                                    FROM vales_personal_gofast v
+                                    LEFT JOIN usuarios_gofast p ON v.persona_id = p.id";
+    
+    if (!empty($where_vales_personal_list)) {
+        $sql_resumen_vales_personal .= " WHERE " . implode(' AND ', $where_vales_personal_list);
+    }
+    
+    $sql_resumen_vales_personal .= " GROUP BY v.persona_id, p.nombre ORDER BY total_valor DESC";
+    
+    if (!empty($params_vales_personal_list)) {
+        $resumen_vales_por_persona = $wpdb->get_results($wpdb->prepare($sql_resumen_vales_personal, $params_vales_personal_list));
+    } else {
+        $resumen_vales_por_persona = $wpdb->get_results($sql_resumen_vales_personal);
+    }
+
+    /*********************************************
      * DATOS PARA TAB DE TRANSFERENCIAS SALIDAS
      *********************************************/
     $where_transf_salidas_list = [];
@@ -2192,6 +2215,61 @@ function gofast_finanzas_admin_shortcode() {
         $pagos_por_mensajero[$mensajero_id][] = $pago;
     }
 
+    /*********************************************
+     * RESUMEN DE PAGOS REGISTRADOS (PARA TAB REGISTRAR PAGO)
+     *********************************************/
+    // Consulta para obtener la suma de pagos registrados separados por tipo (efectivo y transferencia)
+    // Respeta los filtros de fecha principales (fecha_desde y fecha_hasta)
+    $where_resumen_pagos = ["p.tipo_pago IN ('efectivo', 'transferencia')"];
+    $params_resumen_pagos = [];
+    
+    // Aplicar filtros de fecha principales
+    if (!empty($fecha_desde)) {
+        $where_resumen_pagos[] = "p.fecha >= %s";
+        $params_resumen_pagos[] = $fecha_desde;
+    }
+    if (!empty($fecha_hasta)) {
+        $where_resumen_pagos[] = "p.fecha <= %s";
+        $params_resumen_pagos[] = $fecha_hasta;
+    }
+    
+    // Aplicar filtro de mensajero si está activo en el tab de registrar pago
+    if ($filtro_mensajero_saldos > 0) {
+        $where_resumen_pagos[] = "p.mensajero_id = %d";
+        $params_resumen_pagos[] = $filtro_mensajero_saldos;
+    }
+    
+    $sql_resumen_pagos = "SELECT 
+                                tipo_pago,
+                                COUNT(*) as cantidad_pagos,
+                                COALESCE(SUM(total_a_pagar), 0) as total_pagado
+                          FROM pagos_mensajeros_gofast p
+                          WHERE " . implode(' AND ', $where_resumen_pagos) . "
+                          GROUP BY tipo_pago";
+    
+    if (!empty($params_resumen_pagos)) {
+        $resumen_pagos_raw = $wpdb->get_results($wpdb->prepare($sql_resumen_pagos, $params_resumen_pagos));
+    } else {
+        $resumen_pagos_raw = $wpdb->get_results($sql_resumen_pagos);
+    }
+    
+    // Organizar resumen por tipo de pago
+    $resumen_pagos = [
+        'efectivo' => ['cantidad' => 0, 'total' => 0],
+        'transferencia' => ['cantidad' => 0, 'total' => 0]
+    ];
+    
+    foreach ($resumen_pagos_raw as $resumen) {
+        $tipo = $resumen->tipo_pago;
+        if (isset($resumen_pagos[$tipo])) {
+            $resumen_pagos[$tipo]['cantidad'] = (int) $resumen->cantidad_pagos;
+            $resumen_pagos[$tipo]['total'] = (float) $resumen->total_pagado;
+        }
+    }
+    
+    $total_pagos_general = $resumen_pagos['efectivo']['total'] + $resumen_pagos['transferencia']['total'];
+    $cantidad_pagos_general = $resumen_pagos['efectivo']['cantidad'] + $resumen_pagos['transferencia']['cantidad'];
+
     // Totales generales (suma de todos los mensajeros o del mensajero filtrado)
     $total_destinos_saldos = array_sum(array_column($saldos_mensajeros, 'total_destinos'));
     $total_compras_saldos = array_sum(array_column($saldos_mensajeros, 'total_compras'));
@@ -3002,6 +3080,45 @@ function gofast_finanzas_admin_shortcode() {
                     <?php endif; ?>
                 </form>
             </div>
+
+            <!-- Resumen de vales por persona -->
+            <?php if (!empty($resumen_vales_por_persona)): ?>
+            <div class="gofast-box" style="background: #fff; border: 2px solid #667eea; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);">
+                <h4 style="margin-top: 0; color: #667eea; padding-bottom: 12px; border-bottom: 2px solid #667eea;">📊 Resumen de Vales por Persona</h4>
+                <div class="gofast-table-wrap">
+                    <table class="gofast-table" style="background: #fff; border-collapse: collapse; width: 100%;">
+                        <thead>
+                            <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;">
+                                <th style="color: #ffffff !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; padding: 14px 12px !important; font-weight: 700 !important; text-align: left; font-size: 14px;">Persona</th>
+                                <th style="color: #ffffff !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; padding: 14px 12px !important; font-weight: 700 !important; text-align: center; font-size: 14px;">Cantidad de Vales</th>
+                                <th style="color: #ffffff !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; padding: 14px 12px !important; font-weight: 700 !important; text-align: right; font-size: 14px;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $total_general = 0;
+                            $contador = 0;
+                            foreach ($resumen_vales_por_persona as $resumen): 
+                                $total_general += (float) $resumen->total_valor;
+                                $contador++;
+                                $fondo_fila = ($contador % 2 == 0) ? '#f8f9fa' : '#fff';
+                            ?>
+                                <tr style="background: <?= $fondo_fila ?>; border-bottom: 1px solid #e0e0e0;">
+                                    <td style="color: #333; padding: 12px;"><strong><?= esc_html($resumen->persona_nombre ?? 'Sin nombre') ?></strong></td>
+                                    <td style="color: #555; padding: 12px; text-align: center;"><?= (int) $resumen->cantidad_vales ?></td>
+                                    <td style="color: #667eea; padding: 12px; font-weight: 600; text-align: right;"><strong>$<?= number_format((float) $resumen->total_valor, 0, ',', '.') ?></strong></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-weight: bold; border-top: 3px solid #764ba2;">
+                                <td style="color: #fff; padding: 14px; font-size: 15px;">TOTAL GENERAL</td>
+                                <td style="color: #fff; padding: 14px; text-align: center; font-size: 15px;"><?= count($resumen_vales_por_persona) ?> personas</td>
+                                <td style="color: #fff; padding: 14px; font-size: 18px; text-align: right; font-weight: 700;">$<?= number_format($total_general, 0, ',', '.') ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <!-- Listado de vales personal -->
             <div class="gofast-box">
@@ -3815,6 +3932,54 @@ function gofast_finanzas_admin_shortcode() {
                         <?php endif; ?>
                     </div>
                 </form>
+            </div>
+
+            <!-- Resumen de pagos registrados -->
+            <div class="gofast-box" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: #fff; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; color: #fff;">💰 Resumen de Pagos Registrados</h4>
+                <p style="color: rgba(255, 255, 255, 0.9); font-size: 12px; margin: 8px 0 16px;">
+                    Resumen de pagos registrados en el rango de fechas seleccionado
+                    <?php if (!empty($fecha_desde) || !empty($fecha_hasta)): ?>
+                        <?php if (!empty($fecha_desde) && !empty($fecha_hasta)): ?>
+                            (<?= gofast_date_format($fecha_desde, 'd/m/Y') ?> - <?= gofast_date_format($fecha_hasta, 'd/m/Y') ?>)
+                        <?php elseif (!empty($fecha_desde)): ?>
+                            (desde <?= gofast_date_format($fecha_desde, 'd/m/Y') ?>)
+                        <?php elseif (!empty($fecha_hasta)): ?>
+                            (hasta <?= gofast_date_format($fecha_hasta, 'd/m/Y') ?>)
+                        <?php endif; ?>
+                    <?php else: ?>
+                        (todas las fechas)
+                    <?php endif; ?>
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                    <div style="background: rgba(255, 255, 255, 0.2); padding: 16px; border-radius: 8px; backdrop-filter: blur(10px);">
+                        <div style="font-size: 14px; opacity: 0.9; margin-bottom: 8px;">💵 Pagos en Efectivo</div>
+                        <div style="font-size: 24px; font-weight: bold; margin-bottom: 4px;">
+                            $<?= number_format($resumen_pagos['efectivo']['total'], 0, ',', '.') ?>
+                        </div>
+                        <div style="font-size: 12px; opacity: 0.8;">
+                            <?= $resumen_pagos['efectivo']['cantidad'] ?> pago<?= $resumen_pagos['efectivo']['cantidad'] != 1 ? 's' : '' ?>
+                        </div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.2); padding: 16px; border-radius: 8px; backdrop-filter: blur(10px);">
+                        <div style="font-size: 14px; opacity: 0.9; margin-bottom: 8px;">🏦 Pagos por Transferencia</div>
+                        <div style="font-size: 24px; font-weight: bold; margin-bottom: 4px;">
+                            $<?= number_format($resumen_pagos['transferencia']['total'], 0, ',', '.') ?>
+                        </div>
+                        <div style="font-size: 12px; opacity: 0.8;">
+                            <?= $resumen_pagos['transferencia']['cantidad'] ?> pago<?= $resumen_pagos['transferencia']['cantidad'] != 1 ? 's' : '' ?>
+                        </div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.3); padding: 16px; border-radius: 8px; backdrop-filter: blur(10px); border: 2px solid rgba(255, 255, 255, 0.5);">
+                        <div style="font-size: 14px; opacity: 0.9; margin-bottom: 8px;">📊 Total General</div>
+                        <div style="font-size: 28px; font-weight: bold; margin-bottom: 4px;">
+                            $<?= number_format($total_pagos_general, 0, ',', '.') ?>
+                        </div>
+                        <div style="font-size: 12px; opacity: 0.8;">
+                            <?= $cantidad_pagos_general ?> pago<?= $cantidad_pagos_general != 1 ? 's' : '' ?> registrado<?= $cantidad_pagos_general != 1 ? 's' : '' ?>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Tabla de saldos por mensajero -->
