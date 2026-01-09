@@ -813,8 +813,104 @@ function gofast_reportes_admin_shortcode() {
     $total_saldos_pendientes_acumulado = 0;
     
     // Obtener filtros específicos para saldos pendientes
-    // Solo usar el filtro "hasta" (si no hay, usar hoy)
-    $fecha_hasta_saldos = !empty($hasta) ? $hasta : gofast_current_time('Y-m-d');
+    // Calcular quincena actual automáticamente (igual que finanzas_admin)
+    $fecha_actual = gofast_current_time('Y-m-d');
+    $timezone = new DateTimeZone('America/Bogota');
+    $datetime = new DateTime($fecha_actual, $timezone);
+    $mes_actual = $datetime->format('Y-m');
+    $dia_actual = (int) $datetime->format('d');
+    $ultimo_dia_mes = (int) $datetime->format('t');
+    
+    // Determinar quincena actual
+    if ($dia_actual <= 15) {
+        // Primera quincena: del 1 al 15
+        $fecha_desde_saldos = $mes_actual . '-01';
+        $fecha_hasta_saldos = $mes_actual . '-15';
+    } else {
+        // Segunda quincena: del 16 al fin de mes
+        $fecha_desde_saldos = $mes_actual . '-16';
+        $fecha_hasta_saldos = $mes_actual . '-' . str_pad($ultimo_dia_mes, 2, '0', STR_PAD_LEFT);
+    }
+    
+    // Calcular total de saldos pendientes GLOBAL (igual que finanzas_admin)
+    // Fórmula: Comisión(20% de ingresos) - Transferencias Ingresos - Descuentos - Pagos realizados
+    // Esto representa lo que se debe a los mensajeros en total
+    
+    // Total Ingresos (servicios + compras) de la quincena
+    $total_ingresos_servicios_saldos = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COALESCE(SUM(total), 0) FROM servicios_gofast 
+             WHERE tracking_estado != 'cancelado' 
+             AND fecha >= %s AND fecha <= %s",
+            $fecha_desde_saldos . ' 00:00:00', $fecha_hasta_saldos . ' 23:59:59'
+        )
+    ) ?? 0);
+    
+    $total_ingresos_compras_saldos = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COALESCE(SUM(valor), 0) FROM compras_gofast 
+             WHERE estado != 'cancelada' 
+             AND fecha_creacion >= %s AND fecha_creacion <= %s",
+            $fecha_desde_saldos . ' 00:00:00', $fecha_hasta_saldos . ' 23:59:59'
+        )
+    ) ?? 0);
+    
+    $total_ingresos_saldos = $total_ingresos_servicios_saldos + $total_ingresos_compras_saldos;
+    
+    // Total Comisiones (20% de ingresos totales)
+    $total_comisiones_saldos = $total_ingresos_saldos * 0.20;
+    
+    // Total Transferencias Ingresos de la quincena (igual que finanzas_admin)
+    $where_transf_entradas_saldos = ["estado = 'aprobada'"];
+    $where_transf_entradas_saldos[] = "fecha_creacion >= %s";
+    $where_transf_entradas_saldos[] = "fecha_creacion <= %s";
+    
+    $sql_transf_entradas_saldos = "
+        SELECT COALESCE(SUM(t.valor), 0) 
+        FROM transferencias_gofast t
+        WHERE " . implode(' AND ', $where_transf_entradas_saldos) . "
+        AND (
+            (t.tipo = 'normal' OR t.tipo IS NULL)
+            OR (
+                t.tipo = 'pago' 
+                AND EXISTS (
+                    SELECT 1 FROM pagos_mensajeros_gofast p
+                    WHERE p.mensajero_id = t.mensajero_id
+                    AND p.total_a_pagar = t.valor
+                    AND p.tipo_pago IN ('efectivo', 'transferencia')
+                )
+            )
+        )
+    ";
+    
+    $total_transferencias_ingresos_saldos = (float) ($wpdb->get_var(
+        $wpdb->prepare($sql_transf_entradas_saldos, $fecha_desde_saldos . ' 00:00:00', $fecha_hasta_saldos . ' 23:59:59')
+    ) ?? 0);
+    
+    // Total Descuentos de la quincena
+    $total_descuentos_saldos = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast 
+             WHERE fecha >= %s AND fecha <= %s",
+            $fecha_desde_saldos, $fecha_hasta_saldos
+        )
+    ) ?? 0);
+    
+    // Total Pagos en efectivo de la quincena (solo efectivo, igual que finanzas_admin)
+    $total_pagos_mensajeros_saldos = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
+             WHERE tipo_pago = 'efectivo'
+             AND fecha >= %s AND fecha <= %s",
+            $fecha_desde_saldos, $fecha_hasta_saldos
+        )
+    ) ?? 0);
+    
+    // Saldos Pendientes Totales = Comisión - Transferencias Ingresos - Descuentos - Pagos
+    $total_saldos_pendientes_acumulado = $total_comisiones_saldos - $total_transferencias_ingresos_saldos - $total_descuentos_saldos - $total_pagos_mensajeros_saldos;
+    if ($total_saldos_pendientes_acumulado < 0) {
+        $total_saldos_pendientes_acumulado = 0;
+    }
     
     // Obtener lista de mensajeros para calcular saldos
     // Si es admin y hay mensajero_id seleccionado, solo ese mensajero
@@ -849,55 +945,72 @@ function gofast_reportes_admin_shortcode() {
     foreach ($mensajeros_saldos as $mensajero) {
         $mensajero_id_saldo = (int) $mensajero->id;
         
-        // Calcular comisión histórica hasta fecha_hasta_saldos
-        $comision_historica = (float) ($wpdb->get_var(
+        // Calcular comisión de la quincena actual (rango fecha_desde_saldos a fecha_hasta_saldos)
+        // Usar formato con hora completa igual que finanzas_admin
+        $comision_quincena = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(total), 0) * 0.20 FROM servicios_gofast 
                  WHERE mensajero_id = %d AND tracking_estado != 'cancelado' 
-                 AND DATE(fecha) <= %s",
-                $mensajero_id_saldo, $fecha_hasta_saldos
+                 AND fecha >= %s AND fecha <= %s",
+                $mensajero_id_saldo, $fecha_desde_saldos . ' 00:00:00', $fecha_hasta_saldos . ' 23:59:59'
             )
         ) ?? 0);
         
-        $comision_compras_historica = (float) ($wpdb->get_var(
+        $comision_compras_quincena = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) * 0.20 FROM compras_gofast 
                  WHERE mensajero_id = %d AND estado != 'cancelada' 
-                 AND DATE(fecha_creacion) <= %s",
-                $mensajero_id_saldo, $fecha_hasta_saldos
+                 AND fecha_creacion >= %s AND fecha_creacion <= %s",
+                $mensajero_id_saldo, $fecha_desde_saldos . ' 00:00:00', $fecha_hasta_saldos . ' 23:59:59'
             )
         ) ?? 0);
         
-        $transferencias_historicas = (float) ($wpdb->get_var(
+        // Transferencias de la quincena: incluir tipo 'normal' y tipo 'pago' asociadas a pagos (igual que finanzas_admin)
+        $transferencias_quincena = (float) ($wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                 WHERE mensajero_id = %d AND estado = 'aprobada' 
-                 AND (tipo = 'normal' OR tipo IS NULL)
-                 AND DATE(fecha_creacion) <= %s",
-                $mensajero_id_saldo, $fecha_hasta_saldos
+                "SELECT COALESCE(SUM(t.valor), 0) 
+                 FROM transferencias_gofast t
+                 WHERE t.mensajero_id = %d 
+                 AND t.estado = 'aprobada' 
+                 AND t.fecha_creacion >= %s AND t.fecha_creacion <= %s
+                 AND (
+                     (t.tipo = 'normal' OR t.tipo IS NULL)
+                     OR (
+                         t.tipo = 'pago' 
+                         AND EXISTS (
+                             SELECT 1 FROM pagos_mensajeros_gofast p
+                             WHERE p.mensajero_id = t.mensajero_id
+                             AND p.total_a_pagar = t.valor
+                             AND p.tipo_pago IN ('efectivo', 'transferencia')
+                         )
+                     )
+                 )",
+                $mensajero_id_saldo, $fecha_desde_saldos . ' 00:00:00', $fecha_hasta_saldos . ' 23:59:59'
             )
         ) ?? 0);
         
-        $descuentos_historicos = (float) ($wpdb->get_var(
+        $descuentos_quincena = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast 
-                 WHERE mensajero_id = %d AND fecha <= %s",
-                $mensajero_id_saldo, $fecha_hasta_saldos
+                 WHERE mensajero_id = %d AND fecha >= %s AND fecha <= %s",
+                $mensajero_id_saldo, $fecha_desde_saldos, $fecha_hasta_saldos
             )
         ) ?? 0);
         
-        // Pagos históricos: TODOS los pagos (sin límite de fecha)
-        $pagos_historicos = (float) ($wpdb->get_var(
+        // Pagos de la quincena: solo pagos en efectivo (igual que finanzas_admin)
+        // NOTA: Los pagos por transferencia se contabilizan como transferencias ingresos tipo 'pago'
+        $pagos_quincena = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
-                 WHERE mensajero_id = %d AND tipo_pago IN ('efectivo', 'transferencia')",
-                $mensajero_id_saldo
+                 WHERE mensajero_id = %d AND tipo_pago = 'efectivo'
+                 AND fecha >= %s AND fecha <= %s",
+                $mensajero_id_saldo, $fecha_desde_saldos, $fecha_hasta_saldos
             )
         ) ?? 0);
         
-        // Total pendiente histórico hasta la fecha seleccionada
+        // Total pendiente de la quincena actual
         // Usar variable diferente para no afectar el $total_a_pagar de las estadísticas principales
-        $total_a_pagar_saldo = ($comision_historica + $comision_compras_historica) - $transferencias_historicas - $descuentos_historicos - $pagos_historicos;
+        $total_a_pagar_saldo = ($comision_quincena + $comision_compras_quincena) - $transferencias_quincena - $descuentos_quincena - $pagos_quincena;
         if ($total_a_pagar_saldo < 0) {
             $total_a_pagar_saldo = 0;
         }
@@ -917,23 +1030,26 @@ function gofast_reportes_admin_shortcode() {
             $mensajero_id_saldo, $mensajero_id_saldo
         ));
         
-        if ($primera_fecha) {
-            // Calcular desde la primera actividad hasta hoy
-            $fecha_inicio_historico = new DateTime($primera_fecha);
-            $fecha_fin = new DateTime(); // Hoy
-            $fecha_fin->modify('+1 day');
-            $intervalo = new DateInterval('P1D');
-            $periodo = new DatePeriod($fecha_inicio_historico, $intervalo, $fecha_fin);
-            
-            // Obtener TODOS los pagos del mensajero
-            $todos_pagos = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT fecha, total_a_pagar FROM pagos_mensajeros_gofast 
-                     WHERE mensajero_id = %d AND tipo_pago IN ('efectivo', 'transferencia')
-                     ORDER BY fecha ASC, fecha_pago ASC",
-                    $mensajero_id_saldo
-                )
-            );
+        // Calcular días de la quincena actual (no desde primera actividad, sino de la quincena)
+        $fecha_inicio_historico = new DateTime($fecha_desde_saldos);
+        $fecha_fin = new DateTime($fecha_hasta_saldos);
+        $fecha_fin->modify('+1 day'); // +1 para incluir el último día
+        $intervalo = new DateInterval('P1D');
+        $periodo = new DatePeriod($fecha_inicio_historico, $intervalo, $fecha_fin);
+        
+        // Obtener pagos del mensajero de la quincena actual (solo efectivo, igual que finanzas_admin)
+        // NOTA: Los pagos por transferencia se contabilizan como transferencias ingresos tipo 'pago'
+        $todos_pagos = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT fecha, total_a_pagar FROM pagos_mensajeros_gofast 
+                 WHERE mensajero_id = %d AND tipo_pago = 'efectivo'
+                 AND fecha >= %s AND fecha <= %s
+                 ORDER BY fecha ASC, fecha_pago ASC",
+                $mensajero_id_saldo, $fecha_desde_saldos, $fecha_hasta_saldos
+            )
+        );
+        
+        if (!empty($periodo)) {
             
             // Sumar todos los pagos
             $total_pagos_historico = 0;
@@ -963,13 +1079,26 @@ function gofast_reportes_admin_shortcode() {
                     )
                 ) ?? 0);
                 
-                // Transferencias del día (solo tipo normal)
+                // Transferencias del día: incluir tipo 'normal' y tipo 'pago' asociadas a pagos (igual que finanzas_admin)
                 $transferencias_dia = (float) ($wpdb->get_var(
                     $wpdb->prepare(
-                        "SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast 
-                         WHERE mensajero_id = %d AND estado = 'aprobada' 
-                         AND (tipo = 'normal' OR tipo IS NULL)
-                         AND DATE(fecha_creacion) = %s",
+                        "SELECT COALESCE(SUM(t.valor), 0) 
+                         FROM transferencias_gofast t
+                         WHERE t.mensajero_id = %d 
+                         AND t.estado = 'aprobada' 
+                         AND DATE(t.fecha_creacion) = %s
+                         AND (
+                             (t.tipo = 'normal' OR t.tipo IS NULL)
+                             OR (
+                                 t.tipo = 'pago' 
+                                 AND EXISTS (
+                                     SELECT 1 FROM pagos_mensajeros_gofast p
+                                     WHERE p.mensajero_id = t.mensajero_id
+                                     AND p.total_a_pagar = t.valor
+                                     AND p.tipo_pago IN ('efectivo', 'transferencia')
+                                 )
+                             )
+                         )",
                         $mensajero_id_saldo, $fecha_dia
                     )
                 ) ?? 0);
@@ -1013,9 +1142,9 @@ function gofast_reportes_admin_shortcode() {
                 }
             }
             
-            // Agregar días con saldo pendiente hasta la fecha_hasta_saldos seleccionada
+            // Agregar días con saldo pendiente solo de la quincena actual
             foreach ($dias_historico as $dia) {
-                if ($dia['pendiente'] > 0 && $dia['fecha'] <= $fecha_hasta_saldos) {
+                if ($dia['pendiente'] > 0 && $dia['fecha'] >= $fecha_desde_saldos && $dia['fecha'] <= $fecha_hasta_saldos) {
                     $desglose_dias[] = (object) $dia;
                 }
             }
@@ -1031,7 +1160,7 @@ function gofast_reportes_admin_shortcode() {
                 'desglose_dias' => $desglose_dias
             ];
             
-            $total_saldos_pendientes_acumulado += $total_a_pagar_saldo;
+            // NO sumar aquí, el total ya se calcula globalmente arriba igual que finanzas_admin
         }
     }
     
@@ -1305,11 +1434,11 @@ function gofast_reportes_admin_shortcode() {
                 
                 <?php if ($mensajero_id > 0): ?>
                     <p style="color:#666;font-size:13px;margin-top:8px;">
-                        Mostrando saldos pendientes para el mensajero seleccionado hasta <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>
+                        Mostrando saldos pendientes para el mensajero seleccionado de la quincena actual (<?= esc_html(gofast_date_format($fecha_desde_saldos, 'd/m/Y')); ?> al <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>)
                     </p>
                 <?php else: ?>
                     <p style="color:#666;font-size:13px;margin-top:8px;">
-                        Mostrando saldos pendientes acumulados de todos los mensajeros hasta <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>
+                        Mostrando saldos pendientes de todos los mensajeros de la quincena actual (<?= esc_html(gofast_date_format($fecha_desde_saldos, 'd/m/Y')); ?> al <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>)
                     </p>
                 <?php endif; ?>
                 
@@ -1359,14 +1488,14 @@ function gofast_reportes_admin_shortcode() {
                     </div>
                 <?php else: ?>
                     <div style="padding:12px;background:#fff3cd;border-radius:6px;color:#856404;font-size:13px;margin-top:16px;">
-                        ℹ️ No hay días con saldo pendiente hasta la fecha seleccionada.
+                        ℹ️ No hay días con saldo pendiente en la quincena actual (<?= esc_html(gofast_date_format($fecha_desde_saldos, 'd/m/Y')); ?> al <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>).
                     </div>
                 <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="gofast-box" style="margin-bottom:20px;">
                 <h3 style="margin-top:0;">💵 Saldos Pendientes</h3>
-                <p style="color:#666;">No hay mensajeros con saldos pendientes hasta <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>.</p>
+                <p style="color:#666;">No hay mensajeros con saldos pendientes en la quincena actual (<?= esc_html(gofast_date_format($fecha_desde_saldos, 'd/m/Y')); ?> al <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>).</p>
             </div>
         <?php endif; ?>
     <?php else: ?>
@@ -1384,7 +1513,7 @@ function gofast_reportes_admin_shortcode() {
                     </h3>
                     
                     <p style="color:#666;font-size:13px;margin-top:8px;">
-                        Mostrando tus saldos pendientes hasta <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>
+                        Mostrando tus saldos pendientes de la quincena actual (<?= esc_html(gofast_date_format($fecha_desde_saldos, 'd/m/Y')); ?> al <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>)
                     </p>
                     
                     <!-- Desglose por día -->
@@ -1422,7 +1551,7 @@ function gofast_reportes_admin_shortcode() {
                         </div>
                     <?php else: ?>
                         <div style="padding:12px;background:#fff3cd;border-radius:6px;color:#856404;font-size:13px;margin-top:16px;">
-                            ℹ️ No hay días con saldo pendiente hasta la fecha seleccionada.
+                            ℹ️ No hay días con saldo pendiente en la quincena actual (<?= esc_html(gofast_date_format($fecha_desde_saldos, 'd/m/Y')); ?> al <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>).
                         </div>
                     <?php endif; ?>
                 </div>
@@ -1430,7 +1559,7 @@ function gofast_reportes_admin_shortcode() {
         <?php else: ?>
             <div class="gofast-box" style="margin-bottom:20px;">
                 <h3 style="margin-top:0;">💵 Saldos Pendientes</h3>
-                <p style="color:#666;">No tienes saldos pendientes hasta <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>.</p>
+                <p style="color:#666;">No tienes saldos pendientes en la quincena actual (<?= esc_html(gofast_date_format($fecha_desde_saldos, 'd/m/Y')); ?> al <?= esc_html(gofast_date_format($fecha_hasta_saldos, 'd/m/Y')); ?>).</p>
             </div>
         <?php endif; ?>
     <?php endif; ?>
