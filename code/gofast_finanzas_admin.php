@@ -2372,11 +2372,6 @@ function gofast_finanzas_admin_shortcode() {
             filtroTabActivo.value = tab;
         }
         
-        // Actualizar URL sin recargar
-        const url = new URL(window.location);
-        url.searchParams.set('tab', tab);
-        window.history.pushState({}, '', url);
-        
         // Inicializar Select2 cuando se muestre cualquier tab
         if (typeof inicializarSelect2Filtros === 'function') {
             setTimeout(function() {
@@ -2618,7 +2613,7 @@ function gofast_finanzas_admin_shortcode() {
                     </div>
                     <?php if (!empty($filtro_descripcion)): ?>
                         <div>
-                            <a href="<?= esc_url(remove_query_arg('filtro_descripcion')) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
+                            <a href="<?= esc_url(add_query_arg('tab', 'egresos', remove_query_arg('filtro_descripcion'))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
                                 🔄 Limpiar
                             </a>
                         </div>
@@ -2833,7 +2828,7 @@ function gofast_finanzas_admin_shortcode() {
                     </div>
                     <?php if (!empty($filtro_descripcion_vales_empresa)): ?>
                         <div>
-                            <a href="<?= esc_url(remove_query_arg('filtro_descripcion_vales_empresa')) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
+                            <a href="<?= esc_url(add_query_arg('tab', 'vales_empresa', remove_query_arg('filtro_descripcion_vales_empresa'))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
                                 🔄 Limpiar
                             </a>
                         </div>
@@ -3073,7 +3068,7 @@ function gofast_finanzas_admin_shortcode() {
                     </div>
                     <?php if ($filtro_persona > 0 || !empty($filtro_descripcion_vales_personal)): ?>
                         <div>
-                            <a href="<?= esc_url(remove_query_arg(['filtro_persona', 'filtro_descripcion_vales_personal'])) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
+                            <a href="<?= esc_url(add_query_arg('tab', 'vales_personal', remove_query_arg(['filtro_persona', 'filtro_descripcion_vales_personal']))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
                                 🔄 Limpiar
                             </a>
                         </div>
@@ -3312,7 +3307,7 @@ function gofast_finanzas_admin_shortcode() {
                     </div>
                     <?php if ($filtro_mensajero > 0): ?>
                         <div>
-                            <a href="<?= esc_url(remove_query_arg('filtro_mensajero')) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
+                            <a href="<?= esc_url(add_query_arg('tab', 'transferencias_entradas', remove_query_arg('filtro_mensajero'))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
                                 🔄 Limpiar
                             </a>
                         </div>
@@ -3465,7 +3460,7 @@ function gofast_finanzas_admin_shortcode() {
                     </div>
                     <?php if (!empty($filtro_descripcion_transf_salidas)): ?>
                         <div>
-                            <a href="<?= esc_url(remove_query_arg('filtro_descripcion_transf_salidas')) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
+                            <a href="<?= esc_url(add_query_arg('tab', 'transferencias_salidas', remove_query_arg('filtro_descripcion_transf_salidas'))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center;">
                                 🔄 Limpiar
                             </a>
                         </div>
@@ -3704,7 +3699,7 @@ function gofast_finanzas_admin_shortcode() {
                     <?php if ($filtro_mensajero_descuentos > 0 || !empty($filtro_descripcion_descuentos)): ?>
                         <div>
                             <label style="display: block; margin-bottom: 4px;">&nbsp;</label>
-                            <a href="<?= esc_url(remove_query_arg(['filtro_mensajero_descuentos', 'filtro_descripcion_descuentos'])) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center; height: 38px; line-height: 38px;">
+                            <a href="<?= esc_url(add_query_arg('tab', 'descuentos', remove_query_arg(['filtro_mensajero_descuentos', 'filtro_descripcion_descuentos']))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: block; text-align: center; height: 38px; line-height: 38px;">
                                 🔄 Limpiar
                             </a>
                         </div>
@@ -3925,7 +3920,7 @@ function gofast_finanzas_admin_shortcode() {
                         </div>
                         <?php if ($filtro_mensajero_saldos > 0 || !empty($filtro_estado_saldos)): ?>
                             <div>
-                                <a href="<?= esc_url(remove_query_arg(['filtro_mensajero_saldos', 'filtro_estado_saldos'])) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 20px;">
+                                <a href="<?= esc_url(add_query_arg('tab', 'registrar_pago', remove_query_arg(['filtro_mensajero_saldos', 'filtro_estado_saldos']))) ?>" class="gofast-btn gofast-secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 20px;">
                                     🔄 Limpiar
                                 </a>
                             </div>
@@ -4252,16 +4247,25 @@ function gofast_finanzas_admin_shortcode() {
                         <div class="gofast-pagination" style="margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
                             <?php
                             // Construir URL base preservando todos los parámetros GET excepto pg_saldos
-                            $url_params = $_GET;
-                            unset($url_params['pg_saldos']);
-                            // Asegurar que el tab siempre esté presente
-                            if (!isset($url_params['tab']) && !empty($tab_activo)) {
-                                $url_params['tab'] = $tab_activo;
+                            // SIEMPRE establecer el tab a 'registrar_pago' explícitamente
+                            $url_base_params = [];
+                            foreach ($_GET as $key => $value) {
+                                if ($key !== 'pg_saldos') {
+                                    $url_base_params[$key] = $value;
+                                }
                             }
-                            $url_base = add_query_arg($url_params, '');
+                            // Forzar tab a 'registrar_pago'
+                            $url_base_params['tab'] = 'registrar_pago';
+                            
+                            // Obtener la URL base sin parámetros
+                            $current_url = remove_query_arg(array_keys($_GET), $_SERVER['REQUEST_URI']);
+                            
                             for ($i = 1; $i <= $total_paginas_saldos; $i++):
+                                $url_base_params['pg_saldos'] = $i;
+                                // Construir la URL completa con todos los parámetros
+                                $pagina_url = add_query_arg($url_base_params, $current_url);
                             ?>
-                                <a href="<?= esc_url(add_query_arg('pg_saldos', $i, $url_base)) ?>" 
+                                <a href="<?= esc_url($pagina_url) ?>" 
                                    class="gofast-page-link <?= $i === $pg_saldos ? 'gofast-page-current' : '' ?>"
                                    style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; text-decoration: none; color: <?= $i === $pg_saldos ? '#000' : '#333' ?>; background: <?= $i === $pg_saldos ? 'var(--gofast-yellow, #F4C524)' : '#fff' ?>; font-weight: <?= $i === $pg_saldos ? '700' : '400' ?>;">
                                     <?= $i ?>
@@ -4401,16 +4405,25 @@ function gofast_finanzas_admin_shortcode() {
                             <div class="gofast-pagination" style="margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
                                 <?php
                                 // Construir URL base preservando todos los parámetros GET excepto pg_historial
-                                $url_params_historial = $_GET;
-                                unset($url_params_historial['pg_historial']);
-                                // Asegurar que el tab siempre esté presente
-                                if (!isset($url_params_historial['tab']) && !empty($tab_activo)) {
-                                    $url_params_historial['tab'] = $tab_activo;
+                                // SIEMPRE establecer el tab a 'historial_pagos' explícitamente
+                                $url_base_params_historial = [];
+                                foreach ($_GET as $key => $value) {
+                                    if ($key !== 'pg_historial') {
+                                        $url_base_params_historial[$key] = $value;
+                                    }
                                 }
-                                $url_base_historial = add_query_arg($url_params_historial, '');
+                                // Forzar tab a 'historial_pagos'
+                                $url_base_params_historial['tab'] = 'historial_pagos';
+                                
+                                // Obtener la URL base sin parámetros
+                                $current_url_historial = remove_query_arg(array_keys($_GET), $_SERVER['REQUEST_URI']);
+                                
                                 for ($i = 1; $i <= $total_paginas_historial; $i++):
+                                    $url_base_params_historial['pg_historial'] = $i;
+                                    // Construir la URL completa con todos los parámetros
+                                    $pagina_url_historial = add_query_arg($url_base_params_historial, $current_url_historial);
                                 ?>
-                                    <a href="<?= esc_url(add_query_arg('pg_historial', $i, $url_base_historial)) ?>" 
+                                    <a href="<?= esc_url($pagina_url_historial) ?>" 
                                        class="gofast-page-link <?= $i === $pg_historial ? 'gofast-page-current' : '' ?>"
                                        style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; text-decoration: none; color: <?= $i === $pg_historial ? '#000' : '#333' ?>; background: <?= $i === $pg_historial ? 'var(--gofast-yellow, #F4C524)' : '#fff' ?>; font-weight: <?= $i === $pg_historial ? '700' : '400' ?>;">
                                         <?= $i ?>
