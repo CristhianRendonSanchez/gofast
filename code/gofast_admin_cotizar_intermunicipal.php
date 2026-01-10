@@ -244,6 +244,13 @@ function gofast_admin_cotizar_intermunicipal_shortcode() {
             // Verificar si existe el campo asignado_por_user_id
             $column_exists = $wpdb->get_results("SHOW COLUMNS FROM servicios_gofast LIKE 'asignado_por_user_id'");
             
+            // Fecha del servicio (admin puede especificar cualquier fecha, hora del sistema)
+            $fecha_servicio = gofast_current_time('mysql'); // Por defecto fecha actual
+            if (!empty($_POST['fecha_servicio'])) {
+                // Si hay fecha, usar la hora actual del sistema
+                $fecha_servicio = sanitize_text_field($_POST['fecha_servicio']) . ' ' . date('H:i:s');
+            }
+            
             $data_insert = [
                 'nombre_cliente' => $nombre_cliente,
                 'telefono_cliente' => $telefono_cliente,
@@ -254,7 +261,7 @@ function gofast_admin_cotizar_intermunicipal_shortcode() {
                 'tracking_estado' => 'asignado',
                 'mensajero_id' => $mensajero_id,
                 'user_id' => $user_id_servicio,
-                'fecha' => gofast_current_time('mysql'),
+                'fecha' => $fecha_servicio,
             ];
             
             // Si existe el campo, guardar quién asignó (el admin)
@@ -623,6 +630,23 @@ function gofast_admin_mostrar_resumen_intermunicipal($cotizacion) {
                 <small style="color: #666; font-size: 13px; display: block; margin-top: -12px; margin-bottom: 16px;">
                     Especifica la dirección completa en <?= esc_html($destino_seleccionado) ?> (solo zona urbana)
                 </small>
+
+                <!-- Campo de fecha para el servicio (solo admin) -->
+                <div style="background: #e7f3ff; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196F3;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #000;">
+                        📅 Fecha del servicio (opcional)
+                    </label>
+                    <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha</label>
+                        <input type="date" 
+                               name="fecha_servicio" 
+                               value="<?= esc_attr(gofast_date_today()) ?>"
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 8px;">
+                        Si no se especifica, se usará la fecha y hora actual del sistema.
+                    </small>
+                </div>
 
                 <div class="gofast-box" style="background: #e8f4ff; border-left: 4px solid #1f6feb; padding: 12px; margin-top: 20px; margin-bottom: 16px;">
                     <strong style="color: #004085;">💡 Recordatorio:</strong>

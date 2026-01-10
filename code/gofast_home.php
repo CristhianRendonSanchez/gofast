@@ -132,35 +132,6 @@ function gofast_home_shortcode() {
 
 <div class="gofast-home">
 
-    <!-- SECCIÓN: ESTADÍSTICAS ADMIN - AL INICIO -->
-    <?php if ($rol === 'admin' && !empty($stats_admin)): ?>
-    <section class="gofast-home-section" style="margin-bottom:32px;">
-        <div class="gofast-dashboard-stats" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
-            <div class="gofast-box" style="text-align:center;padding:20px;">
-                <div style="font-size:32px;margin-bottom:8px;">📍</div>
-                <div style="font-size:28px;font-weight:700;color:#F4C524;margin-bottom:4px;">
-                    <?php echo number_format($stats_admin['total_destinos']); ?>
-                </div>
-                <div style="font-size:13px;color:#666;">Total Destinos</div>
-            </div>
-            <div class="gofast-box" style="text-align:center;padding:20px;">
-                <div style="font-size:32px;margin-bottom:8px;">🛒</div>
-                <div style="font-size:28px;font-weight:700;color:#E91E63;margin-bottom:4px;">
-                    <?php echo number_format($stats_admin['total_compras']); ?>
-                </div>
-                <div style="font-size:13px;color:#666;">Total Compras</div>
-            </div>
-            <div class="gofast-box" style="text-align:center;padding:20px;">
-                <div style="font-size:32px;margin-bottom:8px;">💰</div>
-                <div style="font-size:28px;font-weight:700;color:#4CAF50;margin-bottom:4px;">
-                    $<?php echo number_format($stats_admin['ingresos_totales'], 0, ',', '.'); ?>
-                </div>
-                <div style="font-size:13px;color:#666;">Ingresos Totales</div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
     <!-- HERO SUPERIOR: título + botón cotizar + panel según rol -->
     <section class="gofast-home-hero">
 
@@ -401,20 +372,20 @@ function gofast_home_shortcode() {
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo $url_admin_usuarios; ?>" class="gofast-home-panel-link">
-                            <span class="gofast-home-panel-icon">👥</span>
+                        <a href="<?php echo $url_reportes; ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">📊</span>
                             <span class="gofast-home-panel-text">
-                                <strong>Usuarios</strong>
-                                <small>Gestionar cuentas</small>
+                                <strong>Reportes</strong>
+                                <small>Ver estadísticas</small>
                             </span>
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo $url_recargos; ?>" class="gofast-home-panel-link">
-                            <span class="gofast-home-panel-icon">⚙️</span>
+                        <a href="<?php echo $url_admin_finanzas ?? home_url('/admin-finanzas'); ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">💹</span>
                             <span class="gofast-home-panel-text">
-                                <strong>Recargos</strong>
-                                <small>Configurar tarifas</small>
+                                <strong>Finanzas</strong>
+                                <small>Gestionar egresos y saldos</small>
                             </span>
                         </a>
                     </li>
@@ -438,9 +409,6 @@ function gofast_home_shortcode() {
                     </li>
 
                 <?php endif; ?>
-
-            </ul>
-        </div>
 
     </section>
 
@@ -546,6 +514,35 @@ function gofast_home_shortcode() {
             });
         })();
     </script>
+    <?php endif; ?>
+
+    <!-- SECCIÓN: ESTADÍSTICAS ADMIN - DESPUÉS DEL RANKING -->
+    <?php if ($rol === 'admin' && !empty($stats_admin)): ?>
+    <section class="gofast-home-section" style="margin-bottom:32px;">
+        <div class="gofast-dashboard-stats" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+            <div class="gofast-box" style="text-align:center;padding:20px;">
+                <div style="font-size:32px;margin-bottom:8px;">📍</div>
+                <div style="font-size:28px;font-weight:700;color:#F4C524;margin-bottom:4px;">
+                    <?php echo number_format($stats_admin['total_destinos']); ?>
+                </div>
+                <div style="font-size:13px;color:#666;">Total Destinos</div>
+            </div>
+            <div class="gofast-box" style="text-align:center;padding:20px;">
+                <div style="font-size:32px;margin-bottom:8px;">🛒</div>
+                <div style="font-size:28px;font-weight:700;color:#E91E63;margin-bottom:4px;">
+                    <?php echo number_format($stats_admin['total_compras']); ?>
+                </div>
+                <div style="font-size:13px;color:#666;">Total Compras</div>
+            </div>
+            <div class="gofast-box" style="text-align:center;padding:20px;">
+                <div style="font-size:32px;margin-bottom:8px;">💰</div>
+                <div style="font-size:28px;font-weight:700;color:#4CAF50;margin-bottom:4px;">
+                    $<?php echo number_format($stats_admin['ingresos_totales'], 0, ',', '.'); ?>
+                </div>
+                <div style="font-size:13px;color:#666;">Ingresos Totales</div>
+            </div>
+        </div>
+    </section>
     <?php endif; ?>
 
     <!-- SECCIÓN: CÓMO FUNCIONA (NUEVA) -->

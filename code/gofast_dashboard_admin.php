@@ -111,6 +111,9 @@ function gofast_dashboard_admin_shortcode() {
     
     $ingresos_mes = $ingresos_servicios_mes + $ingresos_compras_mes;
     $comision_mes = $ingresos_mes * 0.20;
+    
+    // Solicitudes de trabajo pendientes
+    $solicitudes_pendientes = (int) $wpdb->get_var("SELECT COUNT(*) FROM solicitudes_trabajo WHERE estado = 'pendiente'");
 
     /* ==========================================================
        2. HTML
@@ -266,6 +269,13 @@ function gofast_dashboard_admin_shortcode() {
             <div style="font-size:32px;margin-bottom:8px;">📊</div>
             <div style="font-size:28px;font-weight:700;color:#9C27B0;margin-bottom:4px;">$<?= number_format($comision_mes, 0, ',', '.'); ?></div>
             <div style="font-size:13px;color:#666;">Comisión del Mes</div>
+        </div>
+
+        <!-- Solicitudes de Trabajo Pendientes -->
+        <div class="gofast-box" style="text-align:center;padding:20px;">
+            <div style="font-size:32px;margin-bottom:8px;">📋</div>
+            <div style="font-size:28px;font-weight:700;color:#FF6B6B;margin-bottom:4px;"><?= number_format($solicitudes_pendientes); ?></div>
+            <div style="font-size:13px;color:#666;">Solicitudes TrabajoPendientes</div>
         </div>
 
     </div>

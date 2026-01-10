@@ -369,11 +369,30 @@ function gofast_resultado_cotizacion() {
 
 		// Direcciones destino opcionales
 		$dirs_dest   = isset($_POST['dir_destino'])   ? (array) $_POST['dir_destino']   : [];
+		$whatsapp_dest = isset($_POST['whatsapp_destino']) ? (array) $_POST['whatsapp_destino'] : [];
 		$montos_dest = isset($_POST['monto_destino']) ? (array) $_POST['monto_destino'] : [];
 
 		foreach ($montos_dest as $i => $m) {
 			$m = trim($m);
 			$montos_dest[$i] = ($m === "" ? 0 : intval(preg_replace('/[^\d]/', '', $m)));
+		}
+		
+		// Validar: si hay dirección, WhatsApp es obligatorio
+		foreach ($dirs_dest as $i => $dir) {
+			$dir = trim($dir);
+			if (!empty($dir)) {
+				$whatsapp = isset($whatsapp_dest[$i]) ? trim($whatsapp_dest[$i]) : '';
+				if (empty($whatsapp)) {
+					$destino_id = isset($destinos[$i]) ? intval($destinos[$i]) : 0;
+					$destino_nombre = $destino_id > 0 
+						? $wpdb->get_var($wpdb->prepare("SELECT nombre FROM barrios WHERE id = %d", $destino_id))
+						: 'destino';
+					return "<div class='gofast-box' style='background:#f8d7da;border-left:4px solid #dc3545;color:#721c24;'>
+								<b>⚠️ Error de validación:</b><br>
+								Si llenas la dirección de entrega para el destino " . esc_html($destino_nombre) . ", el WhatsApp de destino es obligatorio.
+							</div>";
+				}
+			}
 		}
 
 		// JSON de origen
@@ -388,17 +407,22 @@ function gofast_resultado_cotizacion() {
 
 		// JSON de destinos
 		$destinos_completos = [];
+		
 		foreach ($destinos as $i => $dest_id) {
 
 			$barrio_nombre = $wpdb->get_var("SELECT nombre FROM barrios WHERE id = $dest_id");
 			$sector_id     = intval($wpdb->get_var("SELECT sector_id FROM barrios WHERE id = $dest_id"));
+			
+			// Monto adicional: solo se guarda para los mensajes, NO se suma al total
+			$monto_adicional = !empty($montos_dest[$i]) ? $montos_dest[$i] : 0;
 
 			$destinos_completos[] = [
 				"barrio_id"     => $dest_id,
 				"barrio_nombre" => $barrio_nombre,
 				"sector_id"     => $sector_id,
 				"direccion"     => !empty($dirs_dest[$i]) ? sanitize_text_field($dirs_dest[$i]) : "",
-				"monto"         => !empty($montos_dest[$i]) ? $montos_dest[$i] : 0,
+				"whatsapp"      => !empty($whatsapp_dest[$i]) ? sanitize_text_field($whatsapp_dest[$i]) : "",
+				"monto"         => $monto_adicional, // Solo para mensajes, no se usa en cálculos
 			];
 		}
 
@@ -416,13 +440,16 @@ function gofast_resultado_cotizacion() {
 			$user_id_servicio = $cliente_propietario; // Asociar al cliente propietario del negocio
 		}
 		
+		// El total es solo el valor del servicio (precio base + recargos), NO incluye el monto adicional
+		$total_final = $total;
+		
 		// Guardar servicio
 		$insertado = $wpdb->insert("servicios_gofast", [
 			"nombre_cliente"   => $nombre,
 			"telefono_cliente" => $tel,
 			"direccion_origen" => $dir_origen,
 			"destinos"         => $json_final,
-			"total"            => $total,
+			"total"            => $total_final,
 			"estado"           => "pendiente",
 			"tracking_estado"  => "pendiente",
 			"mensajero_id"     => null,
@@ -609,10 +636,32 @@ function gofast_resultado_cotizacion() {
                             <label><strong><?= esc_html($d["destino"]) ?></strong></label>
 
                             <!-- Dirección destino OPCIONAL -->
-                            <input type="text" name="dir_destino[]" placeholder="Ej: Calle 12 #3-15" style="margin-top:8px;">
+                            <div style="margin-top:8px;">
+                                <label style="font-size:12px;color:#666;">
+                                    Dirección de entrega
+                                </label>
+                                <input type="text" name="dir_destino[]" class="dir-destino-input" placeholder="Ej: Calle 12 #3-15" style="margin-top:4px;width:100%;">
+                            </div>
+
+                            <!-- WhatsApp de destino (obligatorio si hay dirección) -->
+                            <div style="margin-top:8px;">
+                                <label style="font-size:12px;color:#666;">
+                                    WhatsApp de destino 
+                                    <span class="whatsapp-required-indicator" style="display:none;color:#dc3545;">*</span>
+                                </label>
+                                <input type="text" name="whatsapp_destino[]" class="whatsapp-destino-input" placeholder="Ej: 3001234567" pattern="[0-9]{10}" style="margin-top:4px;width:100%;">
+                                <div class="whatsapp-error-message" style="display:none;color:#dc3545;font-size:11px;margin-top:4px;">
+                                    El WhatsApp es obligatorio si llenas la dirección de entrega
+                                </div>
+                            </div>
 
                             <!-- Monto OPCIONAL -->
-                            <input type="text" name="monto_destino[]" class="gofast-money" placeholder="$ 0" style="margin-top:8px;">
+                            <div style="margin-top:8px;">
+                                <label style="font-size:12px;color:#666;">
+                                    Monto adicional (recargo)
+                                </label>
+                                <input type="text" name="monto_destino[]" class="gofast-money" placeholder="$ 0" style="margin-top:4px;width:100%;">
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -834,6 +883,86 @@ function gofast_resultado_cotizacion() {
             window.location.href = '<?= esc_url(home_url('/cotizar')) ?>';
         }
     }
+    
+    // Función para actualizar visibilidad del indicador de WhatsApp obligatorio
+    function actualizarIndicadorWhatsApp(item) {
+        const direccion = item.querySelector('.dir-destino-input');
+        const whatsapp = item.querySelector('.whatsapp-destino-input');
+        const indicador = item.querySelector('.whatsapp-required-indicator');
+        const errorMsg = item.querySelector('.whatsapp-error-message');
+        
+        if (direccion && whatsapp && indicador && errorMsg) {
+            const tieneDireccion = direccion.value.trim() !== '';
+            
+            if (tieneDireccion) {
+                indicador.style.display = 'inline';
+                if (!whatsapp.value.trim()) {
+                    whatsapp.style.borderColor = '#dc3545';
+                    errorMsg.style.display = 'block';
+                } else {
+                    whatsapp.style.borderColor = '#ddd';
+                    errorMsg.style.display = 'none';
+                }
+            } else {
+                indicador.style.display = 'none';
+                whatsapp.style.borderColor = '#ddd';
+                errorMsg.style.display = 'none';
+            }
+        }
+    }
+    
+    // Event listeners para actualizar indicador cuando cambia la dirección o WhatsApp
+    document.addEventListener('input', function(e) {
+        if (e.target.classList.contains('dir-destino-input') || e.target.classList.contains('whatsapp-destino-input')) {
+            const item = e.target.closest('.gofast-dir-item');
+            if (item) {
+                actualizarIndicadorWhatsApp(item);
+            }
+        }
+    });
+    
+    // Inicializar indicadores para destinos existentes
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.gofast-dir-item').forEach(function(item) {
+            actualizarIndicadorWhatsApp(item);
+        });
+        
+        // Validación antes de enviar el formulario
+        const form = document.getElementById('form-solicitar-servicio');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                let hayError = false;
+                const items = document.querySelectorAll('.gofast-dir-item');
+                
+                items.forEach(function(item) {
+                    const direccion = item.querySelector('.dir-destino-input');
+                    const whatsapp = item.querySelector('.whatsapp-destino-input');
+                    
+                    if (direccion && whatsapp) {
+                        const direccionValue = direccion.value.trim();
+                        const whatsappValue = whatsapp.value.trim();
+                        
+                        // Validar: si hay dirección, WhatsApp es obligatorio
+                        if (direccionValue && !whatsappValue) {
+                            hayError = true;
+                            const errorMsg = item.querySelector('.whatsapp-error-message');
+                            if (errorMsg) {
+                                errorMsg.style.display = 'block';
+                            }
+                            whatsapp.style.borderColor = '#dc3545';
+                            whatsapp.focus();
+                        }
+                    }
+                });
+                
+                if (hayError) {
+                    e.preventDefault();
+                    alert('⚠️ Si llenas la dirección de entrega, el WhatsApp de destino es obligatorio.');
+                    return false;
+                }
+            });
+        }
+    });
     </script>
 
     <?php

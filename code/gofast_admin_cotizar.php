@@ -294,6 +294,13 @@ function gofast_admin_cotizar_shortcode() {
                 $direccion_origen_servicio = $nombre_origen;
             }
             
+            // Fecha del servicio (admin puede especificar cualquier fecha, hora del sistema)
+            $fecha_servicio = gofast_current_time('mysql'); // Por defecto fecha actual
+            if (!empty($_POST['fecha_servicio'])) {
+                // Si hay fecha, usar la hora actual del sistema
+                $fecha_servicio = sanitize_text_field($_POST['fecha_servicio']) . ' ' . date('H:i:s');
+            }
+            
             $data_insert = [
                 'nombre_cliente' => $nombre_cliente,
                 'telefono_cliente' => $telefono_cliente,
@@ -304,7 +311,7 @@ function gofast_admin_cotizar_shortcode() {
                 'tracking_estado' => 'asignado',
                 'mensajero_id' => $mensajero_id, // Mensajero seleccionado por el admin
                 'user_id' => $user_id_servicio, // Cliente propietario del negocio o admin
-                'fecha' => gofast_current_time('mysql'),
+                'fecha' => $fecha_servicio,
             ];
             
             // Si existe el campo, guardar quién asignó (el admin)
@@ -1207,6 +1214,23 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
                 <input type="hidden" name="origen" id="input-origen" value="<?= esc_attr($origen) ?>">
                 <input type="hidden" name="destinos_finales" id="input-destinos" value="<?= esc_attr(implode(',', array_column($detalle_envios, 'id'))) ?>">
                 <!-- Los recargos seleccionables se agregarán dinámicamente con JavaScript -->
+
+                <!-- Campo de fecha para el servicio (solo admin) -->
+                <div style="background: #e7f3ff; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196F3;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #000;">
+                        📅 Fecha del servicio (opcional)
+                    </label>
+                    <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha</label>
+                        <input type="date" 
+                               name="fecha_servicio" 
+                               value="<?= esc_attr(gofast_date_today()) ?>"
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 8px;">
+                        Si no se especifica, se usará la fecha y hora actual del sistema.
+                    </small>
+                </div>
 
                 <div class="gofast-btn-group" style="margin-top:24px;">
                     <button type="submit" name="gofast_admin_aceptar" class="gofast-btn-request" style="background:#4CAF50;color:#fff;">
