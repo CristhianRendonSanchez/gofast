@@ -833,8 +833,8 @@ function gofast_reportes_admin_shortcode() {
     }
     
     // Calcular total de saldos pendientes GLOBAL (igual que finanzas_admin)
-    // Fórmula: Comisión(20% de ingresos) - Transferencias Ingresos - Descuentos - Pagos realizados
-    // Esto representa lo que se debe a los mensajeros en total
+    // Fórmula: Comisión(20% de ingresos) - Transferencias Ingresos - Descuentos - Pagos en Efectivo realizados
+    // Esto representa lo que se debe a los mensajeros en total (solo considera pagos en efectivo, no transferencias)
     
     // Total Ingresos (servicios + compras) de la quincena
     $total_ingresos_servicios_saldos = (float) ($wpdb->get_var(
@@ -861,10 +861,23 @@ function gofast_reportes_admin_shortcode() {
     $total_comisiones_saldos = $total_ingresos_saldos * 0.20;
     
     // Total Transferencias Ingresos de la quincena (igual que finanzas_admin)
+    // Solo incluir: transferencias tipo "normal" y transferencias tipo "pago" asociadas a pagos registrados
+    // IMPORTANTE: Usar exactamente la misma lógica que finanzas_admin
     $where_transf_entradas_saldos = ["estado = 'aprobada'"];
-    $where_transf_entradas_saldos[] = "fecha_creacion >= %s";
-    $where_transf_entradas_saldos[] = "fecha_creacion <= %s";
+    $params_transf_entradas_saldos = [];
     
+    if (!empty($fecha_desde_saldos)) {
+        $where_transf_entradas_saldos[] = "fecha_creacion >= %s";
+        $params_transf_entradas_saldos[] = $fecha_desde_saldos . ' 00:00:00';
+    }
+    if (!empty($fecha_hasta_saldos)) {
+        $where_transf_entradas_saldos[] = "fecha_creacion <= %s";
+        $params_transf_entradas_saldos[] = $fecha_hasta_saldos . ' 23:59:59';
+    }
+    
+    // Construir la consulta: solo transferencias tipo "normal" y tipo "pago" asociadas a pagos registrados
+    // Las transferencias tipo "pago" solo se crean cuando se registra un pago por transferencia
+    // Verificamos que exista un pago registrado (efectivo o transferencia) que coincida
     $sql_transf_entradas_saldos = "
         SELECT COALESCE(SUM(t.valor), 0) 
         FROM transferencias_gofast t
@@ -884,7 +897,9 @@ function gofast_reportes_admin_shortcode() {
     ";
     
     $total_transferencias_ingresos_saldos = (float) ($wpdb->get_var(
-        $wpdb->prepare($sql_transf_entradas_saldos, $fecha_desde_saldos . ' 00:00:00', $fecha_hasta_saldos . ' 23:59:59')
+        !empty($params_transf_entradas_saldos)
+            ? $wpdb->prepare($sql_transf_entradas_saldos, $params_transf_entradas_saldos)
+            : str_replace(implode(' AND ', $where_transf_entradas_saldos), "1=1", $sql_transf_entradas_saldos)
     ) ?? 0);
     
     // Total Descuentos de la quincena
@@ -896,21 +911,9 @@ function gofast_reportes_admin_shortcode() {
         )
     ) ?? 0);
     
-    // Total Pagos en efectivo de la quincena (solo efectivo, igual que finanzas_admin)
-    $total_pagos_mensajeros_saldos = (float) ($wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
-             WHERE tipo_pago = 'efectivo'
-             AND fecha >= %s AND fecha <= %s",
-            $fecha_desde_saldos, $fecha_hasta_saldos
-        )
-    ) ?? 0);
-    
-    // Saldos Pendientes Totales = Comisión - Transferencias Ingresos - Descuentos - Pagos
-    $total_saldos_pendientes_acumulado = $total_comisiones_saldos - $total_transferencias_ingresos_saldos - $total_descuentos_saldos - $total_pagos_mensajeros_saldos;
-    if ($total_saldos_pendientes_acumulado < 0) {
-        $total_saldos_pendientes_acumulado = 0;
-    }
+    // Saldos Pendientes Totales - Se calculará después de procesar todos los mensajeros
+    // NOTA: No calcular aquí porque aún no tenemos todos los datos procesados
+    $total_saldos_pendientes_acumulado = 0;
     
     // Obtener lista de mensajeros para calcular saldos
     // Si es admin y hay mensajero_id seleccionado, solo ese mensajero
@@ -965,26 +968,16 @@ function gofast_reportes_admin_shortcode() {
             )
         ) ?? 0);
         
-        // Transferencias de la quincena: incluir tipo 'normal' y tipo 'pago' asociadas a pagos (igual que finanzas_admin)
+        // Transferencias de la quincena: solo tipo "normal" (excluir tipo "pago") (igual que finanzas_admin)
+        // Las transferencias tipo "pago" se contabilizan en los pagos
         $transferencias_quincena = (float) ($wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(t.valor), 0) 
-                 FROM transferencias_gofast t
-                 WHERE t.mensajero_id = %d 
-                 AND t.estado = 'aprobada' 
-                 AND t.fecha_creacion >= %s AND t.fecha_creacion <= %s
-                 AND (
-                     (t.tipo = 'normal' OR t.tipo IS NULL)
-                     OR (
-                         t.tipo = 'pago' 
-                         AND EXISTS (
-                             SELECT 1 FROM pagos_mensajeros_gofast p
-                             WHERE p.mensajero_id = t.mensajero_id
-                             AND p.total_a_pagar = t.valor
-                             AND p.tipo_pago IN ('efectivo', 'transferencia')
-                         )
-                     )
-                 )",
+                "SELECT COALESCE(SUM(valor), 0) 
+                 FROM transferencias_gofast
+                 WHERE mensajero_id = %d 
+                 AND estado = 'aprobada' 
+                 AND (tipo = 'normal' OR tipo IS NULL)
+                 AND fecha_creacion >= %s AND fecha_creacion <= %s",
                 $mensajero_id_saldo, $fecha_desde_saldos . ' 00:00:00', $fecha_hasta_saldos . ' 23:59:59'
             )
         ) ?? 0);
@@ -997,8 +990,8 @@ function gofast_reportes_admin_shortcode() {
             )
         ) ?? 0);
         
-        // Pagos de la quincena: solo pagos en efectivo (igual que finanzas_admin)
-        // NOTA: Los pagos por transferencia se contabilizan como transferencias ingresos tipo 'pago'
+        // Pagos de la quincena: SOLO pagos en efectivo (igual que finanzas_admin)
+        // NOTA: Los pagos por transferencia NO se restan aquí porque ya están contabilizados como transferencias salidas
         $pagos_quincena = (float) ($wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
@@ -1010,51 +1003,50 @@ function gofast_reportes_admin_shortcode() {
         
         // Total pendiente de la quincena actual
         // Usar variable diferente para no afectar el $total_a_pagar de las estadísticas principales
+        // Fórmula: Comisión - Transferencias - Descuentos - Pagos en Efectivo
         $total_a_pagar_saldo = ($comision_quincena + $comision_compras_quincena) - $transferencias_quincena - $descuentos_quincena - $pagos_quincena;
         if ($total_a_pagar_saldo < 0) {
             $total_a_pagar_saldo = 0;
         }
         
-        // Calcular desglose por día (solo días con saldo pendiente)
+        // Calcular desglose por día SOLO dentro del rango de fechas seleccionado
+        // Esto asegura que el desglose coincida con el "Total a Pagar" del resumen
         $desglose_dias = [];
         
-        // Obtener la primera fecha con actividad del mensajero
-        $primera_fecha = $wpdb->get_var($wpdb->prepare(
-            "SELECT MIN(fecha_actividad) FROM (
-                SELECT DATE(fecha) as fecha_actividad FROM servicios_gofast 
-                WHERE mensajero_id = %d AND tracking_estado != 'cancelado'
-                UNION ALL
-                SELECT DATE(fecha_creacion) as fecha_actividad FROM compras_gofast 
-                WHERE mensajero_id = %d AND estado != 'cancelada'
-            ) as fechas",
-            $mensajero_id_saldo, $mensajero_id_saldo
-        ));
-        
-        // Calcular días de la quincena actual (no desde primera actividad, sino de la quincena)
-        $fecha_inicio_historico = new DateTime($fecha_desde_saldos);
-        $fecha_fin = new DateTime($fecha_hasta_saldos);
-        $fecha_fin->modify('+1 day'); // +1 para incluir el último día
-        $intervalo = new DateInterval('P1D');
-        $periodo = new DatePeriod($fecha_inicio_historico, $intervalo, $fecha_fin);
-        
-        // Obtener pagos del mensajero de la quincena actual (solo efectivo, igual que finanzas_admin)
-        // NOTA: Los pagos por transferencia se contabilizan como transferencias ingresos tipo 'pago'
-        $todos_pagos = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT fecha, total_a_pagar FROM pagos_mensajeros_gofast 
-                 WHERE mensajero_id = %d AND tipo_pago = 'efectivo'
-                 AND fecha >= %s AND fecha <= %s
-                 ORDER BY fecha ASC, fecha_pago ASC",
-                $mensajero_id_saldo, $fecha_desde_saldos, $fecha_hasta_saldos
-            )
-        );
-        
-        if (!empty($periodo)) {
+        if (!empty($fecha_desde_saldos) && !empty($fecha_hasta_saldos)) {
+            // Calcular solo días dentro del rango seleccionado
+            $fecha_hoy = gofast_current_time('Y-m-d');
+            $fecha_inicio = new DateTime($fecha_desde_saldos);
             
-            // Sumar todos los pagos
-            $total_pagos_historico = 0;
+            // Determinar la fecha final del periodo
+            // Si fecha_hasta >= hoy, incluir hasta hoy
+            $fecha_fin_periodo = $fecha_hasta_saldos;
+            if ($fecha_hasta_saldos >= $fecha_hoy) {
+                $fecha_fin_periodo = $fecha_hoy;
+            }
+            
+            $fecha_fin = new DateTime($fecha_fin_periodo);
+            $fecha_fin->modify('+1 day'); // +1 day para incluir el último día en el DatePeriod
+            $intervalo = new DateInterval('P1D');
+            $periodo = new DatePeriod($fecha_inicio, $intervalo, $fecha_fin);
+            
+            // Obtener pagos SOLO dentro del rango de fechas seleccionado
+            // Esto asegura que los pagos aplicados coincidan con el cálculo del resumen
+            // IMPORTANTE: Incluir pagos de ambos tipos (efectivo y transferencia) igual que en finanzas_admin
+            $todos_pagos = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT fecha, total_a_pagar FROM pagos_mensajeros_gofast 
+                     WHERE mensajero_id = %d AND tipo_pago IN ('efectivo', 'transferencia')
+                     AND fecha >= %s AND fecha <= %s
+                     ORDER BY fecha ASC, fecha_pago ASC",
+                    $mensajero_id_saldo, $fecha_desde_saldos, $fecha_hasta_saldos
+                )
+            );
+            
+            // Sumar todos los pagos dentro del rango
+            $total_pagos_rango = 0;
             foreach ($todos_pagos as $pago) {
-                $total_pagos_historico += (float) $pago->total_a_pagar;
+                $total_pagos_rango += (float) $pago->total_a_pagar;
             }
             
             // Calcular todos los días con sus valores
@@ -1079,27 +1071,19 @@ function gofast_reportes_admin_shortcode() {
                     )
                 ) ?? 0);
                 
-                // Transferencias del día: incluir tipo 'normal' y tipo 'pago' asociadas a pagos (igual que finanzas_admin)
+                // Transferencias del día: solo tipo "normal" (excluir tipo "pago")
+                // Las transferencias tipo "pago" se contabilizan en los pagos del día
+                // IMPORTANTE: Usar fecha_creacion con hora para coincidir con reportes_admin.php
                 $transferencias_dia = (float) ($wpdb->get_var(
                     $wpdb->prepare(
-                        "SELECT COALESCE(SUM(t.valor), 0) 
-                         FROM transferencias_gofast t
-                         WHERE t.mensajero_id = %d 
-                         AND t.estado = 'aprobada' 
-                         AND DATE(t.fecha_creacion) = %s
-                         AND (
-                             (t.tipo = 'normal' OR t.tipo IS NULL)
-                             OR (
-                                 t.tipo = 'pago' 
-                                 AND EXISTS (
-                                     SELECT 1 FROM pagos_mensajeros_gofast p
-                                     WHERE p.mensajero_id = t.mensajero_id
-                                     AND p.total_a_pagar = t.valor
-                                     AND p.tipo_pago IN ('efectivo', 'transferencia')
-                                 )
-                             )
-                         )",
-                        $mensajero_id_saldo, $fecha_dia
+                        "SELECT COALESCE(SUM(valor), 0) 
+                         FROM transferencias_gofast
+                         WHERE mensajero_id = %d 
+                         AND estado = 'aprobada' 
+                         AND fecha_creacion >= %s
+                         AND fecha_creacion <= %s
+                         AND (tipo = 'normal' OR tipo IS NULL)",
+                        $mensajero_id_saldo, $fecha_dia . ' 00:00:00', $fecha_dia . ' 23:59:59'
                     )
                 ) ?? 0);
                 
@@ -1117,87 +1101,404 @@ function gofast_reportes_admin_shortcode() {
                 $a_pagar_dia = $comision_dia - $transferencias_dia - $descuentos_dia;
                 
                 // Solo agregar días con actividad
+                // NOTA: El pendiente puede ser negativo si las transferencias superan la comisión
+                // o si hay excedentes de pago que ajustan días anteriores
                 if ($ingresos_total_dia > 0) {
                     $dias_historico[] = [
                         'fecha' => $fecha_dia,
                         'ingresos' => $ingresos_total_dia,
+                        'ingresos_servicios' => $ingresos_dia,
+                        'ingresos_compras' => $ingresos_compras_dia,
                         'comision' => $comision_dia,
+                        'comision_servicios' => $ingresos_dia * 0.20,
+                        'comision_compras' => $ingresos_compras_dia * 0.20,
                         'transferencias' => $transferencias_dia,
                         'descuentos' => $descuentos_dia,
-                        'a_pagar' => max(0, $a_pagar_dia),
+                        'a_pagar' => $a_pagar_dia, // Permitir valores negativos (sin max(0, ...))
                         'pagado' => 0,
-                        'pendiente' => max(0, $a_pagar_dia)
+                        'pendiente' => $a_pagar_dia // Permitir valores negativos (sin max(0, ...))
                     ];
                 }
             }
             
-            // Distribuir pagos del día más antiguo al más reciente
-            $pagos_restantes = $total_pagos_historico;
-            for ($i = 0; $i < count($dias_historico) && $pagos_restantes > 0; $i++) {
-                if ($dias_historico[$i]['pendiente'] > 0) {
-                    $aplicar = min($pagos_restantes, $dias_historico[$i]['pendiente']);
-                    $dias_historico[$i]['pagado'] += $aplicar;
-                    $dias_historico[$i]['pendiente'] -= $aplicar;
-                    $pagos_restantes -= $aplicar;
+            // Aplicar pagos a cada día según su fecha específica
+            // Si un pago excede el pendiente del día, aplicar el excedente a días anteriores
+            // IMPORTANTE: Si un pago tiene fecha sin actividad, crear un día virtual para ese pago
+            foreach ($todos_pagos as $pago) {
+                $pago_restante = (float) $pago->total_a_pagar;
+                $fecha_pago = $pago->fecha;
+                
+                // Buscar el día correspondiente a la fecha del pago
+                $dia_pago_index = null;
+                foreach ($dias_historico as $index => $dia) {
+                    if ($dia['fecha'] === $fecha_pago) {
+                        $dia_pago_index = $index;
+                        break;
+                    }
+                }
+                
+                // Si NO existe el día del pago (fecha sin actividad), crear un día virtual para aplicar el pago
+                if ($dia_pago_index === null && $fecha_pago >= $fecha_desde_saldos && $fecha_pago <= $fecha_hasta_saldos) {
+                    // Crear un día virtual con valores en 0 excepto el pago
+                    $dias_historico[] = [
+                        'fecha' => $fecha_pago,
+                        'ingresos' => 0,
+                        'ingresos_servicios' => 0,
+                        'ingresos_compras' => 0,
+                        'comision' => 0,
+                        'comision_servicios' => 0,
+                        'comision_compras' => 0,
+                        'transferencias' => 0,
+                        'descuentos' => 0,
+                        'a_pagar' => 0, // No hay nada a pagar (sin actividad)
+                        'pagado' => 0, // Se aplicará el pago a continuación
+                        'pendiente' => 0 // Sin pendiente inicial
+                    ];
+                    // Actualizar el índice
+                    $dia_pago_index = count($dias_historico) - 1;
+                }
+                
+                // Si existe el día del pago (original o virtual), aplicar el pago
+                if ($dia_pago_index !== null && $pago_restante > 0) {
+                    $pendiente_dia_pago = $dias_historico[$dia_pago_index]['pendiente'];
+                    
+                    // Si el pendiente es positivo, aplicar el pago hasta ese monto
+                    // Si el pendiente es negativo o cero, el pago completo puede aplicarse (creará o aumentará el excedente)
+                    if ($pendiente_dia_pago > 0) {
+                        $aplicar_al_dia_pago = min($pago_restante, $pendiente_dia_pago);
+                    } else {
+                        // Si el pendiente ya es negativo o cero, aplicar el pago completo
+                        // Esto aumentará el excedente (pendiente negativo)
+                        $aplicar_al_dia_pago = $pago_restante;
+                    }
+                    
+                    $dias_historico[$dia_pago_index]['pagado'] += $aplicar_al_dia_pago;
+                    $dias_historico[$dia_pago_index]['pendiente'] -= $aplicar_al_dia_pago;
+                    $pago_restante -= $aplicar_al_dia_pago;
+                    
+                    // Si quedó excedente del pago después de aplicar al día correspondiente,
+                    // aplicar a días anteriores (hacia atrás)
+                    if ($pago_restante > 0) {
+                        // Ordenar días por fecha (más antiguo primero) para aplicar excedente hacia atrás
+                        // Solo considerar días con pendiente positivo (que aún deben pagos)
+                        $indices_ordenados = [];
+                        foreach ($dias_historico as $idx => $d) {
+                            if ($d['fecha'] < $fecha_pago && $d['pendiente'] > 0) {
+                                $indices_ordenados[] = $idx;
+                            }
+                        }
+                        // Ordenar índices por fecha descendente (días más cercanos al pago primero)
+                        usort($indices_ordenados, function($a, $b) use ($dias_historico) {
+                            return strcmp($dias_historico[$b]['fecha'], $dias_historico[$a]['fecha']);
+                        });
+                        
+                        // Aplicar excedente a días anteriores
+                        foreach ($indices_ordenados as $idx_anterior) {
+                            if ($pago_restante <= 0) break;
+                            
+                            $pendiente_anterior = $dias_historico[$idx_anterior]['pendiente'];
+                            if ($pendiente_anterior > 0) {
+                                $aplicar_anterior = min($pago_restante, $pendiente_anterior);
+                                
+                                $dias_historico[$idx_anterior]['pagado'] += $aplicar_anterior;
+                                $dias_historico[$idx_anterior]['pendiente'] -= $aplicar_anterior;
+                                $pago_restante -= $aplicar_anterior;
+                            }
+                        }
+                        
+                        // Si aún queda excedente después de aplicar a días anteriores,
+                        // crear un saldo negativo en el día del pago (para ajustar días pasados)
+                        if ($pago_restante > 0) {
+                            $dias_historico[$dia_pago_index]['pagado'] += $pago_restante;
+                            $dias_historico[$dia_pago_index]['pendiente'] -= $pago_restante;
+                            // Permitir pendiente negativo (saldo a favor) para ajustar días anteriores
+                        }
+                    }
                 }
             }
             
-            // Agregar días con saldo pendiente solo de la quincena actual
+            // Agregar días dentro del rango fecha_desde a fecha_hasta
+            // Solo mostrar días con pendiente != 0 (excluir días completamente pagados)
+            // Incluye días con pendiente > 0 y pendiente < 0
             foreach ($dias_historico as $dia) {
-                if ($dia['pendiente'] > 0 && $dia['fecha'] >= $fecha_desde_saldos && $dia['fecha'] <= $fecha_hasta_saldos) {
-                    $desglose_dias[] = (object) $dia;
+                // Solo mostrar días dentro del rango seleccionado
+                if ($dia['fecha'] >= $fecha_desde_saldos && $dia['fecha'] <= $fecha_hasta_saldos) {
+                    // Calcular pendiente del día
+                    $pendiente_dia = isset($dia['pendiente']) ? $dia['pendiente'] : ($dia['a_pagar'] - (isset($dia['pagado']) ? $dia['pagado'] : 0));
+                    
+                    // Mostrar días con actividad (ingresos > 0) O con pagos aplicados, pero solo si pendiente != 0
+                    // Excluir días con pendiente = 0 (completamente pagados)
+                    if (($dia['ingresos'] > 0 || (isset($dia['pagado']) && $dia['pagado'] > 0)) && abs($pendiente_dia) > 0.01) {
+                        $desglose_dias[] = (object) $dia;
+                    }
                 }
+            }
+            
+            // Asegurar que el día de hoy esté en el desglose si está dentro del rango y tiene actividad
+            // Solo si fecha_hasta >= hoy Y fecha_desde <= hoy (hoy está dentro del rango)
+            if ($fecha_hoy >= $fecha_desde_saldos && $fecha_hoy <= $fecha_hasta_saldos) {
+                // Verificar si hoy ya está en el desglose
+                $hoy_en_desglose = false;
+                foreach ($desglose_dias as $dia) {
+                    if ($dia->fecha === $fecha_hoy) {
+                        $hoy_en_desglose = true;
+                        break;
+                    }
+                }
+                
+                // Si hoy no está en el desglose pero tiene actividad, calcularlo y agregarlo
+                if (!$hoy_en_desglose) {
+                    $ingresos_hoy = (float) ($wpdb->get_var(
+                        $wpdb->prepare(
+                            "SELECT COALESCE(SUM(total), 0) FROM servicios_gofast 
+                             WHERE mensajero_id = %d AND tracking_estado != 'cancelado' AND DATE(fecha) = %s",
+                            $mensajero_id_saldo, $fecha_hoy
+                        )
+                    ) ?? 0);
+                    
+                    $ingresos_compras_hoy = (float) ($wpdb->get_var(
+                        $wpdb->prepare(
+                            "SELECT COALESCE(SUM(valor), 0) FROM compras_gofast 
+                             WHERE mensajero_id = %d AND estado != 'cancelada' AND DATE(fecha_creacion) = %s",
+                            $mensajero_id_saldo, $fecha_hoy
+                        )
+                    ) ?? 0);
+                    
+                    if ($ingresos_hoy > 0 || $ingresos_compras_hoy > 0) {
+                        $ingresos_total_hoy = $ingresos_hoy + $ingresos_compras_hoy;
+                        $comision_hoy = $ingresos_total_hoy * 0.20;
+                        
+                        $transferencias_hoy = (float) ($wpdb->get_var(
+                            $wpdb->prepare(
+                                "SELECT COALESCE(SUM(valor), 0) 
+                                 FROM transferencias_gofast
+                                 WHERE mensajero_id = %d 
+                                 AND estado = 'aprobada' 
+                                 AND fecha_creacion >= %s
+                                 AND fecha_creacion <= %s
+                                 AND (tipo = 'normal' OR tipo IS NULL)",
+                                $mensajero_id_saldo, $fecha_hoy . ' 00:00:00', $fecha_hoy . ' 23:59:59'
+                            )
+                        ) ?? 0);
+                        
+                        $descuentos_hoy = (float) ($wpdb->get_var(
+                            $wpdb->prepare(
+                                "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast 
+                                 WHERE mensajero_id = %d AND fecha = %s",
+                                $mensajero_id_saldo, $fecha_hoy
+                            )
+                        ) ?? 0);
+                        
+                        $a_pagar_hoy = $comision_hoy - $transferencias_hoy - $descuentos_hoy;
+                        $pendiente_hoy = $a_pagar_hoy; // Permitir valores negativos (sin max(0, ...))
+                        
+                        // Aplicar pagos del día de hoy si existen (solo dentro del rango)
+                        $pagos_hoy = 0;
+                        foreach ($todos_pagos as $pago) {
+                            if ($pago->fecha === $fecha_hoy) {
+                                // Permitir aplicar pagos incluso si el pendiente es negativo
+                                // El pendiente puede volverse más negativo si hay excedentes
+                                $aplicar_hoy = (float) $pago->total_a_pagar;
+                                $pagos_hoy += $aplicar_hoy;
+                                $pendiente_hoy -= $aplicar_hoy;
+                                // No forzar a 0, permitir valores negativos
+                            }
+                        }
+                        
+                        // Agregar hoy al desglose si tiene actividad
+                        if ($ingresos_total_hoy > 0) {
+                            $desglose_dias[] = (object) [
+                                'fecha' => $fecha_hoy,
+                                'ingresos' => $ingresos_total_hoy,
+                                'ingresos_servicios' => $ingresos_hoy,
+                                'ingresos_compras' => $ingresos_compras_hoy,
+                                'comision' => $comision_hoy,
+                                'comision_servicios' => $ingresos_hoy * 0.20,
+                                'comision_compras' => $ingresos_compras_hoy * 0.20,
+                                'transferencias' => $transferencias_hoy,
+                                'descuentos' => $descuentos_hoy,
+                                'a_pagar' => $a_pagar_hoy, // Permitir valores negativos (sin max(0, ...))
+                                'pagado' => $pagos_hoy,
+                                'pendiente' => $pendiente_hoy // Permitir valores negativos (sin max(0, ...))
+                            ];
+                        }
+                    }
+                }
+            }
+            
+            // Ordenar desglose_dias por fecha (más antiguo primero)
+            usort($desglose_dias, function($a, $b) {
+                return strcmp($a->fecha, $b->fecha);
+            });
+        }
+
+        // Calcular total pendiente desde el desglose por días (suma de pendientes de días mostrados)
+        // Esto se usa para verificar que coincida con el cálculo del rango
+        // IMPORTANTE: Recalcular el pendiente correctamente para cada día: Total a Pagar - Pagado
+        $total_pendiente_desglose = 0;
+        if (!empty($desglose_dias)) {
+            foreach ($desglose_dias as $dia_obj) {
+                // Recalcular pendiente correctamente: Comisión - Transferencias - Descuentos - Pagado
+                $total_a_pagar_dia_recalc = $dia_obj->comision - $dia_obj->transferencias - $dia_obj->descuentos;
+                $pendiente_recalc = $total_a_pagar_dia_recalc - (isset($dia_obj->pagado) ? $dia_obj->pagado : 0);
+                
+                // Actualizar el pendiente en el objeto para que coincida con el cálculo correcto
+                $dia_obj->pendiente = $pendiente_recalc;
+                
+                // Sumar al total
+                $total_pendiente_desglose += $pendiente_recalc;
             }
         }
         
-        // Solo agregar mensajeros con saldo pendiente
-        if ($total_a_pagar_saldo > 0 || !empty($desglose_dias)) {
+        // Solo agregar mensajeros con saldo pendiente o con días en el desglose
+        // Usar el total del desglose si hay días, de lo contrario usar el cálculo directo
+        $total_final_a_pagar = !empty($desglose_dias) ? $total_pendiente_desglose : $total_a_pagar_saldo;
+        
+        if ($total_final_a_pagar != 0 || !empty($desglose_dias)) {
             $saldos_mensajeros[] = (object) [
                 'mensajero_id' => $mensajero_id_saldo,
                 'mensajero_nombre' => $mensajero->nombre,
                 'mensajero_telefono' => $mensajero->telefono,
-                'total_a_pagar' => $total_a_pagar_saldo,
+                'total_a_pagar' => $total_final_a_pagar,
                 'desglose_dias' => $desglose_dias
             ];
-            
-            // NO sumar aquí, el total ya se calcula globalmente arriba igual que finanzas_admin
         }
     }
     
     // Para admin: calcular desglose diario agregado de todos los mensajeros (o del seleccionado)
+    // IMPORTANTE: Solo incluir días dentro de la quincena activa
     $desglose_dias_admin = [];
+    $total_pendiente_desglose_admin = 0;
+    
     if ($es_admin && !empty($saldos_mensajeros)) {
-        // Agrupar todos los días de todos los mensajeros
+        // Agrupar todos los días de todos los mensajeros SOLO dentro de la quincena activa
         $dias_agrupados = [];
         
         foreach ($saldos_mensajeros as $saldo) {
             foreach ($saldo->desglose_dias as $dia) {
-                $fecha = $dia->fecha;
-                
-                if (!isset($dias_agrupados[$fecha])) {
-                    $dias_agrupados[$fecha] = [
-                        'fecha' => $fecha,
-                        'comision' => 0,
-                        'transferencias' => 0,
-                        'descuentos' => 0,
-                        'pendiente' => 0
-                    ];
+                // Solo incluir días dentro de la quincena activa
+                if ($dia->fecha >= $fecha_desde_saldos && $dia->fecha <= $fecha_hasta_saldos) {
+                    $fecha = $dia->fecha;
+                    
+                    if (!isset($dias_agrupados[$fecha])) {
+                        $dias_agrupados[$fecha] = [
+                            'fecha' => $fecha,
+                            'comision' => 0,
+                            'transferencias' => 0,
+                            'descuentos' => 0,
+                            'pagado' => 0,
+                            'pendiente' => 0
+                        ];
+                    }
+                    
+                    $dias_agrupados[$fecha]['comision'] += $dia->comision;
+                    $dias_agrupados[$fecha]['transferencias'] += $dia->transferencias;
+                    $dias_agrupados[$fecha]['descuentos'] += $dia->descuentos;
+                    $dias_agrupados[$fecha]['pagado'] += (isset($dia->pagado) ? $dia->pagado : 0);
                 }
+            }
+        }
+        
+        // IMPORTANTE: Actualizar descuentos de todos los días usando los totales reales de la BD por fecha
+        // Esto asegura que todos los descuentos de la quincena se incluyan correctamente
+        // Obtener todos los descuentos de la quincena agrupados por fecha
+        $descuentos_totales_por_fecha = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT fecha, COALESCE(SUM(valor), 0) as total_descuentos 
+                 FROM descuentos_mensajeros_gofast 
+                 WHERE fecha >= %s AND fecha <= %s
+                 GROUP BY fecha",
+                $fecha_desde_saldos, $fecha_hasta_saldos
+            )
+        );
+        
+        // Crear un array con los descuentos totales por fecha desde BD
+        $descuentos_bd_por_fecha = [];
+        foreach ($descuentos_totales_por_fecha as $row) {
+            $descuentos_bd_por_fecha[$row->fecha] = (float) $row->total_descuentos;
+        }
+        
+        // Actualizar descuentos de días existentes con los totales reales de la BD para cada fecha
+        // Esto asegura que se incluyan todos los descuentos de todos los mensajeros para esa fecha
+        foreach ($dias_agrupados as $fecha_dia => &$dia) {
+            if (isset($descuentos_bd_por_fecha[$fecha_dia])) {
+                // Actualizar descuentos con el total real de la BD para esa fecha
+                $dia['descuentos'] = $descuentos_bd_por_fecha[$fecha_dia];
+            }
+        }
+        unset($dia); // Liberar referencia
+        
+        // Agregar días con descuentos pero sin ingresos (que no aparecen en el desglose individual)
+        foreach ($descuentos_bd_por_fecha as $fecha_descuento => $total_descuentos_fecha) {
+            if (!isset($dias_agrupados[$fecha_descuento]) && abs($total_descuentos_fecha) > 0.01) {
+                // Crear un día solo con descuentos (sin ingresos)
+                $dias_agrupados[$fecha_descuento] = [
+                    'fecha' => $fecha_descuento,
+                    'comision' => 0,
+                    'transferencias' => 0,
+                    'descuentos' => $total_descuentos_fecha,
+                    'pagado' => 0,
+                    'pendiente' => 0
+                ];
+            }
+        }
+        
+        // Recalcular pendientes correctamente para cada día agrupado
+        foreach ($dias_agrupados as &$dia) {
+            // Recalcular pendiente correctamente: Comisión - Transferencias - Descuentos - Pagado
+            $total_a_pagar_dia_recalc = $dia['comision'] - $dia['transferencias'] - $dia['descuentos'];
+            $pendiente_recalc = $total_a_pagar_dia_recalc - $dia['pagado'];
+            $dia['pendiente'] = $pendiente_recalc;
+        }
+        unset($dia); // Liberar referencia
+        
+        // Filtrar días: mostrar días con actividad (comisión > 0) O con descuentos != 0 O con pagado > 0
+        // Pero solo si pendiente != 0 (excluir días completamente pagados)
+        foreach ($dias_agrupados as $fecha_dia => $dia) {
+            // Solo mostrar días dentro de la quincena activa
+            if ($dia['fecha'] >= $fecha_desde_saldos && $dia['fecha'] <= $fecha_hasta_saldos) {
+                // Calcular pendiente del día
+                $pendiente_dia = isset($dia['pendiente']) ? $dia['pendiente'] : ($dia['comision'] - $dia['transferencias'] - $dia['descuentos'] - $dia['pagado']);
                 
-                $dias_agrupados[$fecha]['comision'] += $dia->comision;
-                $dias_agrupados[$fecha]['transferencias'] += $dia->transferencias;
-                $dias_agrupados[$fecha]['descuentos'] += $dia->descuentos;
-                $dias_agrupados[$fecha]['pendiente'] += $dia->pendiente;
+                // Mostrar días con actividad (comisión > 0) O con descuentos != 0 O con pagos aplicados, pero solo si pendiente != 0
+                // Excluir días con pendiente = 0 (completamente pagados)
+                if (($dia['comision'] > 0 || abs($dia['descuentos']) > 0.01 || $dia['pagado'] > 0) && abs($pendiente_dia) > 0.01) {
+                    $desglose_dias_admin[] = (object) $dia;
+                }
             }
         }
         
         // Ordenar por fecha (más antiguo primero)
-        ksort($dias_agrupados);
-        
-        // Convertir a array de objetos
-        foreach ($dias_agrupados as $dia) {
-            $desglose_dias_admin[] = (object) $dia;
-        }
+        usort($desglose_dias_admin, function($a, $b) {
+            return strcmp($a->fecha, $b->fecha);
+        });
+    }
+    
+    // Calcular el total de saldos pendientes acumulado
+    // IMPORTANTE: Usar la misma fórmula que finanzas_admin
+    // Fórmula: Comisión - Transferencias Ingresos - Descuentos - Pagos en Efectivo (solo efectivo, no transferencias)
+    // Esto representa lo que se debe a los mensajeros (solo considerando pagos en efectivo, no transferencias)
+    // IMPORTANTE: Usar SIEMPRE el rango de fechas (fecha_desde_saldos y fecha_hasta_saldos), no acumulados históricos
+    
+    // Total de pagos realizados a mensajeros SOLO EN EFECTIVO en el rango de fechas
+    // NOTA: Los pagos por transferencia NO se restan aquí porque ya están contabilizados en las transferencias salidas
+    $total_pagos_mensajeros_efectivo_final = (float) ($wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
+             WHERE tipo_pago = 'efectivo'
+             AND fecha >= %s AND fecha <= %s",
+            $fecha_desde_saldos, $fecha_hasta_saldos
+        )
+    ) ?? 0);
+    
+    // Saldos Pendientes = Comisión - Transferencias Ingresos - Descuentos - Pagos en Efectivo (en rango de fecha)
+    // NOTA: Se permiten saldos negativos y saldos 0 para permitir bonificaciones mediante descuentos negativos
+    // NOTA: Los pagos por transferencia NO se restan aquí porque ya están contabilizados como transferencias salidas
+    $total_saldos_pendientes_acumulado = $total_comisiones_saldos - $total_transferencias_ingresos_saldos - $total_descuentos_saldos - $total_pagos_mensajeros_efectivo_final;
+    
+    // No forzar a 0 si es negativo, pero sí asegurar que no sea menor que 0 para mostrar
+    if ($total_saldos_pendientes_acumulado < 0) {
+        $total_saldos_pendientes_acumulado = 0;
     }
 
     /* ==========================================================
@@ -1459,27 +1760,72 @@ function gofast_reportes_admin_shortcode() {
                                         <th>Pendiente</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <?php foreach ($desglose_dias_admin as $dia): ?>
+                                    <tbody>
+                                        <?php foreach ($desglose_dias_admin as $dia): ?>
+                                        <?php 
+                                        // Calcular total a pagar del día (antes de pagos): Comisión - Transferencias - Descuentos
+                                        $total_a_pagar_dia = $dia->comision - $dia->transferencias - $dia->descuentos;
+                                        
+                                        // Calcular pendiente correctamente: Total a Pagar - Pagado
+                                        // El pendiente del objeto ya debería estar calculado correctamente, pero lo verificamos
+                                        $pendiente_calculado = $total_a_pagar_dia - (isset($dia->pagado) ? $dia->pagado : 0);
+                                        
+                                        // Usar el pendiente calculado si el del objeto está en 0 pero debería ser negativo
+                                        // (para corregir casos donde se haya forzado a 0 incorrectamente)
+                                        $pendiente_mostrar = ($dia->pendiente == 0 && $pendiente_calculado < 0) ? $pendiente_calculado : $dia->pendiente;
+                                        ?>
                                         <tr>
                                             <td><?= esc_html(gofast_date_format($dia->fecha, 'd/m/Y')); ?></td>
                                             <td>$<?= number_format($dia->comision, 0, ',', '.'); ?></td>
                                             <td>$<?= number_format($dia->transferencias, 0, ',', '.'); ?></td>
-                                            <td>$<?= number_format($dia->descuentos, 0, ',', '.'); ?></td>
-                                            <td style="font-weight:600;color:#f44336;">
-                                                $<?= number_format($dia->pendiente, 0, ',', '.'); ?>
+                                            <td style="color:<?= $dia->descuentos < 0 ? '#4CAF50' : ($dia->descuentos > 0 ? '#ff9800' : '#666'); ?>;">
+                                                <?php if ($dia->descuentos != 0): ?>
+                                                    <?= $dia->descuentos < 0 ? '+' : '-' ?>$<?= number_format(abs($dia->descuentos), 0, ',', '.'); ?>
+                                                <?php else: ?>
+                                                    $<?= number_format(0, 0, ',', '.'); ?>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td style="font-weight:600;color:<?= $pendiente_mostrar < 0 ? '#4CAF50' : ($pendiente_mostrar > 0 ? '#f44336' : '#666'); ?>;">
+                                                <?php if ($pendiente_mostrar < 0): ?>
+                                                    -$<?= number_format(abs($pendiente_mostrar), 0, ',', '.'); ?>
+                                                <?php else: ?>
+                                                    $<?= number_format($pendiente_mostrar, 0, ',', '.'); ?>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
+                                        <?php endforeach; ?>
+                                    </tbody>
                                 <tfoot>
+                                    <?php 
+                                    // Calcular totales desde el desglose mostrado para comisión y transferencias
+                                    $total_comision_desglose = !empty($desglose_dias_admin) ? array_sum(array_map(function($d) { return $d->comision; }, $desglose_dias_admin)) : 0;
+                                    $total_transferencias_desglose = !empty($desglose_dias_admin) ? array_sum(array_map(function($d) { return $d->transferencias; }, $desglose_dias_admin)) : 0;
+                                    
+                                    // IMPORTANTE: Usar el total global de descuentos (de la quincena) para que coincida con finanzas_admin
+                                    // No solo la suma del desglose, porque puede haber descuentos en días sin ingresos
+                                    $total_descuentos_desglose = $total_descuentos_saldos;
+                                    
+                                    // IMPORTANTE: Usar el mismo total calculado que el título para que coincidan
+                                    // No usar la suma del desglose porque puede faltar días sin actividad pero con descuentos
+                                    $total_pendiente_desglose_tfoot = $total_saldos_pendientes_acumulado;
+                                    ?>
                                     <tr style="background:#f5f5f5;font-weight:700;">
                                         <td>Total</td>
-                                        <td>$<?= number_format(array_sum(array_map(function($d) { return $d->comision; }, $desglose_dias_admin)), 0, ',', '.'); ?></td>
-                                        <td>$<?= number_format(array_sum(array_map(function($d) { return $d->transferencias; }, $desglose_dias_admin)), 0, ',', '.'); ?></td>
-                                        <td>$<?= number_format(array_sum(array_map(function($d) { return $d->descuentos; }, $desglose_dias_admin)), 0, ',', '.'); ?></td>
-                                        <td style="color:#f44336;">
-                                            $<?= number_format($total_saldos_pendientes_acumulado, 0, ',', '.'); ?>
+                                        <td>$<?= number_format($total_comision_desglose, 0, ',', '.'); ?></td>
+                                        <td>$<?= number_format($total_transferencias_desglose, 0, ',', '.'); ?></td>
+                                        <td style="color:<?= $total_descuentos_desglose < 0 ? '#4CAF50' : ($total_descuentos_desglose > 0 ? '#ff9800' : '#666'); ?>;">
+                                            <?php if (abs($total_descuentos_desglose) > 0.01): ?>
+                                                <?= $total_descuentos_desglose < 0 ? '+' : '-' ?>$<?= number_format(abs($total_descuentos_desglose), 0, ',', '.'); ?>
+                                            <?php else: ?>
+                                                $<?= number_format(0, 0, ',', '.'); ?>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td style="color:<?= $total_pendiente_desglose_tfoot < 0 ? '#4CAF50' : ($total_pendiente_desglose_tfoot > 0 ? '#f44336' : '#666'); ?>;">
+                                            <?php if ($total_pendiente_desglose_tfoot < 0): ?>
+                                                -$<?= number_format(abs($total_pendiente_desglose_tfoot), 0, ',', '.'); ?>
+                                            <?php else: ?>
+                                                $<?= number_format($total_pendiente_desglose_tfoot, 0, ',', '.'); ?>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -1535,13 +1881,35 @@ function gofast_reportes_admin_shortcode() {
                                     </thead>
                                     <tbody>
                                         <?php foreach ($saldo->desglose_dias as $dia): ?>
+                                        <?php 
+                                        // Calcular total a pagar del día (antes de pagos): Comisión - Transferencias - Descuentos
+                                        $total_a_pagar_dia = $dia->comision - $dia->transferencias - $dia->descuentos;
+                                        
+                                        // Calcular pendiente correctamente: Total a Pagar - Pagado
+                                        // El pendiente del objeto ya debería estar calculado correctamente, pero lo verificamos
+                                        $pendiente_calculado = $total_a_pagar_dia - (isset($dia->pagado) ? $dia->pagado : 0);
+                                        
+                                        // Usar el pendiente calculado si el del objeto está en 0 pero debería ser negativo
+                                        // (para corregir casos donde se haya forzado a 0 incorrectamente)
+                                        $pendiente_mostrar = ($dia->pendiente == 0 && $pendiente_calculado < 0) ? $pendiente_calculado : $dia->pendiente;
+                                        ?>
                                             <tr>
                                                 <td><?= esc_html(gofast_date_format($dia->fecha, 'd/m/Y')); ?></td>
                                                 <td>$<?= number_format($dia->comision, 0, ',', '.'); ?></td>
                                                 <td>$<?= number_format($dia->transferencias, 0, ',', '.'); ?></td>
-                                                <td>$<?= number_format($dia->descuentos, 0, ',', '.'); ?></td>
-                                                <td style="font-weight:600;color:#f44336;">
-                                                    $<?= number_format($dia->pendiente, 0, ',', '.'); ?>
+                                                <td style="color:<?= $dia->descuentos < 0 ? '#4CAF50' : ($dia->descuentos > 0 ? '#ff9800' : '#666'); ?>;">
+                                                    <?php if ($dia->descuentos != 0): ?>
+                                                        <?= $dia->descuentos < 0 ? '+' : '-' ?>$<?= number_format(abs($dia->descuentos), 0, ',', '.'); ?>
+                                                    <?php else: ?>
+                                                        $<?= number_format(0, 0, ',', '.'); ?>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td style="font-weight:600;color:<?= $pendiente_mostrar < 0 ? '#4CAF50' : ($pendiente_mostrar > 0 ? '#f44336' : '#666'); ?>;">
+                                                    <?php if ($pendiente_mostrar < 0): ?>
+                                                        -$<?= number_format(abs($pendiente_mostrar), 0, ',', '.'); ?>
+                                                    <?php else: ?>
+                                                        $<?= number_format($pendiente_mostrar, 0, ',', '.'); ?>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
