@@ -634,153 +634,140 @@ function gofast_reportes_admin_shortcode() {
         );
     }
 
-    // Pedidos por día (últimos 30 días) - respeta filtros aplicados (zona horaria Colombia)
+    // Pedidos por día (últimos 30 días) - NO se afecta por filtros, siempre últimos 30 días (zona horaria Colombia)
     $timezone = new DateTimeZone('America/Bogota');
-    $datetime = new DateTime('now', $timezone);
-    $datetime->modify('-30 days');
-    $fecha_desde_30dias = $datetime->format('Y-m-d');
     $fecha_hasta_hoy = gofast_current_time('Y-m-d');
+    $datetime = new DateTime($fecha_hasta_hoy, $timezone);
+    $datetime->modify('-29 days'); // -29 días para tener exactamente 30 días (incluyendo hoy)
+    $fecha_desde_30dias = $datetime->format('Y-m-d');
     
-    // Construir WHERE para pedidos por día respetando filtros
+    // Construir WHERE para pedidos por día - SOLO filtro de mensajero si es mensajero (NO admin)
+    // NO aplicar filtros de fecha, negocio, estado, etc. - siempre últimos 30 días
     $where_pedidos_dia = "1=1";
     $params_pedidos_dia = [];
     
+    // Solo filtrar por mensajero si es mensajero (no admin)
     if (!$es_admin) {
         $where_pedidos_dia .= " AND mensajero_id = %d";
         $params_pedidos_dia[] = $usuario->id;
-    } elseif ($mensajero_id > 0) {
-        $where_pedidos_dia .= " AND mensajero_id = %d";
-        $params_pedidos_dia[] = $mensajero_id;
     }
-    
-    // Aplicar filtro de negocio si existe
-    if ($es_admin && $negocio_id > 0) {
-        $where_pedidos_dia .= " AND JSON_EXTRACT(destinos, '$.origen.negocio_id') = %d";
-        $params_pedidos_dia[] = $negocio_id;
-    }
+    // NO aplicar filtro de mensajero si es admin (mostrar todos)
+    // NO aplicar filtro de negocio
+    // NO aplicar filtros de fecha (usar siempre últimos 30 días)
     
     $where_pedidos_dia .= " AND fecha >= %s AND fecha <= %s";
     $params_pedidos_dia[] = $fecha_desde_30dias . ' 00:00:00';
     $params_pedidos_dia[] = $fecha_hasta_hoy . ' 23:59:59';
     
-    // Construir WHERE para compras por día (solo si NO se filtra por negocio)
+    // Construir WHERE para compras por día - SOLO filtro de mensajero si es mensajero
     $where_compras_dia = "1=1";
     $params_compras_dia = [];
     
-    if (!($es_admin && $negocio_id > 0)) {
-        if (!$es_admin) {
-            $where_compras_dia .= " AND mensajero_id = %d";
-            $params_compras_dia[] = $usuario->id;
-        } elseif ($mensajero_id > 0) {
-            $where_compras_dia .= " AND mensajero_id = %d";
-            $params_compras_dia[] = $mensajero_id;
-        }
-        
-        $where_compras_dia .= " AND fecha_creacion >= %s AND fecha_creacion <= %s AND estado != 'cancelada'";
-        $params_compras_dia[] = $fecha_desde_30dias . ' 00:00:00';
-        $params_compras_dia[] = $fecha_hasta_hoy . ' 23:59:59';
+    // Solo filtrar por mensajero si es mensajero (no admin)
+    if (!$es_admin) {
+        $where_compras_dia .= " AND mensajero_id = %d";
+        $params_compras_dia[] = $usuario->id;
     }
+    // NO aplicar filtro de mensajero si es admin (mostrar todos)
+    // NO aplicar filtro de negocio
     
-    // Contar total de días únicos para paginación
-    if (!empty($params_pedidos_dia)) {
-        $sql_count_dias = $wpdb->prepare(
-            "SELECT COUNT(DISTINCT DATE(fecha))
+    $where_compras_dia .= " AND fecha_creacion >= %s AND fecha_creacion <= %s AND estado != 'cancelada'";
+    $params_compras_dia[] = $fecha_desde_30dias . ' 00:00:00';
+    $params_compras_dia[] = $fecha_hasta_hoy . ' 23:59:59';
+    
+    // Consulta de servicios con destinos y ingresos - SIN paginación, siempre últimos 30 días
+    $pedidos_por_dia = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT 
+                DATE(fecha) as dia,
+                SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))) as cantidad_destinos,
+                SUM(CASE WHEN tracking_estado != 'cancelado' THEN total ELSE 0 END) as ingresos
              FROM $tabla
-             WHERE $where_pedidos_dia AND tracking_estado != 'cancelado'",
+             WHERE $where_pedidos_dia AND tracking_estado != 'cancelado'
+             GROUP BY DATE(fecha)
+             ORDER BY dia DESC",
             $params_pedidos_dia
-        );
-    } else {
-        $sql_count_dias = "SELECT COUNT(DISTINCT DATE(fecha))
-             FROM $tabla
-             WHERE $where_pedidos_dia AND tracking_estado != 'cancelado'";
-    }
-    $total_dias = (int) ($wpdb->get_var($sql_count_dias) ?? 0);
-    $total_paginas_dias = max(1, (int) ceil($total_dias / $por_pagina));
-    $offset_dias = ($pg_dias - 1) * $por_pagina;
+        )
+    );
     
-    if (!empty($params_pedidos_dia)) {
-        // Consulta de servicios con destinos y ingresos (con paginación)
-        $params_pedidos_dia_limit = $params_pedidos_dia;
-        $params_pedidos_dia_limit[] = $por_pagina;
-        $params_pedidos_dia_limit[] = $offset_dias;
-        
-        $pedidos_por_dia = $wpdb->get_results(
+    // Consulta de compras por día (cantidad e ingresos) - SIN paginación, siempre últimos 30 días
+    // Solo mostrar compras si NO es admin filtrando por negocio (los negocios no tienen compras)
+    $compras_por_dia = [];
+    if (!($es_admin && $negocio_id > 0)) {
+        // Si es mensajero, solo sus compras; si es admin, todas las compras
+        $compras_por_dia = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT 
-                    DATE(fecha) as dia,
-                    SUM(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos'))) as cantidad_destinos,
-                    SUM(CASE WHEN tracking_estado != 'cancelado' THEN total ELSE 0 END) as ingresos
-                 FROM $tabla
-                 WHERE $where_pedidos_dia AND tracking_estado != 'cancelado'
-                 GROUP BY DATE(fecha)
-                 ORDER BY dia DESC
-                 LIMIT %d OFFSET %d",
-                $params_pedidos_dia_limit
+                    DATE(fecha_creacion) as dia,
+                    COUNT(*) as cantidad_compras,
+                    SUM(valor) as ingresos_compras
+                 FROM $tabla_compras
+                 WHERE $where_compras_dia
+                 GROUP BY DATE(fecha_creacion)
+                 ORDER BY dia DESC",
+                $params_compras_dia
             )
         );
-        
-        // Consulta de compras por día (cantidad e ingresos) - solo si NO se filtra por negocio
-        $compras_por_dia = [];
-        if (!($es_admin && $negocio_id > 0) && !empty($params_compras_dia)) {
-            $compras_por_dia = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT 
-                        DATE(fecha_creacion) as dia,
-                        COUNT(*) as cantidad_compras,
-                        SUM(valor) as ingresos_compras
-                     FROM $tabla_compras
-                     WHERE $where_compras_dia
-                     GROUP BY DATE(fecha_creacion)
-                     ORDER BY dia DESC
-                     LIMIT 30",
-                    $params_compras_dia
-                )
-            );
+    }
+    
+    // Generar array completo de los últimos 30 días (incluso días sin actividad)
+    $pedidos_por_dia_completo = [];
+    
+    // Crear array con todos los días del rango (exactamente 30 días: desde fecha_desde_30dias hasta fecha_hasta_hoy inclusive)
+    $fecha_inicio = new DateTime($fecha_desde_30dias);
+    $fecha_fin = new DateTime($fecha_hasta_hoy);
+    $fecha_fin->modify('+1 day'); // +1 para incluir el último día en DatePeriod
+    $intervalo = new DateInterval('P1D');
+    $periodo = new DatePeriod($fecha_inicio, $intervalo, $fecha_fin);
+    
+    foreach ($periodo as $dia) {
+        $dia_key = $dia->format('Y-m-d');
+        $pedidos_por_dia_completo[$dia_key] = [
+            'dia' => $dia_key,
+            'cantidad_destinos' => 0,
+            'cantidad_compras' => 0,
+            'ingresos' => 0,
+            'comision' => 0
+        ];
+    }
+    
+    // Agregar datos de servicios
+    foreach ($pedidos_por_dia as $servicio) {
+        $dia_key = $servicio->dia;
+        if (isset($pedidos_por_dia_completo[$dia_key])) {
+            $pedidos_por_dia_completo[$dia_key]['cantidad_destinos'] = (int) ($servicio->cantidad_destinos ?? 0);
+            $pedidos_por_dia_completo[$dia_key]['ingresos'] = (float) ($servicio->ingresos ?? 0);
         }
-        
-        // Combinar datos de servicios y compras por día
-        $pedidos_por_dia_completo = [];
-        
-        // Agregar servicios
-        foreach ($pedidos_por_dia as $servicio) {
-            $dia_key = $servicio->dia;
-            $pedidos_por_dia_completo[$dia_key] = [
-                'dia' => $dia_key,
-                'cantidad_destinos' => (int) ($servicio->cantidad_destinos ?? 0),
-                'cantidad_compras' => 0,
-                'ingresos' => (float) ($servicio->ingresos ?? 0),
-                'comision' => 0
-            ];
-        }
-        
-        // Agregar compras y sumar ingresos
-        foreach ($compras_por_dia as $compra) {
-            $dia_key = $compra->dia;
-            if (!isset($pedidos_por_dia_completo[$dia_key])) {
-                $pedidos_por_dia_completo[$dia_key] = [
-                    'dia' => $dia_key,
-                    'cantidad_destinos' => 0,
-                    'cantidad_compras' => 0,
-                    'ingresos' => 0,
-                    'comision' => 0
-                ];
-            }
-            $pedidos_por_dia_completo[$dia_key]['cantidad_compras'] = (int) $compra->cantidad_compras;
+    }
+    
+    // Agregar compras y sumar ingresos
+    foreach ($compras_por_dia as $compra) {
+        $dia_key = $compra->dia;
+        if (isset($pedidos_por_dia_completo[$dia_key])) {
+            $pedidos_por_dia_completo[$dia_key]['cantidad_compras'] = (int) ($compra->cantidad_compras ?? 0);
             $pedidos_por_dia_completo[$dia_key]['ingresos'] += (float) ($compra->ingresos_compras ?? 0);
         }
-        
-        // Calcular comisión (20% de ingresos totales)
-        foreach ($pedidos_por_dia_completo as $key => $dia_data) {
-            $pedidos_por_dia_completo[$key]['comision'] = $dia_data['ingresos'] * 0.20;
-        }
-        
-        // Convertir a array indexado y ordenar
-        $pedidos_por_dia = array_values($pedidos_por_dia_completo);
-    } else {
-        $pedidos_por_dia = [];
-        $total_dias = 0;
-        $total_paginas_dias = 0;
     }
+    
+    // Calcular comisión (20% de ingresos totales)
+    foreach ($pedidos_por_dia_completo as $key => $dia_data) {
+        $pedidos_por_dia_completo[$key]['comision'] = $dia_data['ingresos'] * 0.20;
+    }
+    
+    // Convertir a array indexado y ordenar por fecha descendente (más reciente primero)
+    $pedidos_por_dia_todos = array_values($pedidos_por_dia_completo);
+    usort($pedidos_por_dia_todos, function($a, $b) {
+        return strcmp($b['dia'], $a['dia']); // Orden descendente (más reciente primero)
+    });
+    
+    // Aplicar paginación: 15 días por página
+    $por_pagina_dias = 15;
+    $total_dias = count($pedidos_por_dia_todos);
+    $total_paginas_dias = max(1, (int) ceil($total_dias / $por_pagina_dias));
+    $offset_dias = ($pg_dias - 1) * $por_pagina_dias;
+    
+    // Obtener solo los días de la página actual
+    $pedidos_por_dia = array_slice($pedidos_por_dia_todos, $offset_dias, $por_pagina_dias);
 
     /* ==========================================================
        3. Lista de mensajeros y negocios para filtro (solo admin)

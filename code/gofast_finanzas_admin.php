@@ -101,11 +101,22 @@ function gofast_finanzas_admin_shortcode() {
                 }
                 
                 // Redirigir para mostrar mensaje de éxito
-                $current_url = remove_query_arg('mensaje', $_SERVER['REQUEST_URI']);
-                $redirect_url = add_query_arg([
-                    'mensaje' => 'pago_registrado',
-                    'tab' => 'registrar_pago'
-                ], $current_url);
+                // Preservar todos los parámetros GET existentes (como en la paginación)
+                $url_base_params = [];
+                foreach ($_GET as $key => $value) {
+                    if ($key !== 'mensaje') {
+                        $url_base_params[$key] = $value;
+                    }
+                }
+                // Asegurar que el tab sea 'registrar_pago' y agregar mensaje
+                $url_base_params['tab'] = 'registrar_pago';
+                $url_base_params['mensaje'] = 'pago_registrado';
+                
+                // Obtener la URL base sin parámetros
+                $current_url = remove_query_arg(array_keys($_GET), $_SERVER['REQUEST_URI']);
+                
+                // Construir la URL completa con todos los parámetros preservados
+                $redirect_url = add_query_arg($url_base_params, $current_url);
                 
                 echo '<script>window.location.href = "' . esc_js($redirect_url) . '";</script>';
                 return '';
