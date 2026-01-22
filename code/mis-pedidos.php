@@ -285,6 +285,17 @@ function gofast_pedidos_shortcode() {
                     // Obtener destinos originales para conservar recargos
                     $destinos_originales = $json_destinos['destinos'] ?? [];
                     
+                    // Detectar si el pedido original tenía recargos por valor activos
+                    // Si algún destino original tiene recargo_total mayor al recargo fijo, significa que tenía recargos por valor
+                    $tenia_recargos_por_valor = false;
+                    foreach ($destinos_originales as $dest_orig) {
+                        $recargo_total_orig = (int)($dest_orig['recargo_total'] ?? 0);
+                        if ($recargo_total_orig > $recargo_fijo_por_envio) {
+                            $tenia_recargos_por_valor = true;
+                            break;
+                        }
+                    }
+                    
                     // Obtener recargo global del servicio si existe
                     $recargo_global_servicio = $json_destinos['recargo_global'] ?? null;
                     $recargo_global_valor_servicio = isset($json_destinos['recargo_global_valor']) ? (int)$json_destinos['recargo_global_valor'] : 0;
@@ -308,18 +319,106 @@ function gofast_pedidos_shortcode() {
                             // Monto adicional: solo se guarda para los mensajes, NO se suma al total
                             $monto_extra = isset($dest['monto']) ? (int) $dest['monto'] : 0;
                             
-                            // Buscar recargos del destino original por índice
+                            // Buscar recargos del destino original
+                            // Primero intentar por índice, luego por barrio_id para mayor robustez
                             $orig = isset($destinos_originales[$idx]) ? $destinos_originales[$idx] : null;
+                            $es_destino_original = false;
                             
-                            // Extraer todos los campos de recargo del destino original
-                            $recargo_seleccionable_id = $orig['recargo_seleccionable_id'] ?? null;
-                            $recargo_seleccionable_nombre = $orig['recargo_seleccionable_nombre'] ?? null;
-                            $recargo_seleccionable_valor = (int)($orig['recargo_seleccionable_valor'] ?? 0);
+                            // Si no se encuentra por índice o el barrio_id no coincide, buscar por barrio_id
+                            if (!$orig || (isset($orig['barrio_id']) && (int)$orig['barrio_id'] !== $barrio_id)) {
+                                foreach ($destinos_originales as $orig_temp) {
+                                    if (isset($orig_temp['barrio_id']) && (int)$orig_temp['barrio_id'] === $barrio_id) {
+                                        $orig = $orig_temp;
+                                        $es_destino_original = true;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                $es_destino_original = true;
+                            }
+                            
+                            // Determinar si es un destino nuevo
+                            $es_destino_nuevo = !$orig || (int)($orig['recargo_total'] ?? 0) <= 0;
+                            
+                            // Extraer campos de recargo del destino original
                             $recargo_total_auto = (int)($orig['recargo_total'] ?? 0);
-                            $recargo_global = $orig['recargo_global'] ?? null;
-                            $recargo_global_valor = (int)($orig['recargo_global_valor'] ?? 0);
-                            $recargos_detalle = $orig['recargos_detalle'] ?? [];
-                            $recargo_seleccionable = $orig['recargo_seleccionable'] ?? null;
+                            $recargo_global = null;
+                            $recargo_global_valor = 0;
+                            $recargos_detalle = [];
+                            $recargo_seleccionable = null;
+                            
+                            if ($es_destino_original && $orig) {
+                                // Conservar recargos globales y detalles del destino original
+                                $recargo_global = $orig['recargo_global'] ?? null;
+                                $recargo_global_valor = (int)($orig['recargo_global_valor'] ?? 0);
+                                $recargos_detalle = $orig['recargos_detalle'] ?? [];
+                                $recargo_seleccionable = $orig['recargo_seleccionable'] ?? null;
+                            }
+                            
+                            // Leer recargos seleccionables del destino editado (viene del formulario)
+                            // Si viene explícitamente del formulario, usar ese valor (puede ser null para eliminar)
+                            // Si NO viene del formulario pero es destino original, conservar del original
+                            $recargo_seleccionable_id = null;
+                            $recargo_seleccionable_nombre = null;
+                            $recargo_seleccionable_valor = 0;
+                            
+                            // Verificar si viene explícitamente del formulario (clave existe en el array)
+                            if (array_key_exists('recargo_seleccionable_id', $dest)) {
+                                // Viene del formulario - puede ser vacío (usuario eligió "sin recargo")
+                                if (!empty($dest['recargo_seleccionable_id'])) {
+                                    // Usuario seleccionó un recargo
+                                    $recargo_seleccionable_id = (int)$dest['recargo_seleccionable_id'];
+                                    $recargo_seleccionable_valor = isset($dest['recargo_seleccionable_valor']) ? (int)$dest['recargo_seleccionable_valor'] : 0;
+                                    $recargo_seleccionable_nombre = $dest['recargo_seleccionable_nombre'] ?? null;
+                                    
+                                    // Si no viene el valor o nombre completo, obtenerlos de la base de datos
+                                    if ($recargo_seleccionable_valor <= 0 || empty($recargo_seleccionable_nombre)) {
+                                        $recargo_data = $wpdb->get_row($wpdb->prepare(
+                                            "SELECT id, nombre, valor_fijo FROM recargos WHERE id = %d AND tipo = 'por_volumen_peso' AND activo = 1",
+                                            $recargo_seleccionable_id
+                                        ));
+                                        if ($recargo_data) {
+                                            $recargo_seleccionable_valor = (int)$recargo_data->valor_fijo;
+                                            $recargo_seleccionable_nombre = $recargo_data->nombre;
+                                        } else {
+                                            // Si no existe o no está activo, limpiar
+                                            $recargo_seleccionable_id = null;
+                                            $recargo_seleccionable_valor = 0;
+                                            $recargo_seleccionable_nombre = null;
+                                        }
+                                    }
+                                }
+                                // Si viene vacío del formulario, mantener null (usuario eligió "sin recargo")
+                            } elseif ($es_destino_original && $orig && isset($orig['recargo_seleccionable_id']) && !empty($orig['recargo_seleccionable_id'])) {
+                                // NO viene del formulario pero es destino original - conservar del original
+                                $recargo_seleccionable_id = $orig['recargo_seleccionable_id'] ?? null;
+                                $recargo_seleccionable_nombre = $orig['recargo_seleccionable_nombre'] ?? null;
+                                $recargo_seleccionable_valor = (int)($orig['recargo_seleccionable_valor'] ?? 0);
+                            }
+                            
+                            // IMPORTANTE: Reglas para recargos en destinos nuevos vs originales
+                            // - Recargos por valor: se calculan según el precio base del destino
+                            // - Recargos fijos: siempre se aplican
+                            // - Recargos seleccionables: solo si el destino original los tenía (mismo destino)
+                            if ($es_destino_nuevo) {
+                                // Es un destino nuevo: calcular recargos automáticos
+                                if ($tenia_recargos_por_valor && $precio > 0) {
+                                    // Calcular recargos por valor según el precio base del nuevo destino
+                                    $recargo_variable_calc = $calcular_recargos_variables($precio);
+                                    $recargo_total_auto = $recargo_fijo_por_envio + $recargo_variable_calc;
+                                } else {
+                                    // Solo aplicar recargo fijo
+                                    $recargo_total_auto = $recargo_fijo_por_envio;
+                                }
+                                // Destinos nuevos NO tienen recargos seleccionables (ya están en 0 por defecto)
+                            } elseif ($es_destino_original && $orig && $recargo_total_auto <= 0 && $precio > 0) {
+                                // CORRECCIÓN: Pedido antiguo sin recargo_total guardado
+                                // Calcular y guardar recargo_total para pedidos antiguos que no lo tenían
+                                $recargo_variable_calc = $calcular_recargos_variables($precio);
+                                $recargo_total_auto = $recargo_fijo_por_envio + $recargo_variable_calc;
+                                // Este valor se guardará automáticamente en el destino final
+                            }
+                            // Si es destino original con recargo_total existente, se conserva completo (fijos + variables por valor)
                             
                             // Sumar al total: precio base + recargos (NO incluir monto adicional)
                             $total_nuevo += $precio + $recargo_seleccionable_valor + $recargo_total_auto + $recargo_global_valor;
@@ -346,6 +445,7 @@ function gofast_pedidos_shortcode() {
                             if ($recargo_seleccionable_valor > 0) {
                                 $destino_final['recargo_seleccionable_valor'] = $recargo_seleccionable_valor;
                             }
+                            // Guardar recargo_total siempre que sea mayor a 0 (ya sea del original o calculado)
                             if ($recargo_total_auto > 0) {
                                 $destino_final['recargo_total'] = $recargo_total_auto;
                             }
@@ -722,6 +822,9 @@ function gofast_pedidos_shortcode() {
         $servicio_editar = $wpdb->get_row($wpdb->prepare("SELECT * FROM servicios_gofast WHERE id = %d", $editar_servicio_id));
         if ($servicio_editar):
             $json_servicio = json_decode($servicio_editar->destinos, true);
+            
+            // Obtener recargos seleccionables para el formulario de edición
+            $recargos_seleccionables = $wpdb->get_results("SELECT id, nombre, valor_fijo FROM recargos WHERE activo = 1 AND tipo = 'por_volumen_peso' ORDER BY nombre ASC");
     ?>
 <div class="gofast-home">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
@@ -837,21 +940,36 @@ function gofast_pedidos_shortcode() {
                                         <input type="number" class="destino-monto" value="<?php echo (int)($dest['monto'] ?? 0); ?>" min="0" 
                                                placeholder="0" style="width:120px;padding:10px;font-size:14px;border:1px solid #ddd;border-radius:6px;">
                                     </div>
+                                    <div>
+                                        <label style="display:block;margin-bottom:6px;font-size:13px;">Recargo adicional (peso/volumen):</label>
+                                        <select class="destino-recargo-seleccionable" data-index="<?php echo $idx; ?>" style="width:200px;padding:10px;font-size:14px;border:1px solid #ddd;border-radius:6px;">
+                                            <option value="">Sin recargo adicional</option>
+                                            <?php 
+                                            $recargo_seleccionable_id_actual = isset($dest['recargo_seleccionable_id']) ? (int)$dest['recargo_seleccionable_id'] : 0;
+                                            foreach ($recargos_seleccionables as $rs): 
+                                            ?>
+                                                <option value="<?php echo esc_attr($rs->id); ?>" 
+                                                        data-valor="<?php echo esc_attr($rs->valor_fijo); ?>"
+                                                        data-nombre="<?php echo esc_attr($rs->nombre); ?>"
+                                                        <?php echo ($recargo_seleccionable_id_actual == $rs->id) ? 'selected' : ''; ?>>
+                                                    <?php echo esc_html($rs->nombre); ?> (+$<?php echo number_format($rs->valor_fijo, 0, ',', '.'); ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
                                     <?php 
-                                    // Mostrar recargos existentes (solo lectura)
-                                    $recargo_sel = (int)($dest['recargo_seleccionable_valor'] ?? 0);
+                                    // Mostrar recargos automáticos existentes (solo lectura)
                                     $recargo_total = (int)($dest['recargo_total'] ?? 0);
                                     $recargo_global_dest = (int)($dest['recargo_global_valor'] ?? 0);
-                                    $total_recargos_dest = $recargo_sel + $recargo_total + $recargo_global_dest;
-                                    if ($total_recargos_dest > 0): 
+                                    $total_recargos_auto = $recargo_total + $recargo_global_dest;
+                                    if ($total_recargos_auto > 0): 
                                     ?>
                                     <div style="background:#fff3cd;padding:8px 12px;border-radius:6px;font-size:12px;color:#856404;">
-                                        <strong>💰 Recargos:</strong> $<?php echo number_format($total_recargos_dest, 0, ',', '.'); ?>
+                                        <strong>💰 Recargos automáticos:</strong> $<?php echo number_format($total_recargos_auto, 0, ',', '.'); ?>
                                         <span style="display:block;font-size:11px;color:#666;margin-top:2px;">
                                             <?php 
                                             $detalles = [];
-                                            if ($recargo_sel > 0) $detalles[] = "Peso/Vol: $" . number_format($recargo_sel, 0, ',', '.');
-                                            if ($recargo_total > 0) $detalles[] = "Dinámico: $" . number_format($recargo_total, 0, ',', '.');
+                                            if ($recargo_total > 0) $detalles[] = "Fijos+Variables: $" . number_format($recargo_total, 0, ',', '.');
                                             if ($recargo_global_dest > 0) $detalles[] = "Global: $" . number_format($recargo_global_dest, 0, ',', '.');
                                             echo implode(' | ', $detalles);
                                             ?>
@@ -902,6 +1020,7 @@ function gofast_pedidos_shortcode() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const barrios = <?php echo json_encode($barrios); ?>;
+    const recargosSeleccionables = <?php echo json_encode($recargos_seleccionables ?? []); ?>;
     
     // Función para normalizar texto (sin tildes, minúsculas)
     function normalize(s) {
@@ -972,9 +1091,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     </button>
                 </div>
             </div>
-            <div style="margin-top:12px;">
-                <label style="display:block;margin-bottom:6px;font-size:13px;">Monto adicional (recargo):</label>
-                <input type="number" class="destino-monto" value="0" min="0" placeholder="0" style="width:150px;padding:10px;font-size:14px;border:1px solid #ddd;border-radius:6px;">
+            <div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;align-items:end;">
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-size:13px;">Monto adicional:</label>
+                    <input type="number" class="destino-monto" value="0" min="0" placeholder="0" style="width:150px;padding:10px;font-size:14px;border:1px solid #ddd;border-radius:6px;">
+                </div>
+                <div>
+                    <label style="display:block;margin-bottom:6px;font-size:13px;">Recargo adicional (peso/volumen):</label>
+                    <select class="destino-recargo-seleccionable" data-index="${index}" style="width:200px;padding:10px;font-size:14px;border:1px solid #ddd;border-radius:6px;">
+                        <option value="">Sin recargo adicional</option>
+                        ${(recargosSeleccionables || []).map(rs => {
+                            const valor = parseInt(rs.valor_fijo) || 0;
+                            const valorFormateado = valor.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                            return `<option value="${rs.id}" data-valor="${valor}" data-nombre="${rs.nombre}">${rs.nombre} (+$${valorFormateado})</option>`;
+                        }).join('')}
+                    </select>
+                </div>
             </div>
         `;
         container.appendChild(div);
@@ -1022,15 +1154,34 @@ document.addEventListener('DOMContentLoaded', function() {
             const select = item.querySelector('.destino-barrio-select');
             const direccion = item.querySelector('.destino-direccion');
             const monto = item.querySelector('.destino-monto');
+            const recargoSeleccionable = item.querySelector('.destino-recargo-seleccionable');
             const selectedOption = select.options[select.selectedIndex];
+            const selectedRecargo = recargoSeleccionable ? recargoSeleccionable.options[recargoSeleccionable.selectedIndex] : null;
             
             if (select.value) {
-                destinos.push({
+                const destinoData = {
                     barrio_id: parseInt(select.value),
                     barrio_nombre: selectedOption ? selectedOption.getAttribute('data-nombre') || selectedOption.text : '',
                     direccion: direccion ? direccion.value.trim() : '',
                     monto: monto ? parseInt(monto.value) || 0 : 0
-                });
+                };
+                
+                // SIEMPRE enviar recargo_seleccionable_id, incluso si está vacío
+                // Esto permite distinguir entre "usuario eligió sin recargo" vs "no se envió del formulario"
+                if (recargoSeleccionable) {
+                    if (recargoSeleccionable.value) {
+                        // Usuario seleccionó un recargo
+                        destinoData.recargo_seleccionable_id = parseInt(recargoSeleccionable.value);
+                        destinoData.recargo_seleccionable_valor = selectedRecargo ? parseInt(selectedRecargo.getAttribute('data-valor') || 0) : 0;
+                        destinoData.recargo_seleccionable_nombre = selectedRecargo ? selectedRecargo.getAttribute('data-nombre') || selectedRecargo.text : '';
+                    } else {
+                        // Usuario eligió "Sin recargo adicional" - enviar explícitamente vacío
+                        destinoData.recargo_seleccionable_id = '';
+                    }
+                }
+                // Si no existe recargoSeleccionable, no se envía el campo (conservará el original si existe)
+                
+                destinos.push(destinoData);
             }
         });
         

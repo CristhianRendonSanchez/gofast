@@ -240,6 +240,7 @@ function gofast_admin_cotizar_shortcode() {
                     'sector_id' => $sector_destino,
                     'direccion' => '',
                     'monto' => 0,
+                    'recargo_total' => $recargo_total, // Recargos automáticos: fijos + variables por valor
                     'recargo_seleccionable_id' => $recargo_seleccionable_id,
                     'recargo_seleccionable_valor' => $recargo_seleccionable_valor,
                     'recargo_seleccionable_nombre' => $recargo_seleccionable_nombre,

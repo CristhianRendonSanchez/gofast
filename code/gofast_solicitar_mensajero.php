@@ -416,6 +416,13 @@ function gofast_resultado_cotizacion() {
 			// Monto adicional: solo se guarda para los mensajes, NO se suma al total
 			$monto_adicional = !empty($montos_dest[$i]) ? $montos_dest[$i] : 0;
 
+			// Obtener recargo_total del detalle_envios calculado anteriormente
+			// El recargo_total incluye: recargos fijos + recargos variables por valor
+			$recargo_total_destino = 0;
+			if (isset($detalle_envios[$i]) && isset($detalle_envios[$i]['recargo_total'])) {
+				$recargo_total_destino = (int) $detalle_envios[$i]['recargo_total'];
+			}
+
 			$destinos_completos[] = [
 				"barrio_id"     => $dest_id,
 				"barrio_nombre" => $barrio_nombre,
@@ -423,6 +430,7 @@ function gofast_resultado_cotizacion() {
 				"direccion"     => !empty($dirs_dest[$i]) ? sanitize_text_field($dirs_dest[$i]) : "",
 				"whatsapp"      => !empty($whatsapp_dest[$i]) ? sanitize_text_field($whatsapp_dest[$i]) : "",
 				"monto"         => $monto_adicional, // Solo para mensajes, no se usa en cálculos
+				"recargo_total" => $recargo_total_destino, // Recargos automáticos: fijos + variables por valor
 			];
 		}
 
