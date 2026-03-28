@@ -1,4 +1,4 @@
-<?php
+
 /***************************************************
  * GOFAST – APP MÓVIL
  * Shortcode: [gofast_app_movil]
@@ -90,9 +90,12 @@ function gofast_app_movil_shortcode() {
                              alt="Go Fast App" 
                              style="width: 80px; height: 80px; object-fit: contain;">
                     </div>
-                    <h3 style="margin: 0 0 16px 0; color: #000; font-size: 22px;">Android</h3>
-                    <a href="<?php echo esc_url( home_url('/wp-content/uploads/apk/_GOFAST_19332837.apk') ); ?>" 
-                       download="_GOFAST_19332837.apk"
+                    <h3 style="margin: 0 0 8px 0; color: #000; font-size: 22px;">Go Fast</h3>
+                    <p style="margin: 0 0 16px 0; color: #666; font-size: 14px;">
+                        Versión 1.1
+                    </p>
+                    <a href="<?php echo esc_url( home_url('/wp-content/uploads/apk/gofast.apk') ); ?>" 
+                       download="GoFast_v1.1.apk"
                        style="display: inline-block; background: var(--gofast-yellow); color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; transition: background 0.2s;">
                         📥 Descargar APK
                     </a>
@@ -100,7 +103,7 @@ function gofast_app_movil_shortcode() {
                         ✅ Disponible ahora
                     </p>
                     <p style="margin: 8px 0 0 0; color: #666; font-size: 12px;">
-                        Tamaño: 31.63 MB
+                        Android 6.0+
                     </p>
                 </div>
 
