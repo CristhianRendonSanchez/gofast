@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l c:/Users/CRISTHIAN/Documents/gofast/code/*.php)",
+      "Bash(git -C c:/Users/CRISTHIAN/Documents/gofast diff --stat HEAD)",
+      "Bash(git -C c:/Users/CRISTHIAN/Documents/gofast diff code/gofast_app_movil.php)",
+      "Bash(git -C c:/Users/CRISTHIAN/Documents/gofast status)",
+      "Bash(git -C c:/Users/CRISTHIAN/Documents/gofast diff HEAD -- code/gofast_app_movil.php)",
+      "Bash(wc -l c:/Users/CRISTHIAN/Documents/gofast/db/*.sql)",
+      "Bash(wc -l /c/Users/CRISTHIAN/Documents/gofast/code/*.php)",
+      "Bash(grep -l \"remember_token\" /c/Users/CRISTHIAN/Documents/gofast/code/*.php)",
+      "Bash(grep -n \"SHOW COLUMNS\\\\|SHOW TABLES\" /c/Users/CRISTHIAN/Documents/gofast/code/*.php)",
+      "Bash(grep -En \"for\\\\s*\\\\\\(\\\\s*$\" /c/Users/CRISTHIAN/Documents/gofast/code/mis-pedidos.php)",
+      "Bash(grep -c \"style=\" /c/Users/CRISTHIAN/Documents/gofast/code/*.php)",
+      "Bash(grep -v \":0$\")",
+      "Bash(find /c/Users/CRISTHIAN/Documents/gofast/db -name \"*.sql\" -type f -exec wc -l {} +)",
+      "Bash(grep -h \"CREATE TABLE\\\\|ALTER TABLE\\\\|ADD PRIMARY KEY\\\\|ADD UNIQUE\\\\|ADD INDEX\\\\|ADD FOREIGN\" /c/Users/CRISTHIAN/Documents/gofast/db/*.sql)",
+      "Bash(grep -E \"^[[:space:]]*\\(#[0-9a-f]{3,6}|rgb|hsl|[a-z]+:\\)\" /c/Users/CRISTHIAN/Documents/gofast/css.css)",
+      "Bash(grep -n \"WHERE id = $\" /c/Users/CRISTHIAN/Documents/gofast/code/*.php)",
+      "Bash(grep -En \"json_decode.*true\" /c/Users/CRISTHIAN/Documents/gofast/code/*.php)",
+      "Bash(grep -l \"inline.*style\\\\|style.*=\"\"\" /c/Users/CRISTHIAN/Documents/gofast/code/*.php)",
+      "Bash(xargs grep:*)",
+      "Bash(sort -t: -k2 -rn)"
+    ]
+  }
+}

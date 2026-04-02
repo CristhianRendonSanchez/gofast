@@ -38,6 +38,7 @@ CREATE TABLE `servicios_gofast` (
   `total` int(11) NOT NULL,
   `estado` varchar(30) DEFAULT 'pendiente',
   `mensajero_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `asignado_por_user_id` bigint(20) UNSIGNED DEFAULT NULL,
   `user_id` bigint(20) UNSIGNED DEFAULT NULL,
   `tracking_estado` enum('pendiente','asignado','en_ruta','entregado','cancelado') DEFAULT 'pendiente'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;

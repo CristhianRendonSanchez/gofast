@@ -1,6 +1,10 @@
 -- phpMyAdmin SQL Dump
 -- Alteración para agregar campo tipo a transferencias_gofast
 -- Fecha: 2025-01-27
+--
+-- NOTA: Si importas transferencias_gofast.sql ya actualizado (incluye `tipo` e índices
+-- de finanzas), NO ejecutes este archivo: fallaría por columna/índice duplicado.
+-- Úsalo solo en bases antiguas creadas antes de esa versión del dump.
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;

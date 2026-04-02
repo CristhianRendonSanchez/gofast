@@ -32,6 +32,7 @@ CREATE TABLE `transferencias_gofast` (
   `mensajero_id` bigint(20) UNSIGNED NOT NULL,
   `valor` decimal(10,2) NOT NULL,
   `estado` enum('pendiente','aprobada','rechazada') DEFAULT 'pendiente',
+  `tipo` enum('normal','pago') DEFAULT 'normal' COMMENT 'Tipo de transferencia: normal o pago',
   `creado_por` bigint(20) UNSIGNED NOT NULL,
   `observaciones` text DEFAULT NULL,
   `fecha_creacion` datetime DEFAULT current_timestamp(),
@@ -49,7 +50,8 @@ ALTER TABLE `transferencias_gofast`
   ADD PRIMARY KEY (`id`),
   ADD KEY `mensajero_id` (`mensajero_id`),
   ADD KEY `creado_por` (`creado_por`),
-  ADD KEY `estado` (`estado`);
+  ADD KEY `estado` (`estado`),
+  ADD KEY `idx_tipo` (`tipo`);
 
 --
 -- AUTO_INCREMENT de las tablas volcadas
