@@ -1000,17 +1000,17 @@ function gofast_finanzas_admin_shortcode() {
         // Total Ingresos hasta fecha_hasta
         $total_ingresos_servicios = (float) ($wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(total), 0) FROM servicios_gofast
-                 WHERE tracking_estado != 'cancelado' AND fecha <= %s",
-                $fecha_hasta . ' 23:59:59'
+                "SELECT COALESCE(SUM(total), 0) FROM servicios_gofast 
+                 WHERE tracking_estado != 'cancelado' AND DATE(fecha) <= %s",
+                $fecha_hasta
             )
         ) ?? 0);
-
+        
         $total_ingresos_compras = (float) ($wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(valor), 0) FROM compras_gofast
-                 WHERE estado != 'cancelada' AND fecha_creacion <= %s",
-                $fecha_hasta . ' 23:59:59'
+                "SELECT COALESCE(SUM(valor), 0) FROM compras_gofast 
+                 WHERE estado != 'cancelada' AND DATE(fecha_creacion) <= %s",
+                $fecha_hasta
             )
         ) ?? 0);
         
@@ -1103,8 +1103,8 @@ function gofast_finanzas_admin_shortcode() {
      * DATOS PARA TAB DE INGRESOS
      *********************************************/
     $ingresos_diarios = [];
-
-    if ($tab_activo === 'ingresos' && !empty($fecha_desde) && !empty($fecha_hasta)) {
+    
+    if (!empty($fecha_desde) && !empty($fecha_hasta)) {
         // Obtener ingresos agrupados por día
         // Usar rangos completos de fecha/hora para respetar zona horaria GMT-5
         $sql_ingresos = $wpdb->prepare(
@@ -1183,8 +1183,6 @@ function gofast_finanzas_admin_shortcode() {
     /*********************************************
      * DATOS PARA TAB DE EGRESOS
      *********************************************/
-    $egresos = [];
-    if ($tab_activo === 'egresos') :
     $where_egresos = [];
     $params_egresos = [];
 
@@ -1220,13 +1218,10 @@ function gofast_finanzas_admin_shortcode() {
     } else {
         $egresos = $wpdb->get_results($sql_egresos);
     }
-    endif; // tab egresos
 
     /*********************************************
      * DATOS PARA TAB DE VALES EMPRESA
      *********************************************/
-    $vales_empresa = [];
-    if ($tab_activo === 'vales_empresa') :
     $where_vales_empresa_list = [];
     $params_vales_empresa_list = [];
 
@@ -1262,15 +1257,10 @@ function gofast_finanzas_admin_shortcode() {
     } else {
         $vales_empresa = $wpdb->get_results($sql_vales_empresa);
     }
-    endif; // tab vales_empresa
 
     /*********************************************
      * DATOS PARA TAB DE VALES PERSONAL
      *********************************************/
-    $vales_personal = [];
-    $personas_activas = [];
-    $resumen_vales_por_persona = [];
-    if ($tab_activo === 'vales_personal') :
     // Obtener todos los administradores (incluye activos e inactivos para permitir vales históricos)
     $personas_activas = $wpdb->get_results(
         "SELECT id, nombre, activo
@@ -1348,13 +1338,10 @@ function gofast_finanzas_admin_shortcode() {
     } else {
         $resumen_vales_por_persona = $wpdb->get_results($sql_resumen_vales_personal);
     }
-    endif; // tab vales_personal
 
     /*********************************************
      * DATOS PARA TAB DE TRANSFERENCIAS SALIDAS
      *********************************************/
-    $transferencias_salidas = [];
-    if ($tab_activo === 'transferencias_salidas') :
     $where_transf_salidas_list = [];
     $params_transf_salidas_list = [];
 
@@ -1390,13 +1377,10 @@ function gofast_finanzas_admin_shortcode() {
     } else {
         $transferencias_salidas = $wpdb->get_results($sql_transf_salidas);
     }
-    endif; // tab transferencias_salidas
 
     /*********************************************
      * DATOS PARA TAB DE TRANSFERENCIAS ENTRADAS
      *********************************************/
-    $transferencias_entradas = [];
-    if ($tab_activo === 'transferencias_entradas') :
     $where_transf_entradas = [];
     $params_transf_entradas = [];
 
@@ -1449,19 +1433,16 @@ function gofast_finanzas_admin_shortcode() {
     // NOTA: No filtramos por activo=1 para incluir mensajeros deshabilitados en filtros de transferencias
     $mensajeros = [];
     $mensajeros = $wpdb->get_results(
-        "SELECT id, nombre
+        "SELECT id, nombre 
          FROM usuarios_gofast
          WHERE rol = 'mensajero'
          ORDER BY nombre ASC
         "
     );
-    endif; // tab transferencias_entradas
 
     /*********************************************
      * DATOS PARA TAB DE DESCUENTOS
      *********************************************/
-    $descuentos = [];
-    if ($tab_activo === 'descuentos') :
     $where_descuentos_list = [];
     $params_descuentos_list = [];
 
@@ -1508,7 +1489,6 @@ function gofast_finanzas_admin_shortcode() {
     } else {
         $descuentos = $wpdb->get_results($sql_descuentos);
     }
-    endif; // tab descuentos
 
     /*********************************************
      * DATOS PARA TAB DE SALDOS MENSAJEROS
@@ -1619,232 +1599,6 @@ function gofast_finanzas_admin_shortcode() {
         );
     }
 
-    /*********************************************
-     * BATCH LOAD: pre-cargar datos de todas las tablas
-     * para todos los mensajeros antes del foreach.
-     * Reduce de N_mensajeros×12 queries a 12 queries totales.
-     *********************************************/
-    $_ids_mensajeros = array_map(fn($m) => (int)$m->id, $mensajeros_saldos);
-    $_ids_in = !empty($_ids_mensajeros) ? implode(',', $_ids_mensajeros) : '0';
-    $_fd = !empty($fecha_desde) ? $fecha_desde : '1900-01-01';
-    $_fh = !empty($fecha_hasta) ? $fecha_hasta : '9999-12-31';
-
-    // -- Pagos en rango (reemplaza pagos_en_rango_raw Y todos_pagos dentro del loop) --
-    $_batch_pagos_raw = $wpdb->get_results(
-        "SELECT mensajero_id, fecha, fecha_pago, total_a_pagar, tipo_pago
-         FROM pagos_mensajeros_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND tipo_pago IN ('efectivo','transferencia')
-           AND fecha >= '$_fd' AND fecha <= '$_fh'
-         ORDER BY mensajero_id, fecha ASC, fecha_pago ASC"
-    );
-    $_map_pagos_rango = [];
-    foreach ($_batch_pagos_raw as $_r) {
-        $_map_pagos_rango[(int)$_r->mensajero_id][] = $_r;
-    }
-
-    // -- Servicios resumen por mensajero (rango) --
-    $_cond_svc_desde = !empty($fecha_desde) ? "AND fecha >= '{$fecha_desde} 00:00:00'" : '';
-    $_cond_svc_hasta = !empty($fecha_hasta) ? "AND fecha <= '{$fecha_hasta} 23:59:59'" : '';
-    $_batch_svc_raw = $wpdb->get_results(
-        "SELECT mensajero_id,
-                COALESCE(SUM(total), 0) AS ingresos_servicios,
-                COALESCE(SUM(CASE WHEN JSON_VALID(destinos)=1
-                    THEN COALESCE(JSON_LENGTH(JSON_EXTRACT(destinos,'$.destinos')),0)
-                    ELSE 0 END), 0) AS total_destinos
-         FROM servicios_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND tracking_estado != 'cancelado'
-           $_cond_svc_desde $_cond_svc_hasta
-         GROUP BY mensajero_id"
-    );
-    $_map_svc = [];
-    foreach ($_batch_svc_raw as $_r) {
-        $_map_svc[(int)$_r->mensajero_id] = $_r;
-    }
-
-    // -- Compras resumen por mensajero (rango) --
-    $_cond_comp_desde = !empty($fecha_desde) ? "AND fecha_creacion >= '{$fecha_desde} 00:00:00'" : '';
-    $_cond_comp_hasta = !empty($fecha_hasta) ? "AND fecha_creacion <= '{$fecha_hasta} 23:59:59'" : '';
-    $_batch_comp_raw = $wpdb->get_results(
-        "SELECT mensajero_id,
-                COUNT(*) AS total_compras,
-                COALESCE(SUM(valor), 0) AS ingresos_compras
-         FROM compras_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND estado != 'cancelada'
-           $_cond_comp_desde $_cond_comp_hasta
-         GROUP BY mensajero_id"
-    );
-    $_map_comp = [];
-    foreach ($_batch_comp_raw as $_r) {
-        $_map_comp[(int)$_r->mensajero_id] = $_r;
-    }
-
-    // -- Transferencias aprobadas tipo normal por mensajero (rango) --
-    $_cond_transf_desde = !empty($fecha_desde) ? "AND fecha_creacion >= '{$fecha_desde} 00:00:00'" : '';
-    $_cond_transf_hasta = !empty($fecha_hasta) ? "AND fecha_creacion <= '{$fecha_hasta} 23:59:59'" : '';
-    $_batch_transf_raw = $wpdb->get_results(
-        "SELECT mensajero_id, COALESCE(SUM(valor), 0) AS transferencias_aprobadas
-         FROM transferencias_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND estado = 'aprobada'
-           AND (tipo = 'normal' OR tipo IS NULL)
-           $_cond_transf_desde $_cond_transf_hasta
-         GROUP BY mensajero_id"
-    );
-    $_map_transf = [];
-    foreach ($_batch_transf_raw as $_r) {
-        $_map_transf[(int)$_r->mensajero_id] = (float)$_r->transferencias_aprobadas;
-    }
-
-    // -- Descuentos por mensajero (rango) --
-    $_cond_desc_desde = !empty($fecha_desde) ? "AND fecha >= '$_fd'" : '';
-    $_cond_desc_hasta = !empty($fecha_hasta) ? "AND fecha <= '$_fh'" : '';
-    $_batch_desc_raw = $wpdb->get_results(
-        "SELECT mensajero_id, COALESCE(SUM(valor), 0) AS total_descuentos
-         FROM descuentos_mensajeros_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           $_cond_desc_desde $_cond_desc_hasta
-         GROUP BY mensajero_id"
-    );
-    $_map_desc = [];
-    foreach ($_batch_desc_raw as $_r) {
-        $_map_desc[(int)$_r->mensajero_id] = (float)$_r->total_descuentos;
-    }
-
-    // -- Histórico servicios hasta fecha_hasta (comision_historica) --
-    $_cond_hist_svc = !empty($fecha_hasta) ? "AND DATE(fecha) <= '$_fh'" : '';
-    $_batch_hist_svc_raw = $wpdb->get_results(
-        "SELECT mensajero_id, COALESCE(SUM(total), 0) AS total
-         FROM servicios_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND tracking_estado != 'cancelado'
-           $_cond_hist_svc
-         GROUP BY mensajero_id"
-    );
-    $_map_hist_svc = [];
-    foreach ($_batch_hist_svc_raw as $_r) {
-        $_map_hist_svc[(int)$_r->mensajero_id] = (float)$_r->total;
-    }
-
-    // -- Histórico compras hasta fecha_hasta (comision_compras_historica) --
-    $_cond_hist_comp = !empty($fecha_hasta) ? "AND DATE(fecha_creacion) <= '$_fh'" : '';
-    $_batch_hist_comp_raw = $wpdb->get_results(
-        "SELECT mensajero_id, COALESCE(SUM(valor), 0) AS total
-         FROM compras_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND estado != 'cancelada'
-           $_cond_hist_comp
-         GROUP BY mensajero_id"
-    );
-    $_map_hist_comp = [];
-    foreach ($_batch_hist_comp_raw as $_r) {
-        $_map_hist_comp[(int)$_r->mensajero_id] = (float)$_r->total;
-    }
-
-    // -- Histórico transferencias hasta fecha_hasta --
-    $_cond_hist_transf = !empty($fecha_hasta) ? "AND DATE(fecha_creacion) <= '$_fh'" : '';
-    $_batch_hist_transf_raw = $wpdb->get_results(
-        "SELECT mensajero_id, COALESCE(SUM(valor), 0) AS total
-         FROM transferencias_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND estado = 'aprobada'
-           AND (tipo = 'normal' OR tipo IS NULL)
-           $_cond_hist_transf
-         GROUP BY mensajero_id"
-    );
-    $_map_hist_transf = [];
-    foreach ($_batch_hist_transf_raw as $_r) {
-        $_map_hist_transf[(int)$_r->mensajero_id] = (float)$_r->total;
-    }
-
-    // -- Histórico descuentos hasta fecha_hasta --
-    $_cond_hist_desc = !empty($fecha_hasta) ? "AND fecha <= '$_fh'" : '';
-    $_batch_hist_desc_raw = $wpdb->get_results(
-        "SELECT mensajero_id, COALESCE(SUM(valor), 0) AS total
-         FROM descuentos_mensajeros_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           $_cond_hist_desc
-         GROUP BY mensajero_id"
-    );
-    $_map_hist_desc = [];
-    foreach ($_batch_hist_desc_raw as $_r) {
-        $_map_hist_desc[(int)$_r->mensajero_id] = (float)$_r->total;
-    }
-
-    // -- Histórico pagos hasta fecha_hasta --
-    $_cond_hist_pagos = !empty($fecha_hasta) ? "AND fecha <= '$_fh'" : '';
-    $_batch_hist_pagos_raw = $wpdb->get_results(
-        "SELECT mensajero_id, COALESCE(SUM(total_a_pagar), 0) AS total
-         FROM pagos_mensajeros_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND tipo_pago IN ('efectivo','transferencia')
-           $_cond_hist_pagos
-         GROUP BY mensajero_id"
-    );
-    $_map_hist_pagos = [];
-    foreach ($_batch_hist_pagos_raw as $_r) {
-        $_map_hist_pagos[(int)$_r->mensajero_id] = (float)$_r->total;
-    }
-
-    // -- Day-by-day: servicios por mensajero×día (rango) --
-    $_batch_day_svc_raw = $wpdb->get_results(
-        "SELECT mensajero_id, DATE(fecha) AS dia, COALESCE(SUM(total),0) AS ingresos
-         FROM servicios_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND tracking_estado != 'cancelado'
-           $_cond_svc_desde $_cond_svc_hasta
-         GROUP BY mensajero_id, DATE(fecha)"
-    );
-    $_map_day_svc = [];
-    foreach ($_batch_day_svc_raw as $_r) {
-        $_map_day_svc[(int)$_r->mensajero_id][$_r->dia] = (float)$_r->ingresos;
-    }
-
-    // -- Day-by-day: compras por mensajero×día (rango) --
-    $_batch_day_comp_raw = $wpdb->get_results(
-        "SELECT mensajero_id, DATE(fecha_creacion) AS dia, COALESCE(SUM(valor),0) AS ingresos
-         FROM compras_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND estado != 'cancelada'
-           $_cond_comp_desde $_cond_comp_hasta
-         GROUP BY mensajero_id, DATE(fecha_creacion)"
-    );
-    $_map_day_comp = [];
-    foreach ($_batch_day_comp_raw as $_r) {
-        $_map_day_comp[(int)$_r->mensajero_id][$_r->dia] = (float)$_r->ingresos;
-    }
-
-    // -- Day-by-day: transferencias tipo normal por mensajero×día (rango) --
-    $_batch_day_transf_raw = $wpdb->get_results(
-        "SELECT mensajero_id, DATE(fecha_creacion) AS dia, COALESCE(SUM(valor),0) AS valor
-         FROM transferencias_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND estado = 'aprobada'
-           AND (tipo = 'normal' OR tipo IS NULL)
-           $_cond_transf_desde $_cond_transf_hasta
-         GROUP BY mensajero_id, DATE(fecha_creacion)"
-    );
-    $_map_day_transf = [];
-    foreach ($_batch_day_transf_raw as $_r) {
-        $_map_day_transf[(int)$_r->mensajero_id][$_r->dia] = (float)$_r->valor;
-    }
-
-    // -- Day-by-day: descuentos por mensajero×día (rango) --
-    $_batch_day_desc_raw = $wpdb->get_results(
-        "SELECT mensajero_id, fecha AS dia, COALESCE(SUM(valor),0) AS valor
-         FROM descuentos_mensajeros_gofast
-         WHERE mensajero_id IN ($_ids_in)
-           AND fecha >= '$_fd' AND fecha <= '$_fh'
-         GROUP BY mensajero_id, fecha"
-    );
-    $_map_day_desc = [];
-    foreach ($_batch_day_desc_raw as $_r) {
-        $_map_day_desc[(int)$_r->mensajero_id][$_r->dia] = (float)$_r->valor;
-    }
-    // -- FIN BATCH LOAD --
-
     // Calcular estadísticas para cada mensajero
     $saldos_mensajeros = [];
     foreach ($mensajeros_saldos as $mensajero) {
@@ -1854,7 +1608,20 @@ function gofast_finanzas_admin_shortcode() {
         $fecha_desde_para_pagos = !empty($fecha_desde) ? $fecha_desde : '1900-01-01';
         $fecha_hasta_para_pagos = !empty($fecha_hasta) ? $fecha_hasta : '9999-12-31';
         
-        $pagos_en_rango_raw = $_map_pagos_rango[$mensajero_id] ?? [];
+        $pagos_en_rango_raw = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT fecha, fecha_pago, total_a_pagar, tipo_pago 
+                 FROM pagos_mensajeros_gofast 
+                 WHERE mensajero_id = %d 
+                 AND tipo_pago IN ('efectivo', 'transferencia')
+                 AND fecha >= %s 
+                 AND fecha <= %s
+                 ORDER BY fecha ASC, fecha_pago ASC",
+                $mensajero_id,
+                $fecha_desde_para_pagos,
+                $fecha_hasta_para_pagos
+            )
+        );
         
         // Total destinos - calcular directamente en el rango de fechas
         $where_destinos = "mensajero_id = %d AND tracking_estado != 'cancelado'";
@@ -1869,7 +1636,18 @@ function gofast_finanzas_admin_shortcode() {
             $params_destinos[] = $fecha_hasta;
         }
         
-        $total_destinos = (int) (($_map_svc[$mensajero_id]->total_destinos ?? 0));
+        $total_destinos = (int) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(
+                    CASE 
+                        WHEN destinos IS NULL OR destinos = '' THEN 0
+                        WHEN JSON_VALID(destinos) = 0 THEN 0
+                        ELSE COALESCE(JSON_LENGTH(JSON_EXTRACT(destinos, '$.destinos')), 0)
+                    END
+                ), 0) FROM servicios_gofast WHERE $where_destinos",
+                $params_destinos
+            ) ?? 0)
+        );
 
         // Total compras - calcular directamente en el rango de fechas
         $where_compras = "mensajero_id = %d AND estado != 'cancelada'";
@@ -1884,13 +1662,28 @@ function gofast_finanzas_admin_shortcode() {
             $params_compras[] = $fecha_hasta;
         }
         
-        $total_compras = (int) (($_map_comp[$mensajero_id]->total_compras ?? 0));
+        $total_compras = (int) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM compras_gofast WHERE $where_compras",
+                $params_compras
+            ) ?? 0)
+        );
 
         // Ingresos servicios
-        $ingresos_servicios = (float) (($_map_svc[$mensajero_id]->ingresos_servicios ?? 0));
+        $ingresos_servicios = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT SUM(total) FROM servicios_gofast WHERE $where_destinos",
+                $params_destinos
+            ) ?? 0)
+        );
 
         // Ingresos compras
-        $ingresos_compras = (float) (($_map_comp[$mensajero_id]->ingresos_compras ?? 0));
+        $ingresos_compras = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT SUM(valor) FROM compras_gofast WHERE $where_compras",
+                $params_compras
+            ) ?? 0)
+        );
 
         $ingresos_totales = $ingresos_servicios + $ingresos_compras;
 
@@ -1910,7 +1703,9 @@ function gofast_finanzas_admin_shortcode() {
             $params_transf[] = $fecha_hasta . ' 23:59:59';
         }
         
-        $transferencias_aprobadas = $_map_transf[$mensajero_id] ?? 0.0;
+        $transferencias_aprobadas = (float) ($wpdb->get_var(
+            $wpdb->prepare("SELECT COALESCE(SUM(valor), 0) FROM transferencias_gofast WHERE $where_transf", $params_transf) ?? 0)
+        );
 
         // Descuentos - calcular directamente en el rango de fechas
         $where_descuentos_mensajero = "mensajero_id = %d";
@@ -1924,7 +1719,12 @@ function gofast_finanzas_admin_shortcode() {
             $params_descuentos_mensajero[] = $fecha_hasta;
         }
         
-        $total_descuentos_mensajero = $_map_desc[$mensajero_id] ?? 0.0;
+        $total_descuentos_mensajero = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast WHERE $where_descuentos_mensajero",
+                $params_descuentos_mensajero
+            ) ?? 0)
+        );
         
         // Calcular comisión del rango seleccionado
         $comision_generada = $ingresos_totales * 0.20;
@@ -1951,17 +1751,57 @@ function gofast_finanzas_admin_shortcode() {
         $total_a_pagar_rango = $total_a_pagar;
         
         // Calcular valores históricos SOLO para debug (opcional)
-        $comision_historica = ($_map_hist_svc[$mensajero_id] ?? 0.0) * 0.20;
+        // Obtener total de comisiones históricas hasta fecha_hasta
+        $comision_historica = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(total), 0) * 0.20 FROM servicios_gofast 
+                 WHERE mensajero_id = %d AND tracking_estado != 'cancelado' 
+                 AND DATE(fecha) <= %s",
+                $mensajero_id, $fecha_hasta
+            )
+        ) ?? 0);
         
-        $comision_compras_historica = ($_map_hist_comp[$mensajero_id] ?? 0.0) * 0.20;
+        $comision_compras_historica = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(valor), 0) * 0.20 FROM compras_gofast 
+                 WHERE mensajero_id = %d AND estado != 'cancelada' 
+                 AND DATE(fecha_creacion) <= %s",
+                $mensajero_id, $fecha_hasta
+            )
+        ) ?? 0);
         
         // Transferencias históricas: solo tipo "normal" (excluir tipo "pago")
-        $transferencias_historicas = $_map_hist_transf[$mensajero_id] ?? 0.0;
+        // Las transferencias tipo "pago" se contabilizan en pagos_historicos
+        $transferencias_historicas = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(valor), 0) 
+                 FROM transferencias_gofast
+                 WHERE mensajero_id = %d 
+                 AND estado = 'aprobada' 
+                 AND DATE(fecha_creacion) <= %s
+                 AND (tipo = 'normal' OR tipo IS NULL)",
+                $mensajero_id, $fecha_hasta
+            )
+        ) ?? 0);
         
-        $descuentos_historicos = $_map_hist_desc[$mensajero_id] ?? 0.0;
+        $descuentos_historicos = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast 
+                 WHERE mensajero_id = %d AND fecha <= %s",
+                $mensajero_id, $fecha_hasta
+            )
+        ) ?? 0);
         
         // Pagos históricos: pagos en efectivo y por transferencia hasta fecha_hasta
-        $pagos_historicos = $_map_hist_pagos[$mensajero_id] ?? 0.0;
+        // Los pagos por transferencia crean transferencias tipo "pago", pero se restan aquí como pagos
+        $pagos_historicos = (float) ($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COALESCE(SUM(total_a_pagar), 0) FROM pagos_mensajeros_gofast 
+                 WHERE mensajero_id = %d AND tipo_pago IN ('efectivo', 'transferencia')
+                 AND fecha <= %s",
+                $mensajero_id, $fecha_hasta
+            )
+        ) ?? 0);
         
         // Total pendiente histórico (solo para debug)
         $total_a_pagar_historico = ($comision_historica + $comision_compras_historica) - $transferencias_historicas - $descuentos_historicos - $pagos_historicos;
@@ -2015,8 +1855,17 @@ function gofast_finanzas_admin_shortcode() {
             $intervalo = new DateInterval('P1D');
             $periodo = new DatePeriod($fecha_inicio, $intervalo, $fecha_fin);
             
-            // Usar pagos ya cargados en batch (mismos datos)
-            $todos_pagos = $_map_pagos_rango[$mensajero_id] ?? [];
+            // Obtener pagos SOLO dentro del rango de fechas seleccionado
+            // Esto asegura que los pagos aplicados coincidan con el cálculo del resumen
+            $todos_pagos = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT fecha, total_a_pagar FROM pagos_mensajeros_gofast 
+                     WHERE mensajero_id = %d AND tipo_pago IN ('efectivo', 'transferencia')
+                     AND fecha >= %s AND fecha <= %s
+                     ORDER BY fecha ASC, fecha_pago ASC",
+                    $mensajero_id, $fecha_desde, $fecha_hasta
+                )
+            );
             
             // Sumar todos los pagos dentro del rango
             $total_pagos_rango = 0;
@@ -2029,18 +1878,47 @@ function gofast_finanzas_admin_shortcode() {
             foreach ($periodo as $dia) {
                 $fecha_dia = $dia->format('Y-m-d');
                 
-                // Ingresos del día (servicios + compras) — datos pre-cargados en batch
-                $ingresos_dia = (float) (($_map_day_svc[$mensajero_id][$fecha_dia] ?? 0));
-
-                $ingresos_compras_dia = (float) (($_map_day_comp[$mensajero_id][$fecha_dia] ?? 0));
+                // Ingresos del día (servicios + compras)
+                $ingresos_dia = (float) ($wpdb->get_var(
+                    $wpdb->prepare(
+                        "SELECT COALESCE(SUM(total), 0) FROM servicios_gofast 
+                         WHERE mensajero_id = %d AND tracking_estado != 'cancelado' AND DATE(fecha) = %s",
+                        $mensajero_id, $fecha_dia
+                    )
+                ) ?? 0);
+                
+                $ingresos_compras_dia = (float) ($wpdb->get_var(
+                    $wpdb->prepare(
+                        "SELECT COALESCE(SUM(valor), 0) FROM compras_gofast 
+                         WHERE mensajero_id = %d AND estado != 'cancelada' AND DATE(fecha_creacion) = %s",
+                        $mensajero_id, $fecha_dia
+                    )
+                ) ?? 0);
                 
                 // Transferencias del día: solo tipo "normal" (excluir tipo "pago")
                 // Las transferencias tipo "pago" se contabilizan en los pagos del día
-                // IMPORTANTE: datos pre-cargados en batch, GROUP BY DATE(fecha_creacion)
-                $transferencias_dia = (float) (($_map_day_transf[$mensajero_id][$fecha_dia] ?? 0));
+                // IMPORTANTE: Usar fecha_creacion con hora para coincidir con reportes_admin.php
+                $transferencias_dia = (float) ($wpdb->get_var(
+                    $wpdb->prepare(
+                        "SELECT COALESCE(SUM(valor), 0) 
+                         FROM transferencias_gofast
+                         WHERE mensajero_id = %d 
+                         AND estado = 'aprobada' 
+                         AND fecha_creacion >= %s
+                         AND fecha_creacion <= %s
+                         AND (tipo = 'normal' OR tipo IS NULL)",
+                        $mensajero_id, $fecha_dia . ' 00:00:00', $fecha_dia . ' 23:59:59'
+                    )
+                ) ?? 0);
                 
-                // Descuentos del día — datos pre-cargados en batch
-                $descuentos_dia = (float) (($_map_day_desc[$mensajero_id][$fecha_dia] ?? 0));
+                // Descuentos del día
+                $descuentos_dia = (float) ($wpdb->get_var(
+                    $wpdb->prepare(
+                        "SELECT COALESCE(SUM(valor), 0) FROM descuentos_mensajeros_gofast 
+                         WHERE mensajero_id = %d AND fecha = %s",
+                        $mensajero_id, $fecha_dia
+                    )
+                ) ?? 0);
                 
                 $ingresos_total_dia = $ingresos_dia + $ingresos_compras_dia;
                 $comision_dia = $ingresos_total_dia * 0.20;
@@ -2441,20 +2319,7 @@ function gofast_finanzas_admin_shortcode() {
         $params_historial[] = $fecha_hasta_historial_final;
     }
     
-    // COUNT rápido sin JOINs — solo para calcular la paginación
-    $sql_historial_count = "SELECT COUNT(*) FROM pagos_mensajeros_gofast p WHERE " . implode(' AND ', $where_historial);
-    $total_pagos_count = (int) ($wpdb->get_var(
-        !empty($params_historial) ? $wpdb->prepare($sql_historial_count, $params_historial) : $sql_historial_count
-    ) ?? 0);
-
-    // Variables de paginación (calculadas antes de las queries de datos)
-    $por_pagina_historial = 15;
-    $pg_historial = isset($_GET['pg_historial']) ? max(1, (int) $_GET['pg_historial']) : 1;
-    $total_paginas_historial = max(1, (int) ceil($total_pagos_count / $por_pagina_historial));
-    $offset_historial = ($pg_historial - 1) * $por_pagina_historial;
-
-    // Query paginada para display — solo trae la página actual (15 filas máx.)
-    $sql_historial_paginado = "SELECT p.*,
+    $sql_historial = "SELECT p.*, 
                 m.nombre as mensajero_nombre,
                 m.telefono as mensajero_telefono,
                 u.nombre as creador_nombre
@@ -2462,24 +2327,21 @@ function gofast_finanzas_admin_shortcode() {
          LEFT JOIN usuarios_gofast m ON p.mensajero_id = m.id
          LEFT JOIN usuarios_gofast u ON p.creado_por = u.id
          WHERE " . implode(' AND ', $where_historial) . "
-         ORDER BY p.fecha DESC, p.fecha_pago DESC
-         LIMIT " . (int)$por_pagina_historial . " OFFSET " . (int)$offset_historial;
+         ORDER BY p.fecha DESC, p.fecha_pago DESC";
+    
     if (!empty($params_historial)) {
-        $pagos_mensajeros_paginados = $wpdb->get_results($wpdb->prepare($sql_historial_paginado, $params_historial));
+        $pagos_mensajeros_all = $wpdb->get_results($wpdb->prepare($sql_historial, $params_historial));
     } else {
-        $pagos_mensajeros_paginados = $wpdb->get_results($sql_historial_paginado);
+        $pagos_mensajeros_all = $wpdb->get_results($sql_historial);
     }
-
-    // Query para mapa JS (modal ver-pagos) — sin ORDER BY, sin JOIN mensajero
-    $sql_historial_mapa = "SELECT p.mensajero_id, p.fecha, p.tipo_pago, p.comision_total,
-                p.transferencias_total, p.descuentos_total, p.total_a_pagar, p.fecha_pago,
-                u.nombre as creador_nombre
-         FROM pagos_mensajeros_gofast p
-         LEFT JOIN usuarios_gofast u ON p.creado_por = u.id
-         WHERE " . implode(' AND ', $where_historial);
-    $pagos_mensajeros_all = !empty($params_historial)
-        ? $wpdb->get_results($wpdb->prepare($sql_historial_mapa, $params_historial))
-        : $wpdb->get_results($sql_historial_mapa);
+    
+    // Paginación para historial de pagos
+    $por_pagina_historial = 15;
+    $total_pagos_count = count($pagos_mensajeros_all);
+    $pg_historial = isset($_GET['pg_historial']) ? max(1, (int) $_GET['pg_historial']) : 1;
+    $total_paginas_historial = max(1, (int) ceil($total_pagos_count / $por_pagina_historial));
+    $offset_historial = ($pg_historial - 1) * $por_pagina_historial;
+    $pagos_mensajeros_paginados = array_slice($pagos_mensajeros_all, $offset_historial, $por_pagina_historial);
     
     // Organizar pagos por mensajero_id para fácil acceso
     $pagos_por_mensajero = [];
