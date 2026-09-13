@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * GoFast Select2 Loader
+ */
 function gofast_enqueue_select2() {
     // Select2 CSS
     wp_enqueue_style(

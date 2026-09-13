@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_reportes_admin
+ */
 /***************************************************
  * GOFAST – REPORTES DE PEDIDOS (ADMIN Y MENSAJERO)
  * Shortcode: [gofast_reportes_admin]

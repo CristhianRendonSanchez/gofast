@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_finanzas_admin
+ */
 /***************************************************
  * GOFAST – MÓDULO DE FINANZAS ADMINISTRATIVO
  * Shortcode: [gofast_finanzas_admin]
@@ -6038,4 +6042,3 @@ function inicializarSelect2Filtros() {
     return ob_get_clean();
 }
 add_shortcode('gofast_finanzas_admin', 'gofast_finanzas_admin_shortcode');
-

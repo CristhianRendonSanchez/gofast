@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_admin_configuracion
+ */
 /***************************************************
  * GOFAST – CONFIGURACIÓN DEL SISTEMA (SOLO ADMIN)
  * Shortcode: [gofast_admin_configuracion]

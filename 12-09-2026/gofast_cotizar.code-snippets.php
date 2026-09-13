@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_cotizar
+ */
 /*******************************************************
  * ✅ GOFAST — COTIZAR V2 (Selector inteligente con negocios)
  * Shortcode: [gofast_cotizar]

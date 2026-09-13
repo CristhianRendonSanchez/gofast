@@ -1,63 +1,59 @@
 <?php
+
+/**
+ * gofast_mensajero_cotizar
+ */
 /*******************************************************
- * ⚙️ GOFAST — COTIZACIÓN RÁPIDA PARA ADMINISTRADORES
- * Shortcode: [gofast_admin_cotizar]
- * URL: /admin-cotizar
+ * 🚚 GOFAST — COTIZACIÓN RÁPIDA PARA MENSAJEROS
+ * Shortcode: [gofast_mensajero_cotizar]
+ * URL: /mensajero-cotizar
  *
  * Funcionalidad:
- * - Paso 1: Seleccionar mensajero, origen y destinos
+ * - Paso 1: Seleccionar origen y destinos (igual que cotizar normal)
  * - Paso 2: Resumen editable (eliminar/agregar destinos sin recotizar)
  * - Botones aceptar/rechazar
- * - Al aceptar: crea servicio y lo asigna al mensajero seleccionado
+ * - Al aceptar: crea servicio y lo asigna automáticamente al mensajero
  *******************************************************/
 
-function gofast_admin_cotizar_shortcode() {
+function gofast_mensajero_cotizar_shortcode() {
     global $wpdb;
 
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
 
-    // Validar que sea admin
+    // Validar que sea mensajero o admin
     if (empty($_SESSION['gofast_user_id'])) {
-        return "<div class='gofast-box'>Debes iniciar sesión como administrador para usar esta función.</div>";
+        return "<div class='gofast-box'>Debes iniciar sesión como mensajero o administrador para usar esta función.</div>";
     }
 
     $user_id = (int) $_SESSION['gofast_user_id'];
     $rol = strtolower($_SESSION['gofast_user_rol'] ?? '');
 
     // Verificar rol
-    if ($rol !== 'admin') {
+    if ($rol !== 'mensajero' && $rol !== 'admin') {
         $usuario = $wpdb->get_row($wpdb->prepare(
             "SELECT rol FROM usuarios_gofast WHERE id = %d AND activo = 1",
             $user_id
         ));
-        if (!$usuario || strtolower($usuario->rol) !== 'admin') {
-            return "<div class='gofast-box'>⚠️ Solo los administradores pueden usar esta función.</div>";
+        if (!$usuario || (strtolower($usuario->rol) !== 'mensajero' && strtolower($usuario->rol) !== 'admin')) {
+            return "<div class='gofast-box'>⚠️ Solo los mensajeros y administradores pueden usar esta función.</div>";
         }
-        $_SESSION['gofast_user_rol'] = 'admin';
-        $rol = 'admin';
+        $_SESSION['gofast_user_rol'] = strtolower($usuario->rol);
+        $rol = $_SESSION['gofast_user_rol'];
     }
 
-    // Obtener datos del admin
-    $admin = $wpdb->get_row($wpdb->prepare(
+    // Obtener datos del mensajero/admin
+    $mensajero = $wpdb->get_row($wpdb->prepare(
         "SELECT id, nombre, telefono, email FROM usuarios_gofast WHERE id = %d AND activo = 1",
         $user_id
     ));
 
-    if (!$admin) {
+    if (!$mensajero) {
         return "<div class='gofast-box'>Error: Usuario no encontrado.</div>";
     }
     
-    // Obtener todos los mensajeros activos
-    $mensajeros = $wpdb->get_results(
-        "SELECT id, nombre, telefono 
-         FROM usuarios_gofast 
-         WHERE rol = 'mensajero' AND activo = 1 
-         ORDER BY nombre ASC"
-    );
-    
-    // Obtener TODOS los negocios registrados
+    // Obtener TODOS los negocios registrados para mensajero/admin
     $todos_negocios = $wpdb->get_results(
         "SELECT n.id, n.nombre, n.direccion_full, n.barrio_id, n.whatsapp, n.user_id,
                 u.nombre as cliente_nombre, u.telefono as cliente_telefono
@@ -70,31 +66,19 @@ function gofast_admin_cotizar_shortcode() {
     /*******************************************************
      * PROCESAR ACEPTAR/RECHAZAR
      *******************************************************/
-    if (isset($_POST['gofast_admin_aceptar']) || isset($_POST['gofast_admin_rechazar'])) {
+    if (isset($_POST['gofast_mensajero_aceptar']) || isset($_POST['gofast_mensajero_rechazar'])) {
         
-        if (isset($_POST['gofast_admin_rechazar'])) {
+        if (isset($_POST['gofast_mensajero_rechazar'])) {
             // Rechazar: volver al paso 1
-            unset($_SESSION['gofast_admin_cotizacion']);
+            unset($_SESSION['gofast_mensajero_cotizacion']);
             // Continuar para mostrar el formulario (no redirigir)
-        } elseif (isset($_POST['gofast_admin_aceptar'])) {
+        } elseif (isset($_POST['gofast_mensajero_aceptar'])) {
             // Aceptar: crear servicio
-            if (empty($_POST['origen']) || empty($_POST['destinos_finales']) || empty($_POST['mensajero_id'])) {
-                return "<div class='gofast-box'>Error: Faltan datos del servicio (mensajero, origen o destinos).</div>";
+            if (empty($_POST['origen']) || empty($_POST['destinos_finales'])) {
+                return "<div class='gofast-box'>Error: Faltan datos del servicio.</div>";
             }
 
-            $mensajero_id = intval($_POST['mensajero_id']);
             $origen = intval($_POST['origen']);
-            
-            // Verificar que el mensajero existe y está activo
-            $mensajero_seleccionado = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, nombre, telefono FROM usuarios_gofast WHERE id = %d AND rol = 'mensajero' AND activo = 1",
-                $mensajero_id
-            ));
-            
-            if (!$mensajero_seleccionado) {
-                return "<div class='gofast-box'>Error: El mensajero seleccionado no es válido.</div>";
-            }
-            
             // Obtener negocio_id SOLO si fue seleccionado explícitamente (NO detectar automáticamente por barrio_id)
             $negocio_id = 0;
             $negocio_user_id = null;
@@ -108,10 +92,10 @@ function gofast_admin_cotizar_shortcode() {
                 }
             }
             // Prioridad 2: Si no viene del POST, verificar en sesión (solo si fue guardado explícitamente)
-            elseif (isset($_SESSION['gofast_admin_cotizacion']['negocio_id']) && intval($_SESSION['gofast_admin_cotizacion']['negocio_id']) > 0) {
-                $negocio_id = intval($_SESSION['gofast_admin_cotizacion']['negocio_id']);
-                if (isset($_SESSION['gofast_admin_cotizacion']['negocio_user_id']) && intval($_SESSION['gofast_admin_cotizacion']['negocio_user_id']) > 0) {
-                    $negocio_user_id = intval($_SESSION['gofast_admin_cotizacion']['negocio_user_id']);
+            elseif (isset($_SESSION['gofast_mensajero_cotizacion']['negocio_id']) && intval($_SESSION['gofast_mensajero_cotizacion']['negocio_id']) > 0) {
+                $negocio_id = intval($_SESSION['gofast_mensajero_cotizacion']['negocio_id']);
+                if (isset($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']) && intval($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']) > 0) {
+                    $negocio_user_id = intval($_SESSION['gofast_mensajero_cotizacion']['negocio_user_id']);
                 }
             }
             // Si no hay negocio_id en POST ni en sesión, $negocio_id queda en 0 (barrio simple, sin negocio)
@@ -139,29 +123,41 @@ function gofast_admin_cotizar_shortcode() {
             $negocio_seleccionado = null;
             $cliente_propietario = null;
             if ($negocio_id > 0) {
-                if ($negocio_user_id) {
-                    // Buscar por negocio_id y user_id del cliente propietario
+                // Intentar buscar el negocio con cliente_id si se proporcionó
+                if ($negocio_user_id && $negocio_user_id > 0) {
                     $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
                         "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
                          FROM negocios_gofast n
                          INNER JOIN usuarios_gofast u ON n.user_id = u.id
-                         WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1",
+                         WHERE n.id = %d AND n.user_id = %d AND n.activo = 1 AND u.activo = 1
+                         LIMIT 1",
                         $negocio_id,
                         $negocio_user_id
                     ));
-                } else {
-                    // Buscar solo por negocio_id
+                }
+                
+                // Si no se encontró con cliente_id específico, buscar solo por negocio_id
+                if (!$negocio_seleccionado) {
                     $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
                         "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
                          FROM negocios_gofast n
                          INNER JOIN usuarios_gofast u ON n.user_id = u.id
-                         WHERE n.id = %d AND n.activo = 1 AND u.activo = 1",
+                         WHERE n.id = %d AND n.activo = 1 AND u.activo = 1
+                         LIMIT 1",
                         $negocio_id
                     ));
                 }
                 
-                if ($negocio_seleccionado) {
-                    $cliente_propietario = $negocio_seleccionado->user_id;
+                // Validar que el negocio se encontró
+                if (!$negocio_seleccionado) {
+                    return "<div class='gofast-box'>Error: El negocio seleccionado (ID: " . esc_html($negocio_id) . ") no se encontró o no está activo.</div>";
+                }
+                
+                $cliente_propietario = intval($negocio_seleccionado->user_id);
+                
+                // Validar que el cliente propietario existe y está activo
+                if (empty($cliente_propietario) || $cliente_propietario <= 0) {
+                    return "<div class='gofast-box'>Error: El cliente propietario del negocio no es válido (user_id: " . esc_html($negocio_seleccionado->user_id) . ").</div>";
                 }
             }
 
@@ -271,18 +267,29 @@ function gofast_admin_cotizar_shortcode() {
             $column_exists = $wpdb->get_results("SHOW COLUMNS FROM servicios_gofast LIKE 'asignado_por_user_id'");
             
             // Determinar nombre y teléfono del cliente
-            $nombre_cliente = $admin->nombre . ' (Admin)';
-            $telefono_cliente = $admin->telefono;
-            $user_id_servicio = $admin->id; // Por defecto el admin
+            $nombre_cliente = $mensajero->nombre . ' (' . ($rol === 'admin' ? 'Admin' : 'Mensajero') . ')';
+            $telefono_cliente = $mensajero->telefono;
+            $user_id_servicio = $mensajero->id; // Por defecto el mensajero/admin
             
             // Construir direccion_origen_servicio según reglas:
             // 1. Solo barrio (si no hay negocio)
             // 2. Negocio + dirección (si hay negocio)
-            if ($negocio_seleccionado) {
+            if ($negocio_seleccionado && $negocio_id > 0) {
+                // Validar que tenemos el user_id del negocio
+                if (empty($negocio_seleccionado->user_id) || $negocio_seleccionado->user_id <= 0) {
+                    return "<div class='gofast-box'>Error: No se pudo determinar el cliente propietario del negocio.</div>";
+                }
+                
                 // Usar datos del NEGOCIO (no del cliente)
                 $nombre_cliente = $negocio_seleccionado->nombre; // Nombre del negocio
                 $telefono_cliente = $negocio_seleccionado->whatsapp ?: $negocio_seleccionado->cliente_telefono; // WhatsApp del negocio primero
-                $user_id_servicio = $cliente_propietario; // Asociar al cliente propietario del negocio
+                // SIEMPRE usar el user_id del negocio seleccionado (cliente propietario), nunca el mensajero
+                $user_id_servicio = intval($negocio_seleccionado->user_id); // Asociar al cliente propietario del negocio
+                
+                // Validar que el user_id_servicio es diferente del mensajero (debe ser el cliente)
+                if ($user_id_servicio === $mensajero->id) {
+                    return "<div class='gofast-box'>Error: El cliente propietario del negocio no puede ser el mismo que el mensajero.</div>";
+                }
                 
                 // Caso 2: Negocio + dirección
                 $dir_origen_negocio = $negocio_seleccionado->direccion_full ?: '';
@@ -292,15 +299,10 @@ function gofast_admin_cotizar_shortcode() {
                     $direccion_origen_servicio = $negocio_seleccionado->nombre;
                 }
             } else {
-                // Caso 1: Solo barrio
+                // Caso 1: Solo barrio (sin negocio seleccionado)
                 $direccion_origen_servicio = $nombre_origen;
-            }
-            
-            // Fecha del servicio (admin puede especificar cualquier fecha, hora del sistema)
-            $fecha_servicio = gofast_current_time('mysql'); // Por defecto fecha actual
-            if (!empty($_POST['fecha_servicio'])) {
-                // Si hay fecha, usar la hora actual del sistema
-                $fecha_servicio = sanitize_text_field($_POST['fecha_servicio']) . ' ' . date('H:i:s');
+                // Asegurar que user_id_servicio es el mensajero cuando no hay negocio
+                $user_id_servicio = $mensajero->id;
             }
             
             $data_insert = [
@@ -311,17 +313,17 @@ function gofast_admin_cotizar_shortcode() {
                 'total' => $total,
                 'estado' => 'asignado',
                 'tracking_estado' => 'asignado',
-                'mensajero_id' => $mensajero_id, // Mensajero seleccionado por el admin
-                'user_id' => $user_id_servicio, // Cliente propietario del negocio o admin
-                'fecha' => $fecha_servicio,
+                'mensajero_id' => $mensajero->id,
+                'user_id' => $user_id_servicio, // Cliente propietario del negocio o mensajero/admin
+                'fecha' => gofast_current_time('mysql'),
             ];
             
-            // Si existe el campo, guardar quién asignó (el admin)
+            // Si existe el campo, guardar quién asignó (el mensajero se auto-asignó)
             if (!empty($column_exists)) {
-                $data_insert['asignado_por_user_id'] = $admin->id;
+                $data_insert['asignado_por_user_id'] = $mensajero->id;
             }
             
-            // Crear servicio y asignarlo al mensajero seleccionado
+            // Crear servicio y asignarlo automáticamente al mensajero
             $insertado = $wpdb->insert('servicios_gofast', $data_insert);
 
             if ($insertado === false) {
@@ -329,11 +331,11 @@ function gofast_admin_cotizar_shortcode() {
             }
 
             $service_id = (int) $wpdb->insert_id;
-            unset($_SESSION['gofast_admin_cotizacion']);
+            unset($_SESSION['gofast_mensajero_cotizacion']);
             
             // Guardar mensaje de éxito en sesión
-            $_SESSION['gofast_admin_success'] = [
-                'message' => '✅ Servicio creado exitosamente y asignado a ' . esc_html($mensajero_seleccionado->nombre),
+            $_SESSION['gofast_mensajero_success'] = [
+                'message' => '✅ Servicio creado exitosamente',
                 'service_id' => $service_id,
                 'total' => $total
             ];
@@ -346,21 +348,29 @@ function gofast_admin_cotizar_shortcode() {
     /*******************************************************
      * PASO 2: MOSTRAR RESUMEN EDITABLE
      *******************************************************/
-    if (isset($_POST['gofast_admin_cotizar']) || !empty($_SESSION['gofast_admin_cotizacion'])) {
+    if (isset($_POST['gofast_mensajero_cotizar']) || !empty($_SESSION['gofast_mensajero_cotizacion'])) {
         
         // Guardar en sesión
-        if (isset($_POST['gofast_admin_cotizar'])) {
-            $mensajero_id = intval($_POST['mensajero_id'] ?? 0);
+        if (isset($_POST['gofast_mensajero_cotizar'])) {
             $origen = intval($_POST['origen'] ?? 0);
             // SOLO guardar negocio_id si viene explícitamente del POST (cuando se selecciona un negocio)
             // Si no viene o es 0, NO guardar negocio_id (barrio simple)
             $negocio_id = 0;
             $negocio_user_id = null;
+            
             if (isset($_POST['negocio_id']) && intval($_POST['negocio_id']) > 0) {
                 $negocio_id = intval($_POST['negocio_id']);
                 if (isset($_POST['cliente_id']) && intval($_POST['cliente_id']) > 0) {
                     $negocio_user_id = intval($_POST['cliente_id']);
                 }
+            }
+            
+            // También verificar si el origen seleccionado es un negocio (por los atributos data del select)
+            // Esto es un fallback por si los campos hidden no se enviaron
+            if ($negocio_id <= 0 && $origen > 0) {
+                // Buscar si hay algún negocio con este barrio_id
+                // Pero solo si el origen fue seleccionado desde un negocio (no hacer detección automática)
+                // Este código se mantiene como fallback pero no debería ejecutarse normalmente
             }
             $destinos = array_map('intval', (array) ($_POST['destino'] ?? []));
             
@@ -383,14 +393,13 @@ function gofast_admin_cotizar_shortcode() {
             }
             
             // Mantener recargos seleccionables existentes de la sesión si no vienen en POST
-            $cotizacion_anterior = $_SESSION['gofast_admin_cotizacion'] ?? null;
+            $cotizacion_anterior = $_SESSION['gofast_mensajero_cotizacion'] ?? null;
             if (!empty($cotizacion_anterior['recargos_seleccionables']) && empty($recargos_seleccionables_guardar)) {
                 $recargos_seleccionables_guardar = $cotizacion_anterior['recargos_seleccionables'];
             }
             
-            if ($mensajero_id > 0 && $origen > 0 && !empty($destinos)) {
-                $_SESSION['gofast_admin_cotizacion'] = [
-                    'mensajero_id' => $mensajero_id,
+            if ($origen > 0 && !empty($destinos)) {
+                $_SESSION['gofast_mensajero_cotizacion'] = [
                     'origen' => $origen,
                     'destinos' => $destinos,
                     'negocio_id' => $negocio_id, // Solo será > 0 si se seleccionó explícitamente un negocio
@@ -400,21 +409,21 @@ function gofast_admin_cotizar_shortcode() {
             }
         }
 
-        $cotizacion = $_SESSION['gofast_admin_cotizacion'] ?? null;
+        $cotizacion = $_SESSION['gofast_mensajero_cotizacion'] ?? null;
         
-        if (!$cotizacion || empty($cotizacion['origen']) || empty($cotizacion['destinos']) || empty($cotizacion['mensajero_id'])) {
+        if (!$cotizacion || empty($cotizacion['origen']) || empty($cotizacion['destinos'])) {
             // Volver al paso 1
-            unset($_SESSION['gofast_admin_cotizacion']);
+            unset($_SESSION['gofast_mensajero_cotizacion']);
         } else {
             // Filtrar solo valores vacíos/cero (permitir duplicados)
             $destinos_filtrados = array_values(array_filter($cotizacion['destinos'], function($id) {
                 return $id > 0;
             }));
             $cotizacion['destinos'] = $destinos_filtrados;
-            $_SESSION['gofast_admin_cotizacion'] = $cotizacion;
+            $_SESSION['gofast_mensajero_cotizacion'] = $cotizacion;
             
             // Mostrar resumen editable
-            return gofast_admin_mostrar_resumen($cotizacion['mensajero_id'], $cotizacion['origen'], $destinos_filtrados);
+            return gofast_mensajero_mostrar_resumen($cotizacion['origen'], $destinos_filtrados);
         }
     }
 
@@ -427,17 +436,17 @@ function gofast_admin_cotizar_shortcode() {
     $barrios = $barrios_all ?: [];
 
     // Recuperar última cotización
-    $old_data = $_SESSION['gofast_admin_last_quote'] ?? ['mensajero_id' => '', 'origen' => '', 'destinos' => []];
+    $old_data = $_SESSION['gofast_mensajero_last_quote'] ?? ['origen' => '', 'destinos' => []];
 
     // Mostrar mensaje de éxito si existe
     $success_message = '';
-    if (!empty($_SESSION['gofast_admin_success'])) {
-        $success = $_SESSION['gofast_admin_success'];
+    if (!empty($_SESSION['gofast_mensajero_success'])) {
+        $success = $_SESSION['gofast_mensajero_success'];
         $success_message = "<div class='gofast-box' style='background:#d4edda;border-left:4px solid #28a745;padding:12px;margin-bottom:16px;'>";
         $success_message .= "<strong>✅ " . esc_html($success['message']) . "</strong><br>";
         $success_message .= "<small>ID del servicio: #" . esc_html($success['service_id']) . " | Total: $" . number_format($success['total'], 0, ',', '.') . "</small>";
         $success_message .= "</div>";
-        unset($_SESSION['gofast_admin_success']);
+        unset($_SESSION['gofast_mensajero_success']);
     }
 
     ob_start();
@@ -449,26 +458,11 @@ function gofast_admin_cotizar_shortcode() {
         <?php endif; ?>
         
         <div class="gofast-box" style="background:#e3f2fd;border-left:4px solid #2196F3;padding:12px;margin-bottom:16px;">
-            <strong>⚙️ Modo Administrador</strong><br>
-            <small>Crea servicios y asígnalos a cualquier mensajero. Si seleccionas un negocio, el servicio quedará en el historial del cliente propietario.</small>
+            <strong>🚚 Modo <?= $rol === 'admin' ? 'Administrador' : 'Mensajero' ?></strong><br>
+            <small>Crea servicios rápidamente. Al aceptar, el servicio se asignará automáticamente a ti. Si seleccionas un negocio, el servicio quedará en el historial del cliente propietario.</small>
         </div>
 
-        <form method="post" action="" id="gofast-admin-form">
-            <div class="gofast-row">
-                <div style="flex:1;">
-                    <label><strong>Mensajero <span style="color: var(--gofast-danger);">*</span></strong></label>
-                    <select name="mensajero_id" class="gofast-select" id="mensajero_id" required>
-                        <option value="">Seleccionar mensajero...</option>
-                        <?php foreach ($mensajeros as $m): ?>
-                            <option value="<?= esc_attr($m->id) ?>"
-                                <?= ((string)$old_data['mensajero_id'] === (string)$m->id ? 'selected' : '') ?>>
-                                🚚 <?= esc_html($m->nombre) ?> (<?= esc_html($m->telefono) ?>)
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </div>
-
+        <form method="post" action="" id="gofast-mensajero-form">
             <div class="gofast-row">
                 <div style="flex:1;">
                     <label><strong>Origen</strong></label>
@@ -560,13 +554,13 @@ function gofast_admin_cotizar_shortcode() {
                 </div>
                 <div id="destinos-wrapper">
                     <div id="destinos-extra"></div>
-                    <button type="button" id="btn-add-destino" class="gofast-add-button" onclick="addDestinoAdmin()">
+                    <button type="button" id="btn-add-destino" class="gofast-add-button" onclick="addDestinoMensajero()">
                         ➕ Agregar destino adicional
                     </button>
                 </div>
             </div>
 
-            <template id="tpl-destino-admin">
+            <template id="tpl-destino-mensajero">
                 <div class="gofast-destino-item">
                     <select name="destino[]" class="gofast-select" required>
                         <option value="">Buscar barrio...</option>
@@ -576,12 +570,12 @@ function gofast_admin_cotizar_shortcode() {
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <button type="button" class="gofast-remove" onclick="removeDestinoAdmin(this)">❌</button>
+                    <button type="button" class="gofast-remove" onclick="removeDestinoMensajero(this)">❌</button>
                 </div>
             </template>
 
             <div class="gofast-btn-group">
-                <button type="submit" name="gofast_admin_cotizar" class="gofast-submit" id="btn-submit">
+                <button type="submit" name="gofast_mensajero_cotizar" class="gofast-submit" id="btn-submit">
                     Ver resumen 🚀
                 </button>
             </div>
@@ -589,59 +583,12 @@ function gofast_admin_cotizar_shortcode() {
     </div>
 
     <script>
-    // Proteger contra errores de toggleOtro si se ejecuta desde otro archivo
-    (function() {
-        const tipoSelectExists = document.getElementById("tipo_negocio");
-        const wrapperOtroExists = document.getElementById("tipo_otro_wrapper");
-        
-        // Si los elementos no existen, crear una función segura desde el inicio
-        if (!tipoSelectExists || !wrapperOtroExists) {
-            if (typeof window.toggleOtro === 'undefined') {
-                window.toggleOtro = function() {
-                    // Función vacía segura - no hacer nada
-                    return;
-                };
-            } else if (typeof window.toggleOtro === 'function') {
-                // Si existe y los elementos no están presentes, proteger la función
-                const originalToggleOtro = window.toggleOtro;
-                window.toggleOtro = function() {
-                    try {
-                        const tipoSelect = document.getElementById("tipo_negocio");
-                        const wrapperOtro = document.getElementById("tipo_otro_wrapper");
-                        if (tipoSelect && wrapperOtro && tipoSelect.parentNode && wrapperOtro.parentNode) {
-                            return originalToggleOtro();
-                        }
-                    } catch(e) {
-                        // Silenciar error completamente
-                        return;
-                    }
-                };
-            }
-        }
-        
-        // También prevenir que setTimeout ejecute toggleOtro si no están los elementos
-        const originalSetTimeout = window.setTimeout;
-        window.setTimeout = function(func, delay) {
-            if (typeof func === 'function') {
-                const funcStr = func.toString();
-                if (funcStr.includes('toggleOtro')) {
-                    const tipoSelect = document.getElementById("tipo_negocio");
-                    const wrapperOtro = document.getElementById("tipo_otro_wrapper");
-                    if (!tipoSelect || !wrapperOtro) {
-                        return null; // No ejecutar si no existen los elementos
-                    }
-                }
-            }
-            return originalSetTimeout.apply(this, arguments);
-        };
-    })();
-    
     document.addEventListener('DOMContentLoaded', function(){
         if (window.jQuery && jQuery.fn.select2) {
-            initSelect2Admin('.gofast-form');
+            initSelect2Mensajero('.gofast-form');
         }
 
-        const form = document.getElementById('gofast-admin-form');
+        const form = document.getElementById('gofast-mensajero-form');
         if (!form) return;
 
         // Función para actualizar campos hidden según la selección
@@ -800,55 +747,72 @@ function gofast_admin_cotizar_shortcode() {
             actualizarCamposNegocio();
             
             // SEGUNDO: Validar campos requeridos
-            const mensajero = document.getElementById('mensajero_id').value;
             const origen = document.getElementById('origen').value;
             const destino = document.getElementById('destino-principal').value;
-            if (!mensajero || !origen || !destino){
+            if (!origen || !destino){
                 e.preventDefault();
-                alert('Debes seleccionar mensajero, origen y al menos un destino ⚠️');
+                alert('Debes seleccionar origen y al menos un destino ⚠️');
                 return false;
             }
         });
     });
 
-    function addDestinoAdmin(){
-        const tpl = document.getElementById('tpl-destino-admin');
+    function addDestinoMensajero(){
+        const tpl = document.getElementById('tpl-destino-mensajero');
         const cont = document.getElementById('destinos-extra');
         const btn = document.getElementById('btn-add-destino');
         if (tpl && cont) {
             cont.appendChild(tpl.content.cloneNode(true));
             cont.parentNode.appendChild(btn);
             if (window.jQuery && jQuery.fn.select2) {
-                initSelect2Admin('#destinos-extra');
+                initSelect2Mensajero('#destinos-extra');
             }
         }
     }
 
-    function removeDestinoAdmin(btn){
+    function removeDestinoMensajero(btn){
         btn.parentElement.remove();
     }
 
-    function initSelect2Admin(container){
+    function initSelect2Mensajero(container){
         if (!window.jQuery || !jQuery.fn.select2) return;
         
+        /***************************************************
+         *  Normalizador (quita tildes)
+         ***************************************************/
         const normalize = s => (s || "")
             .toLowerCase()
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .trim();
         
+        /***************************************************
+         *  MATCHER UNIFICADO (igual que cotizador principal)
+         *  Maneja optgroups pero con lógica de búsqueda
+         ***************************************************/
         function matcherDestinos(params, data){
+            // Si no hay data, retornar null
             if (!data) return null;
+            
+            // Si es un optgroup (tiene children), dejarlo pasar para que Select2 lo maneje
+            // Select2 procesará los hijos individualmente con este mismo matcher
             if (data.children && Array.isArray(data.children)) {
                 return data;
             }
+            
+            // Si no tiene id, es un optgroup label o separador
+            // Sin búsqueda, mostrarlo; con búsqueda, ocultarlo
             if (!data.id) {
                 if (!params.term || !params.term.trim()) {
                     return data;
                 }
                 return null;
             }
+            
+            // Si no tiene text, no mostrar
             if (!data.text) return null;
+            
+            // Si no hay término de búsqueda, mostrar todas las opciones
             if (!params.term || !params.term.trim()) {
                 data.matchScore = 0;
                 return data;
@@ -862,28 +826,71 @@ function gofast_admin_cotizar_shortcode() {
 
             const text = normalize(data.text);
             
+            // Extraer partes del texto para negocios (formato: "🏪 Nombre Negocio — Nombre Barrio")
+            let nombreNegocio = '';
+            let nombreBarrio = '';
+            let esNegocio = false;
+            
+            // Detectar si es un negocio (tiene el emoji 🏪 y el separador "—")
+            if (text.includes('—') || text.includes(' - ')) {
+                esNegocio = true;
+                const partes = text.split(/[—\-]/).map(p => p.trim());
+                if (partes.length >= 2) {
+                    // Quitar el emoji del nombre del negocio
+                    nombreNegocio = partes[0].replace(/^🏪\s*/, '').trim();
+                    nombreBarrio = partes[1].trim();
+                }
+            }
+            
+            // PRIMERO: Verificar coincidencia exacta (ignorando mayúsculas y tildes)
             if (text === term) {
                 data.matchScore = 10000;
                 return data;
             }
+            
+            // Si es negocio, verificar coincidencia exacta con el nombre del barrio
+            if (esNegocio && nombreBarrio && nombreBarrio === term) {
+                data.matchScore = 10000;
+                return data;
+            }
+            
+            // SEGUNDO: Verificar si el texto comienza exactamente con el término
             if (text.indexOf(term) === 0) {
                 data.matchScore = 9500;
                 return data;
             }
             
+            // Si es negocio, verificar si el nombre del barrio comienza con el término
+            if (esNegocio && nombreBarrio && nombreBarrio.indexOf(term) === 0) {
+                data.matchScore = 9500;
+                return data;
+            }
+            
+            // Palabras comunes a ignorar en la búsqueda
             const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
+            
             const searchWords = term.split(/\s+/).filter(Boolean).filter(word => {
                 return word.length > 2 && !stopWords.includes(word);
             });
             
+            // Detectar si el término de búsqueda parece ser completo (múltiples palabras o palabra larga)
+            const isCompleteSearch = term.split(/\s+/).length >= 2 || term.length >= 10;
+            
+            // Si después de filtrar no quedan palabras, buscar el término completo
             if (searchWords.length === 0) {
                 if (text.indexOf(term) !== -1) {
+                    data.matchScore = 7000;
+                    return data;
+                }
+                // Si es negocio, buscar también en el nombre del barrio
+                if (esNegocio && nombreBarrio && nombreBarrio.indexOf(term) !== -1) {
                     data.matchScore = 7000;
                     return data;
                 }
                 return null;
             }
             
+            // Verificar que al menos una palabra significativa esté presente
             const significantMatches = searchWords.filter(word => {
                 if (word.length <= 2) {
                     return text.split(/\s+/).some(textWord => textWord.indexOf(word) === 0);
@@ -891,10 +898,103 @@ function gofast_admin_cotizar_shortcode() {
                 return text.indexOf(word) !== -1;
             });
             
+            // Si es negocio, también buscar palabras significativas en el nombre del barrio
+            if (esNegocio && nombreBarrio) {
+                const barrioMatches = searchWords.filter(word => {
+                    if (word.length <= 2) {
+                        return nombreBarrio.split(/\s+/).some(textWord => textWord.indexOf(word) === 0);
+                    }
+                    return nombreBarrio.indexOf(word) !== -1;
+                });
+                // Si hay coincidencias en el barrio, agregarlas a significantMatches
+                if (barrioMatches.length > 0) {
+                    barrioMatches.forEach(match => {
+                        if (!significantMatches.includes(match)) {
+                            significantMatches.push(match);
+                        }
+                    });
+                }
+            }
+            
             if (significantMatches.length === 0) return null;
             
             const allSignificantMatch = searchWords.length === significantMatches.length;
-            let score = allSignificantMatch ? 5000 : 3000;
+            
+            // Si la búsqueda parece completa y no hay coincidencia exacta, ser más estricto
+            if (isCompleteSearch && text !== term && text.indexOf(term) !== 0) {
+                // Solo mostrar si el término completo está presente (aunque no al inicio)
+                if (text.indexOf(term) === -1) {
+                    // Si es negocio, verificar también en el nombre del barrio
+                    let termFoundInBarrio = false;
+                    if (esNegocio && nombreBarrio && nombreBarrio.indexOf(term) !== -1) {
+                        termFoundInBarrio = true;
+                    }
+                    
+                    if (!termFoundInBarrio) {
+                        // Verificar si al menos todas las palabras significativas están presentes
+                        const allWordsPresent = searchWords.every(word => text.indexOf(word) !== -1);
+                        // Si es negocio, también verificar en el nombre del barrio
+                        if (!allWordsPresent && esNegocio && nombreBarrio) {
+                            const allWordsInBarrio = searchWords.every(word => nombreBarrio.indexOf(word) !== -1);
+                            if (!allWordsInBarrio) {
+                                return null; // Filtrar si no están todas las palabras
+                            }
+                        } else if (!allWordsPresent) {
+                            return null; // Filtrar si no están todas las palabras
+                        }
+                    }
+                }
+            }
+
+            // Sistema de puntuación
+            let score = 0;
+            
+            const textWithoutStopWords = text.split(/\s+/).filter(w => !stopWords.includes(w)).join(' ');
+            const termWithoutStopWords = searchWords.join(' ');
+            
+            // Coincidencia exacta sin stop words
+            if (textWithoutStopWords === termWithoutStopWords) {
+                score = 10000;
+            } 
+            // El término completo (sin stop words) está al inicio
+            else if (textWithoutStopWords.indexOf(termWithoutStopWords) === 0) {
+                score = 9000;
+            } 
+            // El término completo (sin stop words) está en cualquier parte
+            else if (textWithoutStopWords.indexOf(termWithoutStopWords) !== -1) {
+                score = 8000;
+            } 
+            // Al menos una palabra significativa al inicio
+            else if (searchWords.some(word => text.indexOf(word) === 0)) {
+                score = 7000;
+            } 
+            // El término completo está en cualquier parte
+            else if (text.indexOf(term) !== -1) {
+                score = 6000;
+            }
+            // Si es negocio, verificar si el término está en el nombre del barrio
+            else if (esNegocio && nombreBarrio && nombreBarrio.indexOf(term) !== -1) {
+                score = 6000;
+            } 
+            // Coincidencias parciales
+            else {
+                score = allSignificantMatch ? 5000 : 3000;
+                
+                let lastIndex = -1;
+                let wordsInOrder = true;
+                searchWords.forEach(word => {
+                    const wordIndex = text.indexOf(word, lastIndex + 1);
+                    if (wordIndex === -1) {
+                        wordsInOrder = false;
+                    } else {
+                        if (wordIndex < lastIndex) wordsInOrder = false;
+                        lastIndex = wordIndex;
+                        if (text.indexOf(word) === 0) score += 500;
+                    }
+                });
+                
+                if (wordsInOrder) score += 1000;
+            }
             
             data.matchScore = score;
             return data;
@@ -916,7 +1016,251 @@ function gofast_admin_cotizar_shortcode() {
                         const scoreB = b.matchScore || 0;
                         return scoreB - scoreA;
                     });
+                },
+                templateResult: function(data, container){
+                    // Manejar optgroups (no tienen id pero tienen children)
+                    if (!data || !data.text) {
+                        if (data && data.children) return data.text; // Retornar label del optgroup
+                        return data ? data.text : '';
+                    }
+                    
+                    // Si no tiene id, es un optgroup label, retornar sin modificar
+                    if (!data.id) return data.text;
+
+                    let originalText = data.text;
+                    
+                    // Obtener el término de búsqueda del campo activo
+                    let searchTerm = "";
+                    const $activeField = jQuery('.select2-container--open .select2-search__field');
+                    if ($activeField.length) {
+                        searchTerm = $activeField.val() || "";
+                    }
+                    
+                    if (!searchTerm || !searchTerm.trim()) {
+                        const $result = jQuery('<span>' + originalText + '</span>');
+                        if (data.matchScore !== undefined) {
+                            $result.attr('data-match-score', data.matchScore);
+                        }
+                        return $result;
+                    }
+
+                    // Normalizar para búsqueda sin tildes
+                    const normalizedSearch = normalize(searchTerm);
+                    const normalizedText = normalize(originalText);
+                    
+                    // Dividir término en palabras significativas
+                    const stopWords = ['las', 'los', 'la', 'el', 'de', 'del', 'en', 'un', 'una', 'y', 'o'];
+                    const searchWords = normalizedSearch.split(/\s+/).filter(Boolean).filter(word => {
+                        return word.length > 2 && !stopWords.includes(word);
+                    });
+                    
+                    // Si no hay palabras significativas, buscar el término completo
+                    const wordsToHighlight = searchWords.length > 0 ? searchWords : [normalizedSearch];
+                    
+                    // Encontrar coincidencias en el texto normalizado y mapear a texto original
+                    const highlightRanges = [];
+                    
+                    wordsToHighlight.forEach(function(word) {
+                        let searchPos = 0;
+                        while ((searchPos = normalizedText.indexOf(word, searchPos)) !== -1) {
+                            const endPos = searchPos + word.length;
+                            
+                            // Mapear posiciones normalizadas a originales
+                            let origStart = -1;
+                            let origEnd = -1;
+                            let normPos = 0;
+                            
+                            // Encontrar inicio
+                            for (let i = 0; i < originalText.length && origStart === -1; i++) {
+                                const charNorm = normalize(originalText[i]);
+                                if (normPos === searchPos) {
+                                    origStart = i;
+                                }
+                                normPos += charNorm.length;
+                            }
+                            
+                            // Encontrar fin
+                            if (origStart >= 0) {
+                                normPos = searchPos;
+                                for (let i = origStart; i < originalText.length; i++) {
+                                    const charNorm = normalize(originalText[i]);
+                                    normPos += charNorm.length;
+                                    if (normPos >= endPos) {
+                                        origEnd = i + 1;
+                                        break;
+                                    }
+                                }
+                                
+                                if (origStart >= 0 && origEnd > origStart) {
+                                    highlightRanges.push({ start: origStart, end: origEnd });
+                                }
+                            }
+                            
+                            searchPos = endPos;
+                        }
+                    });
+                    
+                    // Fusionar rangos solapados
+                    if (highlightRanges.length > 0) {
+                        highlightRanges.sort((a, b) => a.start - b.start);
+                        const mergedRanges = [highlightRanges[0]];
+                        
+                        for (let i = 1; i < highlightRanges.length; i++) {
+                            const current = highlightRanges[i];
+                            const last = mergedRanges[mergedRanges.length - 1];
+                            
+                            if (current.start <= last.end) {
+                                last.end = Math.max(last.end, current.end);
+                            } else {
+                                mergedRanges.push(current);
+                            }
+                        }
+                        
+                        // Construir resultado con resaltados
+                        const parts = [];
+                        let lastIndex = 0;
+                        
+                        mergedRanges.forEach(function(range) {
+                            // Agregar texto antes del rango
+                            if (range.start > lastIndex) {
+                                parts.push(originalText.substring(lastIndex, range.start));
+                            }
+                            
+                            // Agregar texto resaltado
+                            const matchText = originalText.substring(range.start, range.end);
+                            parts.push('<span style="background-color:#F4C524;color:#000;font-weight:bold;padding:1px 2px;">' + 
+                                       matchText + '</span>');
+                            
+                            lastIndex = range.end;
+                        });
+                        
+                        // Agregar texto restante después del último rango
+                        if (lastIndex < originalText.length) {
+                            parts.push(originalText.substring(lastIndex));
+                        }
+                        
+                        const result = parts.join('');
+                        
+                        // Crear elemento jQuery con el HTML renderizado correctamente
+                        const $result = jQuery('<span>').html(result);
+                        // Agregar atributo data con el score para poder filtrar después
+                        if (data.matchScore !== undefined) {
+                            $result.attr('data-match-score', data.matchScore);
+                        }
+                        return $result;
+                    }
+                    
+                    // Si no hay coincidencias, retornar texto sin resaltar
+                    const $result = jQuery('<span>').text(originalText);
+                    if (data.matchScore !== undefined) {
+                        $result.attr('data-match-score', data.matchScore);
+                    }
+                    return $result;
                 }
+            }).on('select2:open', function(e) {
+                const $select = jQuery(this);
+                const $container = $select.next('.select2-container');
+                
+                // Asegurar que el campo de búsqueda sea visible
+                setTimeout(function() {
+                    const $dropdown = jQuery('.select2-dropdown');
+                    const $searchContainer = $dropdown.find('.select2-search--dropdown');
+                    const $searchField = $searchContainer.find('.select2-search__field');
+                    
+                    if ($searchField.length) {
+                        // Forzar actualización dinámica al escribir
+                        $searchField.on('input.select2-dynamic', function() {
+                            // Select2 actualiza automáticamente los resultados cuando cambia el término
+                            // Solo necesitamos esperar a que se actualicen y luego filtrar
+                            const term = jQuery(this).val() || '';
+                            
+                            // Después de que Select2 actualice los resultados, filtrar si hay coincidencias exactas
+                            setTimeout(function() {
+                                        const $results = $dropdown.find('.select2-results__options');
+                                        const $items = $results.find('.select2-results__option[role="option"]:not(.select2-results__option--loading)');
+                                        
+                                        if ($items.length > 0) {
+                                            // Verificar si hay coincidencias exactas (score 10000)
+                                            let hasExactMatch = false;
+                                            $items.each(function() {
+                                                const $item = jQuery(this);
+                                                const $span = $item.find('span[data-match-score]');
+                                                if ($span.length) {
+                                                    const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                                    if (score >= 10000) {
+                                                        hasExactMatch = true;
+                                                        return false; // break
+                                                    }
+                                                }
+                                            });
+                                            
+                                            if (hasExactMatch) {
+                                                // Ocultar elementos con score < 9500
+                                                $items.each(function() {
+                                                    const $item = jQuery(this);
+                                                    const $span = $item.find('span[data-match-score]');
+                                                    if ($span.length) {
+                                                        const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                                        if (score < 9500) {
+                                                            $item.hide();
+                                                        } else {
+                                                            $item.show();
+                                                        }
+                                                    } else {
+                                                        $item.show(); // Mostrar si no tiene score
+                                                    }
+                                                });
+                                            } else {
+                                                // Si no hay exactas, verificar si hay muy cercanas (>= 9000)
+                                                let hasVeryClose = false;
+                                                $items.each(function() {
+                                                    const $item = jQuery(this);
+                                                    const $span = $item.find('span[data-match-score]');
+                                                    if ($span.length) {
+                                                        const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                                        if (score >= 9000) {
+                                                            hasVeryClose = true;
+                                                            return false; // break
+                                                        }
+                                                    }
+                                                });
+                                                
+                                                if (hasVeryClose) {
+                                                    // Mostrar solo las muy cercanas (hasta 5)
+                                                    let count = 0;
+                                                    $items.each(function() {
+                                                        const $item = jQuery(this);
+                                                        const $span = $item.find('span[data-match-score]');
+                                                        if ($span.length) {
+                                                            const score = parseInt($span.attr('data-match-score') || '0', 10);
+                                                            if (score >= 9000 && count < 5) {
+                                                                $item.show();
+                                                                count++;
+                                                            } else {
+                                                                $item.hide();
+                                                            }
+                                                        } else {
+                                                            $item.hide(); // Ocultar si no tiene score
+                                                        }
+                                                    });
+                                                } else {
+                                                    // Mostrar todos (hasta 10)
+                                                    let count = 0;
+                                                    $items.each(function() {
+                                                        if (count < 10) {
+                                                            jQuery(this).show();
+                                                            count++;
+                                                        } else {
+                                                            jQuery(this).hide();
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }, 150);
+                        });
+                    }
+                }, 50);
             });
         });
     }
@@ -929,7 +1273,7 @@ function gofast_admin_cotizar_shortcode() {
 /*******************************************************
  * FUNCIÓN: MOSTRAR RESUMEN EDITABLE
  *******************************************************/
-function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
+function gofast_mensajero_mostrar_resumen($origen, $destinos) {
     global $wpdb;
     
     if (session_status() === PHP_SESSION_NONE) {
@@ -937,7 +1281,7 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
     }
     
     // Obtener negocio_id de la sesión si existe
-    $cotizacion = $_SESSION['gofast_admin_cotizacion'] ?? null;
+    $cotizacion = $_SESSION['gofast_mensajero_cotizacion'] ?? null;
     $negocio_id = isset($cotizacion['negocio_id']) ? intval($cotizacion['negocio_id']) : 0;
     $negocio_user_id = isset($cotizacion['negocio_user_id']) ? intval($cotizacion['negocio_user_id']) : null;
     
@@ -952,7 +1296,7 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
     // Obtener datos del negocio si existe
     $negocio_seleccionado = null;
     if ($negocio_id > 0) {
-        // Intentar buscar el negocio con cliente_id si se proporcionó
+        // Intentar primero con cliente_id si está disponible
         if ($negocio_user_id && $negocio_user_id > 0) {
             $negocio_seleccionado = $wpdb->get_row($wpdb->prepare(
                 "SELECT n.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
@@ -976,16 +1320,6 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
                 $negocio_id
             ));
         }
-    }
-
-    // Obtener datos del mensajero
-    $mensajero = $wpdb->get_row($wpdb->prepare(
-        "SELECT id, nombre, telefono FROM usuarios_gofast WHERE id = %d AND rol = 'mensajero' AND activo = 1",
-        $mensajero_id
-    ));
-
-    if (!$mensajero) {
-        return "<div class='gofast-box'>Error: Mensajero no encontrado.</div>";
     }
 
     // Datos del origen
@@ -1030,10 +1364,6 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
     $total = 0;
     $lista_recargos = [];
 
-    // Obtener recargos seleccionables de la sesión
-    $cotizacion = $_SESSION['gofast_admin_cotizacion'] ?? null;
-    $recargos_seleccionables_sesion = isset($cotizacion['recargos_seleccionables']) ? $cotizacion['recargos_seleccionables'] : [];
-    
     foreach ($destinos as $dest_id) {
         $sector_destino = intval($wpdb->get_var($wpdb->prepare("SELECT sector_id FROM barrios WHERE id = %d", $dest_id)));
         $nombre_destino = $wpdb->get_var($wpdb->prepare("SELECT nombre FROM barrios WHERE id = %d", $dest_id));
@@ -1048,19 +1378,8 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
         $recargo_variable = $calcular_recargos_variables($precio);
         $recargo_total = $recargo_fijo_por_envio + $recargo_variable;
         
-        // Recargo seleccionable: recuperar de sesión si existe
+        // Recargo seleccionable inicialmente 0 (se puede cambiar en el resumen)
         $recargo_seleccionable_valor = 0;
-        $recargo_seleccionable_id = null;
-        if (isset($recargos_seleccionables_sesion[$dest_id])) {
-            $recargo_seleccionable_id = intval($recargos_seleccionables_sesion[$dest_id]);
-            $recargo_seleccionable = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, nombre, valor_fijo FROM recargos WHERE id = %d AND tipo = 'por_volumen_peso' AND activo = 1",
-                $recargo_seleccionable_id
-            ));
-            if ($recargo_seleccionable) {
-                $recargo_seleccionable_valor = intval($recargo_seleccionable->valor_fijo);
-            }
-        }
         
         $total_trayecto = $precio + $recargo_total + $recargo_seleccionable_valor;
         $total += $total_trayecto;
@@ -1071,7 +1390,6 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
             'precio' => $precio,
             'recargo' => $recargo_total,
             'recargo_seleccionable' => $recargo_seleccionable_valor,
-            'recargo_seleccionable_id' => $recargo_seleccionable_id,
             'total' => $total_trayecto,
         ];
     }
@@ -1093,8 +1411,7 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
         <div class="gofast-box" style="max-width:800px;margin:0 auto;">
             
             <div style="background:#e3f2fd;border-left:4px solid #2196F3;padding:12px;margin-bottom:20px;border-radius:8px;">
-                <strong>⚙️ Resumen del Servicio</strong><br>
-                <small>Mensajero asignado: <strong><?= esc_html($mensajero->nombre) ?></strong></small><br>
+                <strong>🚚 Resumen del Servicio</strong><br>
                 <small>Puedes eliminar destinos o agregar nuevos antes de aceptar.</small>
             </div>
 
@@ -1103,6 +1420,10 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
                 <?php if ($negocio_seleccionado && !empty($negocio_seleccionado->nombre)): ?>
                     <span style="background:#4CAF50;color:#fff;padding:4px 12px;border-radius:12px;font-size:13px;margin-left:12px;font-weight:normal;vertical-align:middle;">
                         🏪 Negocio: <?= esc_html($negocio_seleccionado->nombre) ?>
+                    </span>
+                <?php elseif ($negocio_id > 0): ?>
+                    <span style="background:#ff9800;color:#fff;padding:4px 12px;border-radius:12px;font-size:13px;margin-left:12px;font-weight:normal;vertical-align:middle;">
+                        🏪 Negocio ID: <?= esc_html($negocio_id) ?>
                     </span>
                 <?php endif; ?>
             </h3>
@@ -1113,6 +1434,13 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
                         Este servicio quedará asociado al cliente <strong><?= esc_html($negocio_seleccionado->cliente_nombre ?? 'Cliente') ?></strong> 
                         (propietario del negocio <strong><?= esc_html($negocio_seleccionado->nombre) ?></strong>) 
                         y aparecerá en su historial de pedidos.
+                    </small>
+                </div>
+            <?php elseif ($negocio_id > 0): ?>
+                <div style="background:#fff3cd;border-left:4px solid #ff9800;padding:10px;margin-bottom:16px;border-radius:6px;">
+                    <strong style="color:#856404;">⚠️ Negocio seleccionado pero no encontrado</strong><br>
+                    <small style="color:#555;">
+                        Se detectó un negocio seleccionado (ID: <?= esc_html($negocio_id) ?>) pero no se pudo obtener su información completa.
                     </small>
                 </div>
             <?php endif; ?>
@@ -1212,33 +1540,21 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
 
             <!-- Formulario oculto para enviar -->
             <form method="post" id="form-aceptar-rechazar">
-                <input type="hidden" name="mensajero_id" value="<?= esc_attr($mensajero_id) ?>">
                 <input type="hidden" name="origen" id="input-origen" value="<?= esc_attr($origen) ?>">
                 <input type="hidden" name="destinos_finales" id="input-destinos" value="<?= esc_attr(implode(',', array_column($detalle_envios, 'id'))) ?>">
+                <?php if ($negocio_id > 0): ?>
+                    <input type="hidden" name="negocio_id" value="<?= esc_attr($negocio_id) ?>">
+                    <?php if ($negocio_user_id): ?>
+                        <input type="hidden" name="cliente_id" value="<?= esc_attr($negocio_user_id) ?>">
+                    <?php endif; ?>
+                <?php endif; ?>
                 <!-- Los recargos seleccionables se agregarán dinámicamente con JavaScript -->
 
-                <!-- Campo de fecha para el servicio (solo admin) -->
-                <div style="background: #e7f3ff; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196F3;">
-                    <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #000;">
-                        📅 Fecha del servicio (opcional)
-                    </label>
-                    <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Fecha</label>
-                        <input type="date" 
-                               name="fecha_servicio" 
-                               value="<?= esc_attr(gofast_date_today()) ?>"
-                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-                    </div>
-                    <small style="color: #666; font-size: 12px; display: block; margin-top: 8px;">
-                        Si no se especifica, se usará la fecha y hora actual del sistema.
-                    </small>
-                </div>
-
                 <div class="gofast-btn-group" style="margin-top:24px;">
-                    <button type="submit" name="gofast_admin_aceptar" class="gofast-btn-request" style="background:#4CAF50;color:#fff;">
+                    <button type="submit" name="gofast_mensajero_aceptar" class="gofast-btn-request" style="background:#4CAF50;color:#fff;">
                         ✅ Aceptar y crear servicio
                     </button>
-                    <button type="submit" name="gofast_admin_rechazar" class="gofast-btn-action gofast-secondary">
+                    <button type="submit" name="gofast_mensajero_rechazar" class="gofast-btn-action gofast-secondary">
                         ❌ Rechazar y volver
                     </button>
                 </div>
@@ -1309,13 +1625,13 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
         }, $recargos_variables)) ?>
     };
     
-    // Mapa de barrios con sus sectores
+    // Mapa de barrios con sus sectores (para cálculo rápido)
     const barriosMap = <?= json_encode(array_map(function($b) use ($wpdb) {
         $sector = intval($wpdb->get_var($wpdb->prepare("SELECT sector_id FROM barrios WHERE id = %d", $b->id)));
         return ['id' => $b->id, 'nombre' => $b->nombre, 'sector_id' => $sector];
     }, $barrios_all)) ?>;
     
-    // Mapa de tarifas
+    // Mapa de tarifas (origen_sector -> destino_sector -> precio)
     const tarifasMap = {};
     <?php
     $tarifas_all = $wpdb->get_results("SELECT origen_sector_id, destino_sector_id, precio FROM tarifas");
@@ -1351,6 +1667,7 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
                     return;
                 }
                 
+                // Agregar destino (recargar para calcular correctamente)
                 agregarDestinoResumen(destinoId);
             });
         }
@@ -1359,7 +1676,7 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
     function eliminarDestinoResumen(destinoId) {
         if (!confirm('¿Eliminar este destino del resumen?')) return;
         
-        const item = document.querySelector('[data-destino-id="' + destinoId + '"]');
+        const item = document.querySelector('[data-destino-id=\"' + destinoId + '\"]');
         if (item) {
             item.remove();
             actualizarDestinosInput();
@@ -1368,18 +1685,10 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
     }
 
     function agregarDestinoResumen(destinoId) {
+        // Recargar página con nuevo destino agregado (más confiable para recargos variables)
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = '';
-        
-        const inputMensajero = document.createElement('input');
-        inputMensajero.type = 'hidden';
-        inputMensajero.name = 'mensajero_id';
-        const mensajeroInput = document.querySelector('input[name="mensajero_id"]');
-        if (mensajeroInput) {
-            inputMensajero.value = mensajeroInput.value;
-            form.appendChild(inputMensajero);
-        }
         
         const inputOrigen = document.createElement('input');
         inputOrigen.type = 'hidden';
@@ -1404,7 +1713,7 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
         const nuevoDestinoInput = document.createElement('input');
         nuevoDestinoInput.type = 'hidden';
         nuevoDestinoInput.name = 'destino[]';
-        nuevoDestinoInput.value = destinoId;
+        nuevoDestinoInput.value = destinoId.toString();
         form.appendChild(nuevoDestinoInput);
         
         // Agregar recargos seleccionables actuales para preservarlos
@@ -1420,9 +1729,28 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
             }
         });
         
+        // Preservar negocio_id y cliente_id si existen (importante cuando se seleccionó un negocio)
+        const negocioIdInput = document.querySelector('#form-aceptar-rechazar input[name="negocio_id"]');
+        if (negocioIdInput && negocioIdInput.value && negocioIdInput.value !== '0') {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'negocio_id';
+            input.value = negocioIdInput.value;
+            form.appendChild(input);
+        }
+        
+        const clienteIdInput = document.querySelector('#form-aceptar-rechazar input[name="cliente_id"]');
+        if (clienteIdInput && clienteIdInput.value && clienteIdInput.value !== '0') {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'cliente_id';
+            input.value = clienteIdInput.value;
+            form.appendChild(input);
+        }
+        
         const submit = document.createElement('input');
         submit.type = 'hidden';
-        submit.name = 'gofast_admin_cotizar';
+        submit.name = 'gofast_mensajero_cotizar';
         submit.value = '1';
         form.appendChild(submit);
         
@@ -1465,14 +1793,17 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
             }
         });
         
+        // Actualizar total en pantalla
         const totalBox = document.getElementById('total-amount');
         if (totalBox) {
             totalBox.textContent = 'Total: $' + total.toLocaleString('es-CO');
         }
         
+        // Validar que haya al menos un destino
         if (items.length === 0) {
             alert('Debes tener al menos un destino');
-            window.location.href = '<?= esc_url(home_url('/admin-cotizar')) ?>';
+            // Recargar para volver al paso 1
+            window.location.href = '<?= esc_url(home_url('/mensajero-cotizar')) ?>';
         }
     }
     
@@ -1525,4 +1856,4 @@ function gofast_admin_mostrar_resumen($mensajero_id, $origen, $destinos) {
     return ob_get_clean();
 }
 
-add_shortcode('gofast_admin_cotizar', 'gofast_admin_cotizar_shortcode');
+add_shortcode('gofast_mensajero_cotizar', 'gofast_mensajero_cotizar_shortcode');

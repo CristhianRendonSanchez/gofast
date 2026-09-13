@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_admin_solicitudes_trabajo
+ */
 /***************************************************
  * GOFAST – ADMINISTRACIÓN DE SOLICITUDES DE TRABAJO (SOLO ADMIN)
  * Shortcode: [gofast_admin_solicitudes_trabajo]

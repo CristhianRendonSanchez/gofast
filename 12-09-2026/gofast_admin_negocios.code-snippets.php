@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_admin_negocios
+ */
 /***************************************************
  * GOFAST – ADMINISTRACIÓN DE NEGOCIOS (SOLO ADMIN)
  * Shortcode: [gofast_admin_negocios]

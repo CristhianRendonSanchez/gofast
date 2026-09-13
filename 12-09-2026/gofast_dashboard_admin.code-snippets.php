@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_dashboard_admin
+ */
 /***************************************************
  * GOFAST – DASHBOARD ADMINISTRATIVO
  * Shortcode: [gofast_dashboard_admin]
@@ -189,12 +193,6 @@ function gofast_dashboard_admin_shortcode() {
             <div style="font-size:40px;margin-bottom:12px;">⚙️</div>
             <h3 style="margin:0 0 8px 0;color:#1a1a1a;">Configuración del Sistema</h3>
             <p style="margin:0;color:#666;font-size:14px;">Gestionar tarifas, barrios, sectores y destinos intermunicipales</p>
-        </a>
-
-        <a href="<?php echo esc_url( home_url('/admin-listado-precios') ); ?>" class="gofast-box" style="display:block;text-decoration:none;padding:24px;transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
-            <div style="font-size:40px;margin-bottom:12px;">📄</div>
-            <h3 style="margin:0 0 8px 0;color:#1a1a1a;">Listado de Precios PDF</h3>
-            <p style="margin:0;color:#666;font-size:14px;">Generar y descargar precios por zona o desde un barrio (A → B = $X)</p>
         </a>
 
         <a href="<?php echo esc_url( home_url('/admin-solicitudes-trabajo') ); ?>" class="gofast-box" style="display:block;text-decoration:none;padding:24px;transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">

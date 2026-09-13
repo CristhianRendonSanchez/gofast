@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_admin_cotizar
+ */
 /*******************************************************
  * ⚙️ GOFAST — COTIZACIÓN RÁPIDA PARA ADMINISTRADORES
  * Shortcode: [gofast_admin_cotizar]

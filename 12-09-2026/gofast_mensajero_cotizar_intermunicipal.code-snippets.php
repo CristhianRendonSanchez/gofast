@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_mensajero_cotizar_intermunicipal
+ */
 /*******************************************************
  * 🚚 GOFAST — COTIZACIÓN INTERMUNICIPAL PARA MENSAJEROS
  * Shortcode: [gofast_mensajero_cotizar_intermunicipal]

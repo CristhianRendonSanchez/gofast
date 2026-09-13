@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_finanzas_admin_dev
+ */
 /***************************************************
  * GOFAST – MÓDULO DE FINANZAS ADMINISTRATIVO
  * Shortcode: [gofast_finanzas_admin]
@@ -15,7 +19,7 @@
  * - Tab Historial de Pagos: Historial de pagos registrados
  * - Bloque de Resultados Generales: Cálculos consolidados
  ***************************************************/
-function gofast_finanzas_admin_shortcode() {
+function gofast_finanzas_admin_dev_shortcode() {
     global $wpdb;
 
     if (session_status() === PHP_SESSION_NONE) {
@@ -6037,5 +6041,4 @@ function inicializarSelect2Filtros() {
     <?php
     return ob_get_clean();
 }
-add_shortcode('gofast_finanzas_admin', 'gofast_finanzas_admin_shortcode');
-
+add_shortcode('gofast_finanzas_admin_dev', 'gofast_finanzas_admin_dev_shortcode');

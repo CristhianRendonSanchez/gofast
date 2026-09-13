@@ -1,3 +1,4 @@
+<?php
 /*******************************************************
  * 🚚 GOFAST — COTIZACIÓN RÁPIDA PARA MENSAJEROS
  * Shortcode: [gofast_mensajero_cotizar]
@@ -1852,4 +1853,3 @@ function gofast_mensajero_mostrar_resumen($origen, $destinos) {
 }
 
 add_shortcode('gofast_mensajero_cotizar', 'gofast_mensajero_cotizar_shortcode');
-

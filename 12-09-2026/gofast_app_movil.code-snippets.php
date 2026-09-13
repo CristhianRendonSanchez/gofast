@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_app_movil
+ */
 /***************************************************
  * GOFAST – APP MÓVIL
  * Shortcode: [gofast_app_movil]

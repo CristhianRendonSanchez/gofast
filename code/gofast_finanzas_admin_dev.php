@@ -2605,55 +2605,11 @@ function gofast_finanzas_admin_dev_shortcode() {
     
     // Función global para cambiar tabs - debe estar disponible inmediatamente
     window.mostrarTabFinanzas = function(tab, element) {
-        // Ocultar todos los tabs
-        document.querySelectorAll('.gofast-config-tab-content').forEach(function(content) {
-            content.style.display = 'none';
-        });
-        
-        // Remover clase activa de todos los botones
-        document.querySelectorAll('.gofast-config-tab').forEach(function(btn) {
-            btn.classList.remove('gofast-config-tab-active');
-        });
-        
-        // Mostrar el tab seleccionado
-        const tabContent = document.getElementById('tab-' + tab);
-        if (tabContent) {
-            tabContent.style.display = 'block';
-        }
-        
-        // Agregar clase activa al botón
-        if (element) {
-            element.classList.add('gofast-config-tab-active');
-        } else {
-            // Si no hay element, buscar el botón correspondiente
-            document.querySelectorAll('.gofast-config-tab').forEach(function(btn) {
-                if (btn.textContent.includes(tab === 'ingresos' ? 'Ingresos' : 
-                                             tab === 'egresos' ? 'Egresos' : 
-                                             tab === 'vales_empresa' ? 'Vales Empresa' : 
-                                             tab === 'vales_personal' ? 'Vales Personal' : 
-                                             tab === 'transferencias_entradas' ? 'Transferencias Entradas' : 
-                                             tab === 'transferencias_salidas' ? 'Transferencias Salidas' : 
-                                             tab === 'descuentos' ? 'Descuentos' : 
-                                             tab === 'registrar_pago' ? 'Registrar Pago' :
-                                             tab === 'historial_pagos' ? 'Historial de Pagos' :
-                                             '')) {
-                    btn.classList.add('gofast-config-tab-active');
-                }
-            });
-        }
-        
-        // Actualizar el campo hidden del formulario de filtros para preservar el tab
-        const filtroTabActivo = document.getElementById('filtro-tab-activo');
-        if (filtroTabActivo) {
-            filtroTabActivo.value = tab;
-        }
-        
-        // Inicializar Select2 cuando se muestre cualquier tab
-        if (typeof inicializarSelect2Filtros === 'function') {
-            setTimeout(function() {
-                inicializarSelect2Filtros();
-            }, 100);
-        }
+        // Navegar vía URL para que PHP cargue los datos del tab seleccionado.
+        // Es necesario porque los datos se cargan condicionalmente según $tab_activo.
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', tab);
+        window.location.href = url.toString();
     };
     </script>
     

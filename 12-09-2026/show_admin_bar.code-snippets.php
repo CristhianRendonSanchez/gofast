@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * show_admin_bar
+ */
 add_filter('show_admin_bar', function() {
     return false;
 }, 99999);

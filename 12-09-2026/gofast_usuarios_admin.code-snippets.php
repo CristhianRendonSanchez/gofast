@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * gofast_usuarios_admin
+ */
 /***************************************************
  * GOFAST – ADMIN GESTIÓN DE USUARIOS
  * Shortcode: [gofast_usuarios_admin]
