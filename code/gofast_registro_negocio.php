@@ -113,6 +113,7 @@ function gofast_registro_negocio_shortcode() {
     $whatsapp_val = $negocio ? esc_attr($negocio->whatsapp) : '';
 
     $nombre_val = $negocio ? esc_attr($negocio->nombre) : '';
+    $nit_val    = $negocio ? esc_attr($negocio->nit ?? '') : '';
     $dir_val    = $negocio ? esc_attr($negocio->direccion_full) : '';
     $barrio_val = $negocio ? intval($negocio->barrio_id) : 0;
 
@@ -139,6 +140,18 @@ function gofast_registro_negocio_shortcode() {
 
             <label>Nombre del negocio</label>
             <input type="text" name="nombre_negocio" value="<?= $nombre_val ?>" required>
+
+            <label>NIT</label>
+            <input type="text"
+                   name="nit"
+                   value="<?= $nit_val ?>"
+                   placeholder="Ej: 900123456-7"
+                   pattern="[0-9.]{5,20}(-[0-9])?"
+                   title="Solo números; si tiene dígito de verificación, sepáralo con guion. Ej: 900123456-7"
+                   required>
+            <small style="display:block;color:#666;font-size:12px;margin-top:-6px;margin-bottom:10px;">
+                Aparece en tus estados de cuenta. Si no tienes NIT, escribe tu número de cédula.
+            </small>
 
             <label>Tipo de negocio</label>
             <select name="tipo_negocio" id="tipo_negocio" class="gofast-select" required>

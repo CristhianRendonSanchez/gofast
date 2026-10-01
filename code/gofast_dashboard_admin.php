@@ -155,6 +155,12 @@ function gofast_dashboard_admin_shortcode() {
             <p style="margin:0;color:#666;font-size:14px;">Ver reportes detallados, estadísticas y exportar datos</p>
         </a>
 
+        <a href="<?php echo esc_url( home_url('/admin-estadisticas') ); ?>" class="gofast-box" style="display:block;text-decoration:none;padding:24px;transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
+            <div style="font-size:40px;margin-bottom:12px;">📈</div>
+            <h3 style="margin:0 0 8px 0;color:#1a1a1a;">Estadísticas de Clientes</h3>
+            <p style="margin:0;color:#666;font-size:14px;">Servicios por tarifa, cliente y mensajero, y estados de cuenta por cliente</p>
+        </a>
+
         <a href="<?php echo esc_url( home_url('/transferencias') ); ?>" class="gofast-box" style="display:block;text-decoration:none;padding:24px;transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
             <div style="font-size:40px;margin-bottom:12px;">💰</div>
             <h3 style="margin:0 0 8px 0;color:#1a1a1a;">Transferencias</h3>

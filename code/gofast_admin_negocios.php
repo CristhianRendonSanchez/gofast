@@ -45,10 +45,14 @@ function gofast_admin_negocios_shortcode() {
         $barrio_id = isset($_POST['barrio_id']) ? (int) $_POST['barrio_id'] : 0;
         $direccion = sanitize_text_field($_POST['direccion_full'] ?? '');
         $whatsapp = gofast_clean_whatsapp($_POST['whatsapp'] ?? '');
+        $nit = preg_replace('/[^0-9\-]/', '', (string) ($_POST['nit'] ?? ''));
         $activo = isset($_POST['activo']) ? 1 : 0;
 
         if (empty($nombre) || empty($direccion) || $barrio_id <= 0) {
             $mensaje = 'Todos los campos obligatorios deben estar completos.';
+            $mensaje_tipo = 'error';
+        } elseif (!preg_match('/^\d{5,15}(-\d)?$/', $nit)) {
+            $mensaje = 'El NIT no es válido: usa solo números y, si aplica, el dígito de verificación con guion (ej: 900123456-7).';
             $mensaje_tipo = 'error';
         } else {
             // Si el tipo es "Otro", usar el valor escrito
@@ -74,11 +78,12 @@ function gofast_admin_negocios_shortcode() {
                         'sector_id' => $sector_id,
                         'direccion_full' => $direccion,
                         'whatsapp' => $whatsapp,
+                        'nit' => $nit,
                         'activo' => $activo,
                         'updated_at' => gofast_current_time('mysql')
                     ],
                     ['id' => $negocio_id],
-                    ['%s', '%s', '%d', '%d', '%s', '%s', '%d', '%s'],
+                    ['%s', '%s', '%d', '%d', '%s', '%s', '%s', '%d', '%s'],
                     ['%d']
                 );
 
@@ -295,6 +300,7 @@ function gofast_admin_negocios_shortcode() {
                             <tr>
                                 <th>ID</th>
                                 <th>Nombre</th>
+                                <th>NIT</th>
                                 <th>Cliente</th>
                                 <th>Dirección</th>
                                 <th>Barrio</th>
@@ -310,6 +316,7 @@ function gofast_admin_negocios_shortcode() {
                                 <tr class="<?= $n->activo == 0 ? 'gofast-row-inactive' : '' ?>">
                                     <td>#<?= esc_html($n->id) ?></td>
                                     <td><strong><?= esc_html($n->nombre) ?></strong></td>
+                                    <td><?= !empty($n->nit) ? esc_html($n->nit) : '<span style="color:#999;">Sin NIT</span>' ?></td>
                                     <td>
                                         <?= esc_html($n->cliente_nombre ?? 'N/A') ?><br>
                                         <small style="color: #666;"><?= esc_html($n->cliente_telefono ?? '') ?></small>
@@ -333,6 +340,7 @@ function gofast_admin_negocios_shortcode() {
                                                 data-negocio-barrio-id="<?= esc_attr($n->barrio_id) ?>"
                                                 data-negocio-direccion="<?= esc_attr($n->direccion_full) ?>"
                                                 data-negocio-whatsapp="<?= esc_attr(gofast_clean_whatsapp($n->whatsapp)) ?>"
+                                                data-negocio-nit="<?= esc_attr($n->nit ?? '') ?>"
                                                 data-negocio-activo="<?= esc_attr($n->activo) ?>"
                                                 style="background: var(--gofast-yellow); color: #000; margin-right: 4px;">
                                             ✏️ Editar
@@ -363,6 +371,7 @@ function gofast_admin_negocios_shortcode() {
                                 <div style="font-size: 18px; font-weight: 700; color: #000; margin-bottom: 4px;">
                                     <?= esc_html($n->nombre) ?>
                                 </div>
+                                <div style="font-size: 12px; color: #666; margin-bottom: 6px;">NIT: <?= !empty($n->nit) ? esc_html($n->nit) : 'Sin NIT' ?></div>
                                 <span class="gofast-badge-estado <?= $n->activo == 1 ? 'gofast-badge-estado-entregado' : 'gofast-badge-estado-cancelado' ?>" style="font-size: 12px; padding: 4px 10px;">
                                     <?= $n->activo == 1 ? '✅ Activo' : '❌ Inactivo' ?>
                                 </span>
@@ -416,6 +425,7 @@ function gofast_admin_negocios_shortcode() {
                                     data-negocio-barrio-id="<?= esc_attr($n->barrio_id) ?>"
                                     data-negocio-direccion="<?= esc_attr($n->direccion_full) ?>"
                                     data-negocio-whatsapp="<?= esc_attr($n->whatsapp) ?>"
+                                    data-negocio-nit="<?= esc_attr($n->nit ?? '') ?>"
                                     data-negocio-activo="<?= esc_attr($n->activo) ?>"
                                     style="flex: 1; background: var(--gofast-yellow); color: #000;">
                                 ✏️ Editar
@@ -454,6 +464,21 @@ function gofast_admin_negocios_shortcode() {
                        id="editar-negocio-nombre"
                        required
                        style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+            </div>
+
+            <div style="margin-bottom:16px;">
+                <label style="display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:#000;">NIT:</label>
+                <input type="text"
+                       name="nit"
+                       id="editar-negocio-nit"
+                       placeholder="Ej: 900123456-7"
+                       pattern="[0-9.]{5,20}(-[0-9])?"
+                       title="Solo números; si tiene dígito de verificación, sepáralo con guion. Ej: 900123456-7"
+                       required
+                       style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                <small style="display:block;color:#666;font-size:12px;margin-top:4px;">
+                    Se muestra en los estados de cuenta. Si no tiene NIT, la cédula del dueño.
+                </small>
             </div>
             
             <div style="margin-bottom:16px;">
@@ -565,6 +590,7 @@ jQuery(document).ready(function($) {
         $('#editar-negocio-id').val(negocioId || '');
         $('#editar-negocio-nombre').val(negocioNombre || '');
         $('#editar-negocio-direccion').val(negocioDireccion || '');
+        $('#editar-negocio-nit').val(btn.attr('data-negocio-nit') || '');
         
         // Limpiar WhatsApp si es un valor problemático (2147483647 o 0)
         let whatsappValue = negocioWhatsapp || '';

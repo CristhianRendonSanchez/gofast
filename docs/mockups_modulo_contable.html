@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GoFast – Módulo Contable · Propuesta y mockups</title>
+<style>
+  :root {
+    --yellow: #F4C524;
+    --yellow-soft: #fff8db;
+    --black: #1a1a1a;
+    --gray-900: #222;
+    --gray-700: #555;
+    --gray-500: #888;
+    --gray-300: #ddd;
+    --gray-100: #f5f5f5;
+    --white: #fff;
+    --green: #28a745;
+    --blue: #0d6efd;
+    --red: #dc3545;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    background: #eceae4;
+    color: var(--gray-900);
+    line-height: 1.45;
+  }
+
+  /* ---------- Navegación ---------- */
+  .topnav {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--black);
+    display: flex; align-items: center; gap: 18px;
+    padding: 12px 24px; overflow-x: auto;
+  }
+  .topnav .brand { color: var(--yellow); font-weight: 800; letter-spacing: .5px; white-space: nowrap; }
+  .topnav a {
+    color: #ddd; text-decoration: none; font-size: 13px; white-space: nowrap;
+    padding: 6px 10px; border-radius: 6px;
+  }
+  .topnav a:hover { background: #333; color: var(--yellow); }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  /* ---------- Portada ---------- */
+  .hero {
+    background: var(--black); color: var(--white);
+    border-radius: 18px; padding: 48px 40px; margin-bottom: 40px;
+    position: relative; overflow: hidden;
+  }
+  .hero::after {
+    content: ""; position: absolute; right: -140px; top: -140px;
+    width: 300px; height: 300px; border-radius: 50%; background: var(--yellow); opacity: .9;
+  }
+  .hero h1 { font-size: 36px; position: relative; z-index: 1; max-width: 640px; }
+  .hero h1 span { color: var(--yellow); }
+  .hero p { margin-top: 12px; color: #ccc; max-width: 560px; position: relative; z-index: 1; }
+  .hero .pills { margin-top: 22px; display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
+  .pill { background: #2c2c2c; color: #eee; border-radius: 999px; padding: 6px 14px; font-size: 13px; }
+
+  /* ---------- Secciones ---------- */
+  section.screen { margin-bottom: 56px; scroll-margin-top: 70px; }
+  .screen-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .screen-num {
+    background: var(--yellow); color: var(--black); font-weight: 800;
+    border-radius: 8px; padding: 2px 10px; font-size: 14px;
+  }
+  .screen-head h2 { font-size: 22px; }
+  .screen-desc { color: var(--gray-700); margin-bottom: 16px; max-width: 820px; font-size: 14px; }
+
+  /* Marco tipo navegador */
+  .browser {
+    background: var(--white); border-radius: var(--radius);
+    box-shadow: 0 10px 30px rgba(0,0,0,.12); overflow: hidden;
+  }
+  .browser-bar {
+    background: #f0f0f0; padding: 10px 14px; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--gray-300);
+  }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #ccc; }
+  .dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
+  .url {
+    margin-left: 12px; background: var(--white); border-radius: 6px; padding: 4px 12px;
+    font-size: 12px; color: var(--gray-500); flex: 1; max-width: 420px;
+  }
+  .app { padding: 22px; }
+
+  /* Header app GoFast */
+  .app-header {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--black); color: var(--white); padding: 12px 20px;
+  }
+  .app-header .logo { font-weight: 800; color: var(--yellow); }
+  .app-header .user { font-size: 13px; color: #ccc; }
+
+  h3.app-title { font-size: 20px; margin-bottom: 4px; }
+  .app-sub { color: var(--gray-500); font-size: 13px; margin-bottom: 18px; }
+
+  /* Controles */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    background: var(--gray-100); border-radius: 10px; padding: 12px; margin-bottom: 18px;
+  }
+  .chip {
+    border: 1.5px solid var(--gray-300); background: var(--white); border-radius: 999px;
+    padding: 6px 14px; font-size: 13px; cursor: default;
+  }
+  .chip.active { border-color: var(--yellow); background: var(--yellow-soft); font-weight: 700; }
+  .input, .select {
+    border: 1px solid var(--gray-300); background: var(--white); border-radius: 8px;
+    padding: 7px 10px; font-size: 13px; color: var(--gray-700); min-width: 120px;
+  }
+  .select::after { content: " ▾"; color: var(--gray-500); }
+  .btn {
+    border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 700;
+    cursor: default; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-dark { background: var(--black); color: var(--white); }
+  .btn-yellow { background: var(--yellow); color: var(--black); }
+  .btn-green { background: var(--green); color: var(--white); }
+  .btn-blue { background: var(--blue); color: var(--white); }
+  .btn-ghost { background: var(--white); border: 1px solid var(--gray-300); color: var(--gray-900); }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi { border: 1px solid #eee; border-radius: 10px; padding: 14px; background: var(--white); }
+  .kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); }
+  .kpi .value { font-size: 22px; font-weight: 800; margin-top: 4px; }
+  .kpi .delta { font-size: 12px; margin-top: 2px; }
+  .up { color: var(--green); } .down { color: var(--red); }
+  .kpi.hl { background: var(--black); color: var(--white); border-color: var(--black); }
+  .kpi.hl .label { color: #bbb; } .kpi.hl .value { color: var(--yellow); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; border-bottom: 2px solid #eee; margin-bottom: 14px; flex-wrap: wrap; }
+  .tab { padding: 8px 14px; font-size: 13px; color: var(--gray-700); border-bottom: 3px solid transparent; margin-bottom: -2px; }
+  .tab.active { border-color: var(--yellow); color: var(--black); font-weight: 700; }
+
+  /* Tablas */
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--gray-500); padding: 8px 10px; border-bottom: 2px solid #eee; background: #fafafa;
+  }
+  table.t td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; }
+  table.t td.num, table.t th.num { text-align: right; white-space: nowrap; }
+  table.t tr.total td { font-weight: 800; background: var(--yellow-soft); }
+  .bar { height: 8px; background: #eee; border-radius: 999px; overflow: hidden; min-width: 90px; }
+  .bar > span { display: block; height: 100%; background: var(--yellow); }
+
+  .badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 700; }
+  .b-ok { background: #d4edda; color: #155724; }
+  .b-warn { background: #fff3cd; color: #856404; }
+  .b-bad { background: #f8d7da; color: #721c24; }
+  .b-info { background: #e7f1ff; color: #084298; }
+  .b-dark { background: var(--black); color: var(--yellow); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; }
+  .card { border: 1px solid #eee; border-radius: 10px; padding: 16px; background: var(--white); }
+  .card h4 { font-size: 14px; margin-bottom: 10px; }
+
+  /* Gráfico de barras simple */
+  .chart { display: flex; align-items: flex-end; gap: 8px; height: 150px; padding: 8px 4px 0; border-bottom: 1px solid #eee; }
+  .chart .col { flex: 1; background: var(--yellow); border-radius: 4px 4px 0 0; position: relative; }
+  .chart .col.dark { background: var(--black); }
+  .chart-labels { display: flex; gap: 8px; font-size: 10px; color: var(--gray-500); padding: 4px; }
+  .chart-labels span { flex: 1; text-align: center; }
+
+  .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; color: var(--gray-500); }
+  .pages { display: flex; gap: 4px; }
+  .pages span { border: 1px solid var(--gray-300); border-radius: 6px; padding: 3px 9px; }
+  .pages span.on { background: var(--black); color: var(--yellow); border-color: var(--black); }
+
+  .exports { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--gray-300); }
+
+  /* Modal */
+  .modal-bg {
+    background: rgba(0,0,0,.45); padding: 36px 20px; display: flex; justify-content: center;
+  }
+  .modal { background: var(--white); border-radius: 14px; width: 100%; max-width: 720px; overflow: hidden; }
+  .modal-head { background: var(--black); color: var(--white); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .modal-head b { color: var(--yellow); }
+  .modal-body { padding: 20px; }
+  .kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+  .kv div { background: var(--gray-100); border-radius: 8px; padding: 10px; }
+  .kv small { display: block; font-size: 11px; color: var(--gray-500); text-transform: uppercase; }
+  .kv strong { font-size: 14px; }
+
+  /* Formularios */
+  .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px; }
+  .field .input, .field .select { width: 100%; display: block; }
+  .field.full { grid-column: 1 / -1; }
+  .req { color: var(--red); }
+  .help { font-size: 11px; color: var(--gray-500); margin-top: 3px; }
+  .notice { border-left: 4px solid var(--yellow); background: var(--yellow-soft); padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; }
+
+  /* Diagrama de tablas */
+  .er { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: start; }
+  .entity { border-radius: 10px; overflow: hidden; border: 1.5px solid var(--gray-300); background: var(--white); font-size: 12px; }
+  .entity.new { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(244,197,36,.25); }
+  .entity-head { background: #444; color: var(--white); padding: 8px 12px; font-weight: 700; display: flex; justify-content: space-between; }
+  .entity.new .entity-head { background: var(--black); color: var(--yellow); }
+  .entity ul { list-style: none; }
+  .entity li { padding: 5px 12px; border-top: 1px solid #f1f1f1; display: flex; justify-content: space-between; gap: 8px; }
+  .entity li em { color: var(--gray-500); font-style: normal; }
+  .entity li.pk b::before { content: "PK "; color: var(--yellow); background: var(--black); border-radius: 3px; padding: 0 4px; margin-right: 4px; font-size: 10px; }
+  .entity li.fk b::before { content: "FK "; color: var(--black); background: #eee; border-radius: 3px; padding: 0 4px; margin-right: 4px; font-size: 10px; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--gray-700); margin-top: 14px; flex-wrap: wrap; }
+  .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; }
+  .legend .l-new::before { background: var(--yellow); }
+  .legend .l-old::before { background: #444; }
+
+  /* Flujo */
+  .flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .flow .step { background: var(--white); border: 1.5px solid var(--gray-300); border-radius: 10px; padding: 12px 14px; font-size: 13px; min-width: 150px; text-align: center; }
+  .flow .step.new { border-color: var(--yellow); background: var(--yellow-soft); font-weight: 700; }
+  .flow .arrow { font-size: 20px; color: var(--gray-500); }
+
+  /* CSV */
+  .csv { font-family: Consolas, "Courier New", monospace; font-size: 12px; background: #1e1e1e; color: #e6e6e6; border-radius: 10px; padding: 14px; overflow-x: auto; white-space: pre; }
+  .csv .h { color: var(--yellow); }
+
+  /* Cronograma */
+  .timeline { display: grid; grid-template-columns: 260px repeat(6, 1fr); font-size: 12px; border: 1px solid #eee; border-radius: 10px; overflow: hidden; background: var(--white); }
+  .timeline > div { padding: 9px 10px; border-bottom: 1px solid #f1f1f1; border-right: 1px solid #f7f7f7; }
+  .timeline .th { background: #fafafa; font-weight: 700; color: var(--gray-500); text-transform: uppercase; font-size: 11px; }
+  .timeline .task { font-weight: 600; }
+  .timeline .on { background: var(--yellow); }
+  .timeline .on.dark { background: var(--black); }
+
+  .costs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  .cost-card { border-radius: 14px; padding: 22px; background: var(--white); border: 1px solid #eee; }
+  .cost-card.main { background: var(--black); color: var(--white); border-color: var(--black); }
+  .cost-card h4 { font-size: 15px; margin-bottom: 6px; }
+  .cost-card .big { font-size: 30px; font-weight: 800; margin: 8px 0; }
+  .cost-card.main .big { color: var(--yellow); }
+  .cost-card ul { margin: 10px 0 0 18px; font-size: 13px; }
+  .cost-card.main ul { color: #ccc; }
+
+  .foot { text-align: center; font-size: 12px; color: var(--gray-500); margin-top: 40px; }
+
+  @media (max-width: 900px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .grid-2, .er, .costs, .form-grid { grid-template-columns: 1fr; }
+    .timeline { grid-template-columns: 160px repeat(6, 1fr); }
+    .kv { grid-template-columns: 1fr 1fr; }
+  }
+  @media print {
+    .topnav { display: none; }
+    body { background: #fff; }
+    section.screen { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="brand">GO FAST · Módulo contable</span>
+  <a href="#s1">1. Panel admin</a>
+  <a href="#s2">2. Agrupaciones</a>
+  <a href="#s3">3. Detalle domicilio</a>
+  <a href="#s4">4. Panel cliente</a>
+  <a href="#s5">5. Datos facturación</a>
+  <a href="#s6">6. Clientes y facturación</a>
+  <a href="#s7">7. Exportes CSV</a>
+  <a href="#s8">8. Tablas nuevas</a>
+  <a href="#s9">9. Tiempos y costos</a>
+</nav>
+
+<div class="wrap">
+
+  <!-- PORTADA -->
+  <div class="hero">
+    <h1>Módulo <span>contable</span> para administradores y clientes</h1>
+    <p>Ver todos los domicilios realizados con su desglose completo: tarifa, trayecto, recargos, cliente y mensajero. Totales y promedios por rango de fechas, y exportes listos para la facturación electrónica.</p>
+    <div class="pills">
+      <span class="pill">Desglose por tarifa y trayecto</span>
+      <span class="pill">Totales y promedios por fechas</span>
+      <span class="pill">Vista para clientes</span>
+      <span class="pill">CSV para factura electrónica</span>
+      <span class="pill">Precios históricos protegidos</span>
+    </div>
+  </div>
+
+  <!-- 1. PANEL ADMIN -->
+  <section class="screen" id="s1">
+    <div class="screen-head"><span class="screen-num">1</span><h2>Panel contable del administrador</h2></div>
+    <p class="screen-desc">Pantalla principal. Filtros rápidos por periodo, indicadores clave con comparación contra el periodo anterior, gráfico de ingresos por día y el detalle de cada domicilio.</p>
+
+    <div class="browser">
+      <div class="browser-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">gofast.com.co/contabilidad</span></div>
+      <div class="app-header"><span class="logo">GO FAST</span><span class="user">Admin · Cristhian</span></div>
+      <div class="app">
+        <h3 class="app-title">Contabilidad</h3>
+        <p class="app-sub">Periodo: 1 al 15 de septiembre de 2026 · Comparado con 16 al 31 de agosto</p>
+
+        <div class="filters">
+          <span class="chip">Hoy</span>
+          <span class="chip">Semana</span>
+          <span class="chip active">Quincena</span>
+          <span class="chip">Mes</span>
+          <span class="input">Desde 01/09/2026</span>
+          <span class="input">Hasta 15/09/2026</span>
+          <span class="select">Todos los clientes</span>
+          <span class="select">Todos los mensajeros</span>
+          <span class="select">Urbano + intermunicipal</span>
+          <span class="select">Entregados</span>
+          <span class="btn btn-dark">Aplicar</span>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi hl"><div class="label">Ingresos</div><div class="value">$8.540.000</div><div class="delta up">+12% vs anterior</div></div>
+          <div class="kpi"><div class="label">Domicilios</div><div class="value">1.248</div><div class="delta up">+9%</div></div>
+          <div class="kpi"><div class="label">Ticket promedio</div><div class="value">$6.843</div><div class="delta up">+3%</div></div>
+          <div class="kpi"><div class="label">Recargos</div><div class="value">$612.000</div><div class="delta down">-4%</div></div>
+          <div class="kpi"><div class="label">Cancelados</div><div class="value">23</div><div class="delta up">1,8% del total</div></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h4>Ingresos por día</h4>
+            <div class="chart">
+              <div class="col" style="height:45%"></div><div class="col" style="height:60%"></div>
+              <div class="col" style="height:52%"></div><div class="col" style="height:70%"></div>
+              <div class="col dark" style="height:88%"></div><div class="col" style="height:66%"></div>
+              <div class="col" style="height:40%"></div><div class="col" style="height:58%"></div>
+              <div class="col" style="height:63%"></div><div class="col" style="height:74%"></div>
+              <div class="col" style="height:80%"></div><div class="col dark" style="height:95%"></div>
+              <div class="col" style="height:71%"></div><div class="col" style="height:49%"></div>
+              <div class="col" style="height:55%"></div>
+            </div>
+            <div class="chart-labels"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span></div>
+          </div>
+          <div class="card">
+            <h4>Composición del ingreso</h4>
+            <table class="t">
+              <tr><td>Tarifas base</td><td class="num">$7.280.000</td><td class="num">85%</td></tr>
+              <tr><td>Recargos automáticos</td><td class="num">$412.000</td><td class="num">5%</td></tr>
+              <tr><td>Recargos seleccionables</td><td class="num">$200.000</td><td class="num">2%</td></tr>
+              <tr><td>Montos adicionales</td><td class="num">$248.000</td><td class="num">3%</td></tr>
+              <tr><td>Intermunicipales</td><td class="num">$400.000</td><td class="num">5%</td></tr>
+              <tr class="total"><td>Total</td><td class="num">$8.540.000</td><td class="num">100%</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:18px;">
+          <h4>Detalle de domicilios</h4>
+          <table class="t">
+            <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Trayecto(s)</th><th>Mensajero</th><th>Tipo</th><th>Estado</th><th class="num">Total</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>1520</td><td>12/09 10:30</td><td>Panadería Sol</td><td>San Carlos → Olímpico <span class="badge b-info">+1</span></td><td>Juan P.</td><td>Urbano</td><td><span class="badge b-ok">Entregado</span></td><td class="num">$12.000</td><td><span class="btn btn-ghost">Ver</span></td></tr>
+              <tr><td>1519</td><td>12/09 10:05</td><td>María Gómez</td><td>Centro → Bastilla</td><td>Luis R.</td><td>Urbano</td><td><span class="badge b-ok">Entregado</span></td><td class="num">$5.500</td><td><span class="btn btn-ghost">Ver</span></td></tr>
+              <tr><td>1518</td><td>12/09 09:40</td><td>Farmacia Vida</td><td>Tuluá → Buga</td><td>Juan P.</td><td>Intermunicipal</td><td><span class="badge b-ok">Entregado</span></td><td class="num">$25.000</td><td><span class="btn btn-ghost">Ver</span></td></tr>
+              <tr><td>1517</td><td>12/09 09:12</td><td>Carlos Ruiz</td><td>Lago → Laguito</td><td>—</td><td>Urbano</td><td><span class="badge b-bad">Cancelado</span></td><td class="num">$4.500</td><td><span class="btn btn-ghost">Ver</span></td></tr>
+            </tbody>
+          </table>
+          <div class="pagination"><span>Mostrando 1–15 de 1.248</span><div class="pages"><span class="on">1</span><span>2</span><span>3</span><span>…</span><span>84</span></div></div>
+        </div>
+
+        <div class="exports">
+          <span class="btn btn-blue">Descargar detalle (CSV)</span>
+          <span class="btn btn-ghost">Descargar resumen (CSV)</span>
+          <span class="btn btn-yellow">CSV para facturación electrónica</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. AGRUPACIONES -->
+  <section class="screen" id="s2">
+    <div class="screen-head"><span class="screen-num">2</span><h2>Agrupaciones: por tarifa, trayecto, cliente, mensajero y periodo</h2></div>
+    <p class="screen-desc">Con un clic se reorganiza la información. Cada agrupación muestra cantidad de viajes, total, promedio y su peso sobre el ingreso del periodo.</p>
+
+    <div class="browser">
+      <div class="browser-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">gofast.com.co/contabilidad?ver=trayecto</span></div>
+      <div class="app">
+        <div class="tabs">
+          <span class="tab">Por tarifa (zona → zona)</span>
+          <span class="tab active">Por trayecto (barrio → barrio)</span>
+          <span class="tab">Por cliente / negocio</span>
+          <span class="tab">Por mensajero</span>
+          <span class="tab">Por tipo de recargo</span>
+          <span class="tab">Por día / semana / mes</span>
+        </div>
+        <table class="t">
+          <thead><tr><th>Trayecto</th><th class="num">Viajes</th><th class="num">Total</th><th class="num">Promedio</th><th class="num">Mínimo</th><th class="num">Máximo</th><th>Participación</th></tr></thead>
+          <tbody>
+            <tr><td>San Carlos → Olímpico</td><td class="num">184</td><td class="num">$1.012.000</td><td class="num">$5.500</td><td class="num">$5.500</td><td class="num">$7.000</td><td><div class="bar"><span style="width:92%"></span></div></td></tr>
+            <tr><td>Centro → Bastilla</td><td class="num">151</td><td class="num">$830.500</td><td class="num">$5.500</td><td class="num">$5.000</td><td class="num">$6.500</td><td><div class="bar"><span style="width:76%"></span></div></td></tr>
+            <tr><td>Doce de Octubre → Lago</td><td class="num">120</td><td class="num">$540.000</td><td class="num">$4.500</td><td class="num">$4.500</td><td class="num">$5.500</td><td><div class="bar"><span style="width:52%"></span></div></td></tr>
+            <tr><td>Avenida Cali → Quintas de San Felipe</td><td class="num">98</td><td class="num">$588.000</td><td class="num">$6.000</td><td class="num">$6.000</td><td class="num">$8.000</td><td><div class="bar"><span style="width:55%"></span></div></td></tr>
+            <tr><td>Balcones del Lago → Balcones del Lago <span class="badge b-warn">mismo barrio</span></td><td class="num">77</td><td class="num">$269.500</td><td class="num">$3.500</td><td class="num">$3.500</td><td class="num">$4.000</td><td><div class="bar"><span style="width:25%"></span></div></td></tr>
+          </tbody>
+        </table>
+
+        <div class="grid-2" style="margin-top:18px;">
+          <div class="card">
+            <h4>Vista "Por mensajero"</h4>
+            <table class="t">
+              <thead><tr><th>Mensajero</th><th class="num">Viajes</th><th class="num">Ingreso generado</th><th class="num">Promedio</th></tr></thead>
+              <tr><td>Juan P.</td><td class="num">412</td><td class="num">$2.884.000</td><td class="num">$7.000</td></tr>
+              <tr><td>Luis R.</td><td class="num">355</td><td class="num">$2.307.500</td><td class="num">$6.500</td></tr>
+              <tr><td>Andrés M.</td><td class="num">298</td><td class="num">$1.788.000</td><td class="num">$6.000</td></tr>
+            </table>
+          </div>
+          <div class="card">
+            <h4>Vista "Por cliente / negocio"</h4>
+            <table class="t">
+              <thead><tr><th>Cliente</th><th class="num">Viajes</th><th class="num">Total</th><th>Facturación</th></tr></thead>
+              <tr><td>Panadería Sol</td><td class="num">96</td><td class="num">$672.000</td><td><span class="badge b-ok">Datos completos</span></td></tr>
+              <tr><td>Farmacia Vida</td><td class="num">71</td><td class="num">$912.000</td><td><span class="badge b-ok">Datos completos</span></td></tr>
+              <tr><td>María Gómez</td><td class="num">18</td><td class="num">$99.000</td><td><span class="badge b-warn">Falta documento</span></td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. DETALLE -->
+  <section class="screen" id="s3">
+    <div class="screen-head"><span class="screen-num">3</span><h2>Detalle de un domicilio (desglose completo)</h2></div>
+    <p class="screen-desc">Al abrir un domicilio se ve cada trayecto con su tarifa, recargos y adicionales tal como quedaron el día del servicio. Aunque cambien las tarifas después, este valor no se altera.</p>
+
+    <div class="browser">
+      <div class="browser-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">gofast.com.co/contabilidad · Domicilio #1520</span></div>
+      <div class="modal-bg">
+        <div class="modal">
+          <div class="modal-head"><span>Domicilio <b>#1520</b></span><span class="badge b-ok">Entregado</span></div>
+          <div class="modal-body">
+            <div class="kv">
+              <div><small>Fecha</small><strong>12/09/2026 10:30</strong></div>
+              <div><small>Cliente</small><strong>Panadería Sol</strong></div>
+              <div><small>Mensajero</small><strong>Juan P.</strong></div>
+              <div><small>Origen</small><strong>San Carlos</strong></div>
+              <div><small>Tipo</small><strong>Urbano</strong></div>
+              <div><small>Creado por</small><strong>Cliente (web)</strong></div>
+            </div>
+            <table class="t">
+              <thead><tr><th>Trayecto</th><th class="num">Tarifa</th><th class="num">Recargo</th><th class="num">Recargo extra</th><th class="num">Adicional</th><th class="num">Total</th></tr></thead>
+              <tbody>
+                <tr><td>San Carlos → Olímpico</td><td class="num">$5.000</td><td class="num">$500</td><td class="num">—</td><td class="num">—</td><td class="num">$5.500</td></tr>
+                <tr><td>San Carlos → Bastilla</td><td class="num">$5.000</td><td class="num">$500</td><td class="num">$1.000<br><small style="color:#888">Lluvia</small></td><td class="num">—</td><td class="num">$6.500</td></tr>
+                <tr class="total"><td>Total del domicilio</td><td class="num">$10.000</td><td class="num">$1.000</td><td class="num">$1.000</td><td class="num">$0</td><td class="num">$12.000</td></tr>
+              </tbody>
+            </table>
+            <p class="help" style="margin-top:10px;">Valores guardados el 12/09/2026. Registro contable fijo.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. PANEL CLIENTE -->
+  <section class="screen" id="s4">
+    <div class="screen-head"><span class="screen-num">4</span><h2>Panel contable del cliente o negocio</h2></div>
+    <p class="screen-desc">El cliente ve solo sus domicilios, con totales y promedios del periodo. Le sirve para conciliar con sus propias cuentas y para descargar su historial.</p>
+
+    <div class="browser">
+      <div class="browser-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">gofast.com.co/mis-cuentas</span></div>
+      <div class="app-header"><span class="logo">GO FAST</span><span class="user">Panadería Sol</span></div>
+      <div class="app">
+        <h3 class="app-title">Mis cuentas</h3>
+        <p class="app-sub">Resumen de tus domicilios con GoFast</p>
+
+        <div class="filters">
+          <span class="chip">Semana</span><span class="chip">Quincena</span><span class="chip active">Mes</span>
+          <span class="input">Desde 01/09/2026</span><span class="input">Hasta 30/09/2026</span>
+          <span class="btn btn-dark">Aplicar</span>
+        </div>
+
+        <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+          <div class="kpi hl"><div class="label">Total del mes</div><div class="value">$672.000</div></div>
+          <div class="kpi"><div class="label">Domicilios</div><div class="value">96</div></div>
+          <div class="kpi"><div class="label">Promedio</div><div class="value">$7.000</div></div>
+          <div class="kpi"><div class="label">Destino más frecuente</div><div class="value" style="font-size:16px">Olímpico</div></div>
+        </div>
+
+        <table class="t">
+          <thead><tr><th>#</th><th>Fecha</th><th>Trayecto(s)</th><th>Estado</th><th class="num">Total</th></tr></thead>
+          <tr><td>1520</td><td>12/09 10:30</td><td>San Carlos → Olímpico, Bastilla</td><td><span class="badge b-ok">Entregado</span></td><td class="num">$12.000</td></tr>
+          <tr><td>1491</td><td>11/09 16:12</td><td>San Carlos → Centro</td><td><span class="badge b-ok">Entregado</span></td><td class="num">$5.000</td></tr>
+          <tr><td>1466</td><td>10/09 08:55</td><td>San Carlos → Lago</td><td><span class="badge b-ok">Entregado</span></td><td class="num">$4.500</td></tr>
+          <tr class="total"><td colspan="4">Total del periodo</td><td class="num">$672.000</td></tr>
+        </table>
+
+        <div class="exports">
+          <span class="btn btn-blue">Descargar mi historial (CSV)</span>
+          <span class="btn btn-ghost">Mis datos de facturación</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. DATOS FACTURACIÓN -->
+  <section class="screen" id="s5">
+    <div class="screen-head"><span class="screen-num">5</span><h2>Datos de facturación del cliente</h2></div>
+    <p class="screen-desc">Formulario donde el cliente (o el admin por él) registra la información que exige la factura electrónica. Hoy estos datos no existen en el sistema.</p>
+
+    <div class="browser">
+      <div class="browser-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">gofast.com.co/mis-cuentas/facturacion</span></div>
+      <div class="app">
+        <h3 class="app-title">Datos de facturación</h3>
+        <p class="app-sub">Se usarán para emitir tus facturas electrónicas</p>
+        <div class="notice">Completa estos datos para que podamos facturar tus servicios a tu nombre o al de tu empresa.</div>
+
+        <div class="form-grid">
+          <div class="field"><label>Tipo de persona <span class="req">*</span></label><span class="select">Jurídica</span></div>
+          <div class="field"><label>Tipo de documento <span class="req">*</span></label><span class="select">NIT</span></div>
+          <div class="field"><label>Número de documento <span class="req">*</span></label><span class="input">900.123.456</span></div>
+          <div class="field"><label>Dígito de verificación</label><span class="input">7</span><div class="help">Solo para NIT</div></div>
+          <div class="field full"><label>Razón social o nombre completo <span class="req">*</span></label><span class="input">Panadería Sol S.A.S.</span></div>
+          <div class="field full"><label>Dirección <span class="req">*</span></label><span class="input">Calle 25 # 30-12, San Carlos</span></div>
+          <div class="field"><label>Municipio <span class="req">*</span></label><span class="select">Tuluá, Valle del Cauca</span></div>
+          <div class="field"><label>Teléfono</label><span class="input">310 000 0000</span></div>
+          <div class="field"><label>Correo de facturación <span class="req">*</span></label><span class="input">facturas@panaderiasol.com</span><div class="help">Aquí llegará la factura electrónica</div></div>
+          <div class="field"><label>Responsabilidad fiscal</label><span class="select">No responsable de IVA (R-99-PN)</span></div>
+        </div>
+        <div style="margin-top:18px;display:flex;gap:10px;"><span class="btn btn-yellow">Guardar datos</span><span class="btn btn-ghost">Cancelar</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. ADMIN CLIENTES FACTURACIÓN -->
+  <section class="screen" id="s6">
+    <div class="screen-head"><span class="screen-num">6</span><h2>Control de clientes para facturar</h2></div>
+    <p class="screen-desc">El administrador ve qué clientes tienen los datos completos y cuánto hay pendiente por facturar en el periodo, antes de exportar al sistema de facturación.</p>
+
+    <div class="browser">
+      <div class="browser-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">gofast.com.co/contabilidad?ver=facturacion</span></div>
+      <div class="app">
+        <div class="filters">
+          <span class="chip active">Septiembre 2026</span>
+          <span class="select">Todos los estados</span>
+          <span class="input">Buscar cliente o NIT…</span>
+        </div>
+        <table class="t">
+          <thead><tr><th>Cliente</th><th>Documento</th><th>Correo facturación</th><th class="num">Servicios</th><th class="num">Por facturar</th><th>Datos</th><th></th></tr></thead>
+          <tr><td>Panadería Sol S.A.S.</td><td>NIT 900.123.456-7</td><td>facturas@panaderiasol.com</td><td class="num">96</td><td class="num">$672.000</td><td><span class="badge b-ok">Completos</span></td><td><span class="btn btn-ghost">Editar</span></td></tr>
+          <tr><td>Farmacia Vida</td><td>NIT 901.555.222-1</td><td>contab@farmaciavida.co</td><td class="num">71</td><td class="num">$912.000</td><td><span class="badge b-ok">Completos</span></td><td><span class="btn btn-ghost">Editar</span></td></tr>
+          <tr><td>María Gómez</td><td>—</td><td>maria@gmail.com</td><td class="num">18</td><td class="num">$99.000</td><td><span class="badge b-warn">Falta documento</span></td><td><span class="btn btn-ghost">Completar</span></td></tr>
+          <tr><td>Clientes ocasionales</td><td>Consumidor final</td><td>—</td><td class="num">412</td><td class="num">$2.160.000</td><td><span class="badge b-info">Factura global</span></td><td></td></tr>
+        </table>
+        <div class="exports">
+          <span class="btn btn-yellow">Exportar CSV de facturación del periodo</span>
+          <span class="btn btn-ghost">Solo clientes con datos completos</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. EXPORTES -->
+  <section class="screen" id="s7">
+    <div class="screen-head"><span class="screen-num">7</span><h2>Exportes CSV (se abren en Excel)</h2></div>
+    <p class="screen-desc">Tres archivos: el detalle para revisión contable, el resumen para análisis y el de facturación, con los campos listos para cargar manualmente en el sistema de facturación electrónica.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h4>Detalle de domicilios</h4>
+        <div class="csv"><span class="h">Servicio;Fecha;Cliente;Origen;Destino;Tarifa;Recargo;Recargo_extra;Adicional;Total;Mensajero;Estado</span>
+1520;2026-09-12 10:30;Panadería Sol;San Carlos;Olímpico;5000;500;0;0;5500;Juan P.;Entregado
+1520;2026-09-12 10:30;Panadería Sol;San Carlos;Bastilla;5000;500;1000;0;6500;Juan P.;Entregado
+1519;2026-09-12 10:05;María Gómez;Centro;Bastilla;5000;500;0;0;5500;Luis R.;Entregado</div>
+      </div>
+      <div class="card">
+        <h4>Resumen por agrupación</h4>
+        <div class="csv"><span class="h">Agrupacion;Viajes;Total;Promedio;Minimo;Maximo</span>
+San Carlos → Olímpico;184;1012000;5500;5500;7000
+Centro → Bastilla;151;830500;5500;5000;6500
+Doce de Octubre → Lago;120;540000;4500;4500;5500</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px;">
+      <h4>CSV para facturación electrónica <span class="badge b-dark">carga manual</span></h4>
+      <div class="csv"><span class="h">Tipo_doc;Numero_doc;DV;Razon_social;Direccion;Municipio;Email;Telefono;Resp_fiscal;Concepto;Cantidad;Valor_unitario;Total;Periodo</span>
+NIT;900123456;7;Panadería Sol S.A.S.;Calle 25 # 30-12;Tuluá;facturas@panaderiasol.com;3100000000;R-99-PN;Servicio de mensajería urbana;96;7000;672000;2026-09
+NIT;901555222;1;Farmacia Vida;Cra 30 # 20-10;Tuluá;contab@farmaciavida.co;3200000000;R-99-PN;Servicio de mensajería urbana e intermunicipal;71;12845;912000;2026-09
+CC;222222222222;;Consumidor final;Tuluá;Tuluá;;;;Servicio de mensajería;412;5243;2160000;2026-09</div>
+      <p class="help" style="margin-top:8px;">Las columnas se ajustan a la plantilla de importación del proveedor de facturación que se elija.</p>
+    </div>
+  </section>
+
+  <!-- 8. TABLAS -->
+  <section class="screen" id="s8">
+    <div class="screen-head"><span class="screen-num">8</span><h2>Tablas nuevas en la base de datos</h2></div>
+    <p class="screen-desc">Solo se agregan dos tablas. Las existentes no se modifican. La clave es guardar una "foto" de cada trayecto al momento de crear o editar el domicilio, para que la contabilidad nunca cambie si se modifican las tarifas.</p>
+
+    <div class="er">
+      <div class="entity">
+        <div class="entity-head">servicios_gofast <span>existe</span></div>
+        <ul>
+          <li class="pk"><b>id</b><em>bigint</em></li>
+          <li><b>fecha</b><em>datetime</em></li>
+          <li class="fk"><b>user_id</b><em>cliente</em></li>
+          <li class="fk"><b>mensajero_id</b><em>bigint</em></li>
+          <li><b>destinos</b><em>JSON</em></li>
+          <li><b>total</b><em>int</em></li>
+          <li><b>tracking_estado</b><em>enum</em></li>
+        </ul>
+      </div>
+
+      <div class="entity new">
+        <div class="entity-head">servicios_detalle_contable <span>NUEVA</span></div>
+        <ul>
+          <li class="pk"><b>id</b><em>bigint</em></li>
+          <li class="fk"><b>servicio_id</b><em>bigint</em></li>
+          <li><b>fecha_servicio</b><em>datetime</em></li>
+          <li class="fk"><b>cliente_id</b><em>bigint</em></li>
+          <li class="fk"><b>negocio_id</b><em>bigint</em></li>
+          <li class="fk"><b>mensajero_id</b><em>bigint</em></li>
+          <li><b>tipo_servicio</b><em>urbano / inter</em></li>
+          <li><b>estado</b><em>varchar</em></li>
+          <li><b>orden_trayecto</b><em>int</em></li>
+          <li><b>barrio_origen</b><em>id + nombre</em></li>
+          <li><b>barrio_destino</b><em>id + nombre</em></li>
+          <li><b>sector_origen / destino</b><em>int</em></li>
+          <li><b>tarifa_base</b><em>int</em></li>
+          <li><b>recargo_automatico</b><em>int</em></li>
+          <li><b>recargo_extra</b><em>nombre + valor</em></li>
+          <li><b>monto_adicional</b><em>int</em></li>
+          <li><b>total_trayecto</b><em>int</em></li>
+          <li><b>es_estimado</b><em>histórico</em></li>
+        </ul>
+      </div>
+
+      <div class="entity new">
+        <div class="entity-head">datos_facturacion_gofast <span>NUEVA</span></div>
+        <ul>
+          <li class="pk"><b>id</b><em>bigint</em></li>
+          <li class="fk"><b>user_id</b><em>bigint</em></li>
+          <li class="fk"><b>negocio_id</b><em>opcional</em></li>
+          <li><b>tipo_persona</b><em>natural / jurídica</em></li>
+          <li><b>tipo_documento</b><em>CC / NIT / CE</em></li>
+          <li><b>numero_documento</b><em>varchar</em></li>
+          <li><b>dv</b><em>varchar</em></li>
+          <li><b>razon_social</b><em>varchar</em></li>
+          <li><b>direccion</b><em>varchar</em></li>
+          <li><b>municipio</b><em>varchar</em></li>
+          <li><b>email_facturacion</b><em>varchar</em></li>
+          <li><b>telefono</b><em>varchar</em></li>
+          <li><b>responsabilidad_fiscal</b><em>varchar</em></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legend"><span class="l-new">Tabla nueva</span><span class="l-old">Tabla existente (sin cambios)</span></div>
+
+    <div class="card" style="margin-top:22px;">
+      <h4>Cómo fluye la información</h4>
+      <div class="flow">
+        <div class="step">Cliente, admin o mensajero crea el domicilio</div>
+        <span class="arrow">→</span>
+        <div class="step">Se guarda el servicio</div>
+        <span class="arrow">→</span>
+        <div class="step new">Se guarda la foto contable por trayecto</div>
+        <span class="arrow">→</span>
+        <div class="step">Panel admin y panel cliente</div>
+        <span class="arrow">→</span>
+        <div class="step new">CSV para factura electrónica</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. TIEMPOS Y COSTOS -->
+  <section class="screen" id="s9">
+    <div class="screen-head"><span class="screen-num">9</span><h2>Tiempos y costos</h2></div>
+    <p class="screen-desc">Estimado de 68 a 94 horas de desarrollo, entregado en tres fases. A medio tiempo son unas 4 a 6 semanas.</p>
+
+    <div class="timeline">
+      <div class="th">Actividad</div><div class="th">Sem 1</div><div class="th">Sem 2</div><div class="th">Sem 3</div><div class="th">Sem 4</div><div class="th">Sem 5</div><div class="th">Sem 6</div>
+
+      <div class="task">Fase 1 · Tablas nuevas (6–8 h)</div><div class="on dark"></div><div></div><div></div><div></div><div></div><div></div>
+      <div class="task">Fase 1 · Foto contable en 9 pantallas (10–14 h)</div><div class="on dark"></div><div class="on dark"></div><div></div><div></div><div></div><div></div>
+      <div class="task">Fase 2 · Carga del histórico (4–6 h)</div><div></div><div class="on"></div><div></div><div></div><div></div><div></div>
+      <div class="task">Fase 2 · Panel admin (20–28 h)</div><div></div><div class="on"></div><div class="on"></div><div class="on"></div><div></div><div></div>
+      <div class="task">Fase 2 · Exportes CSV (6–8 h)</div><div></div><div></div><div></div><div class="on"></div><div></div><div></div>
+      <div class="task">Fase 3 · Datos de facturación (6–8 h)</div><div></div><div></div><div></div><div></div><div class="on dark"></div><div></div>
+      <div class="task">Fase 3 · Panel cliente (8–12 h)</div><div></div><div></div><div></div><div></div><div class="on dark"></div><div class="on dark"></div>
+      <div class="task">Pruebas y paso a producción (8–10 h)</div><div></div><div></div><div></div><div></div><div></div><div class="on"></div>
+    </div>
+
+    <div class="costs" style="margin-top:22px;">
+      <div class="cost-card main">
+        <h4>Desarrollo con freelance</h4>
+        <div class="big">$2,7 – $8,5 M</div>
+        <div>COP · 68 a 94 horas a 40.000 – 90.000 COP/h</div>
+        <ul>
+          <li>Perfil medio (≈ 60.000 COP/h): 4 a 5,6 millones</li>
+          <li>Sin costos de infraestructura adicionales</li>
+          <li>Entregado por fases</li>
+        </ul>
+      </div>
+      <div class="cost-card">
+        <h4>Desarrollo propio con IA</h4>
+        <div class="big">$80 – $160 mil</div>
+        <div>COP en herramientas · 35 a 55 horas de tiempo propio</div>
+        <ul>
+          <li>Suscripción de IA por 1 a 2 meses</li>
+          <li>Mismo hosting y base de datos</li>
+          <li>Requiere probar y publicar los snippets</li>
+        </ul>
+      </div>
+    </div>
+    <p class="help" style="margin-top:12px;">No incluye el proveedor de facturación electrónica (se contrata aparte) ni una integración por API en el futuro.</p>
+  </section>
+
+  <p class="foot">GoFast · Propuesta módulo contable · Mockups ilustrativos, los datos mostrados son de ejemplo.</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,1622 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/css.css"></head><body style="max-width:1200px;margin:0 auto;padding:20px;font-family:system-ui,Arial,sans-serif;"><style>
+.gofast-md-tabs { display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 2px solid #ddd; margin-bottom: 4px; }
+.gofast-md-barra { background: var(--gofast-gray-300); border-radius: 999px; height: 8px; overflow: hidden; margin-bottom: 2px; }
+.gofast-md-barra span { display: block; height: 100%; background: var(--gofast-yellow); border-radius: 999px; }
+.gofast-md-excluido td { color: #999; }
+.gofast-md-nota { font-size: 12px; color: #666; margin-top: 10px; }
+.gofast-home .gofast-alert-info { color: #1a1a1a; margin-bottom: 20px; }
+.gofast-md-kpi small { display: block; margin-top: 6px; font-size: 11px; }
+.gofast-md-kpis { display: grid; gap: 16px; margin: 0 0 20px; }
+.gofast-md-kpis .gofast-box { margin: 0; min-width: 0; }
+.gofast-md-kpis-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.gofast-md-kpis-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.gofast-md-kpis-5 .gofast-md-kpi { padding: 16px 10px !important; }
+@media (max-width: 768px) {
+    .gofast-home .gofast-md-kpis.gofast-md-kpis-5, .gofast-home .gofast-md-kpis.gofast-md-kpis-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+    .gofast-md-kpis-5 > .gofast-box:first-child { grid-column: 1 / -1; }
+    .gofast-home .gofast-md-kpis .gofast-box { padding: 12px 8px !important; }
+    .gofast-home .gofast-md-kpis .gofast-box > div:first-child { font-size: 22px !important; margin-bottom: 2px !important; }
+    .gofast-home .gofast-md-kpis .gofast-box > div:nth-child(2) { font-size: 20px !important; }
+    .gofast-home .gofast-md-kpis .gofast-box > div:nth-child(3) { font-size: 12px !important; }
+}
+.gofast-md-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.gofast-md-chips-lbl { font-weight: 600; font-size: 13px; margin-right: 4px; }
+.gofast-md-chips button.gofast-md-chip { background: #fff; color: #1a1a1a; border: 1px solid var(--gofast-gray-400); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; line-height: 1.2; width: auto; min-height: 0; margin: 0; box-shadow: none; cursor: pointer; }
+.gofast-md-chips button.gofast-md-chip:hover { border-color: #1a1a1a; }
+.gofast-md-chips button.gofast-md-chip-on { background: var(--gofast-yellow); border-color: var(--gofast-yellow); }
+.gofast-md-rango-libre { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 3px 3px 8px; border: 1px solid var(--gofast-gray-400); border-radius: 999px; background: #fff; font-size: 13px; }
+.gofast-md-rango-libre.gofast-md-chip-on { border-color: var(--gofast-yellow); box-shadow: 0 0 0 2px var(--gofast-yellow); }
+.gofast-md-rango-libre input[type="date"] { border: 0; padding: 4px; margin: 0; height: auto; font-size: 13px; width: auto; min-height: 0; background: transparent; box-shadow: none; }
+.gofast-md-rango-libre button.gofast-md-chip { padding: 5px 12px; }
+.gofast-md-negocios { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.gofast-md-negocio { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--gofast-gray-400); border-radius: var(--radius-m); background: #fff; color: #1a1a1a; text-decoration: none; }
+.gofast-md-negocio:hover { border-color: #1a1a1a; }
+.gofast-md-negocio-on { border: 2px solid var(--gofast-yellow); background: #fff9d6; }
+.gofast-md-negocio .ico { font-size: 22px; }
+.gofast-md-negocio b { display: block; font-size: 13px; }
+.gofast-md-negocio small { color: #666; font-size: 12px; }
+.gofast-md-negocio > span:last-child { min-width: 0; }
+.gofast-md-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
+.gofast-md-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.gofast-md-grid .gofast-box, .gofast-md-grid-2 .gofast-box { margin: 0; }
+.gofast-md-chart { display: flex; align-items: flex-end; gap: 3px; height: 200px; border-bottom: 2px solid var(--gofast-gray-300); padding-top: 8px; }
+.gofast-md-chart-col { flex: 1; min-width: 3px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; cursor: pointer; }
+.gofast-md-chart-bar { width: 100%; height: calc((100% - var(--reserva, 20px)) * var(--h, 0)); background: var(--gofast-yellow); border-radius: 4px 4px 0 0; min-height: 2px; transition: background .15s; }
+.gofast-md-chart-max { background: #e0a800; }
+.gofast-md-chart-val { display: block; text-align: center; font-size: 11px; font-weight: 700; color: #333; line-height: 1.1; margin-bottom: 3px; white-space: nowrap; }
+.gofast-md-chart-varias .gofast-md-chart-val { font-size: 10px; }
+.gofast-md-chart-muchas { --reserva: 46px; }
+.gofast-md-chart-muchas .gofast-md-chart-val { writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto 3px; font-size: 10px; font-weight: 600; }
+.gofast-md-chart-col:hover .gofast-md-chart-bar, .gofast-md-chart-activa .gofast-md-chart-bar { background: #000; }
+.gofast-md-chart-info { margin-top: 10px; padding: 8px 10px; background: #fff9d6; border-radius: 8px; font-size: 13px; }
+.gofast-md-chart-info small { color: #666; }
+@media (max-width: 600px) {
+    .gofast-md-chart-varias { --reserva: 46px; }
+    .gofast-md-chart-varias .gofast-md-chart-val { writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto 3px; }
+    .gofast-md-chart { gap: 2px; }
+    .gofast-md-chart-muchas .gofast-md-chart-val { font-size: 9px; }
+}
+.gofast-md-chart-labels { display: flex; gap: 3px; margin-top: 4px; }
+.gofast-md-chart-labels span { flex: 1; min-width: 3px; font-size: 10px; color: #666; text-align: center; white-space: nowrap; }
+.gofast-md-stack { display: flex; height: 26px; border-radius: 6px; overflow: hidden; background: var(--gofast-gray-300); margin: 8px 0 14px; }
+.gofast-md-stack span { display: block; height: 100%; }
+.gofast-md-leyenda > div { display: grid; grid-template-columns: 14px 1fr auto; column-gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+.gofast-md-leyenda i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.gofast-md-leyenda small { grid-column: 2 / 4; color: #666; font-size: 11px; }
+.gofast-md-top { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.gofast-md-top-n { width: 24px; height: 24px; border-radius: 50%; background: var(--gofast-yellow); color: #000; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gofast-md-top-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+.gofast-md-top-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gofast-md-grid > *, .gofast-md-grid-2 > * { min-width: 0; }
+.gofast-md-tarifas { margin-bottom: 8px; align-items: start; }
+.gofast-md-tarifas-grafica { position: sticky; top: 20px; background: #fafafa; border: 1px solid var(--gofast-gray-400, #e5e5e5); border-radius: var(--radius-m, 10px); padding: 14px; }
+.gofast-md-mini { margin-top: 14px; }
+.gofast-md-mini > div { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+.gofast-md-mini > div:last-child { border-bottom: 0; }
+.gofast-md-mini span { color: #666; }
+.gofast-md-mini b { text-align: right; }
+.gofast-home .gofast-md-panel .gofast-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 900px) {
+    .gofast-md-grid, .gofast-md-grid-2 { grid-template-columns: minmax(0, 1fr); }
+}
+.gofast-md-descargas { display: flex; gap: 8px; flex-wrap: wrap; }
+.gofast-md-descargas a { text-decoration: none; }
+.gofast-home .gofast-pedidos-filtros-row.gofast-md-filtros-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 16px; align-items: end; margin-bottom: 14px; }
+.gofast-home .gofast-md-filtros-grid > div { min-width: 0 !important; max-width: none !important; width: auto; }
+.gofast-home .gofast-md-filtros-grid.gofast-md-filtros-cliente { grid-template-columns: minmax(0, 360px) auto; justify-content: start; }
+.gofast-home .gofast-md-filtros-grid .gofast-pedidos-filtros-actions { display: flex; flex-direction: row !important; justify-content: flex-start !important; gap: 8px; }
+.gofast-home .gofast-md-filtros-grid .select2-container { width: 100% !important; max-width: 100%; }
+.gofast-home .gofast-md-filtros-grid .select2-selection__rendered { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gofast-md-cargando { position: fixed; inset: 0; z-index: 99999; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, .55); }
+.gofast-md-cargando.on { display: flex; }
+.gofast-md-cargando div { background: #fff; color: #1a1a1a; border-radius: 12px; padding: 18px 26px; font-weight: 600; display: flex; gap: 12px; align-items: center; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+.gofast-md-cargando i { width: 20px; height: 20px; border: 3px solid #eee; border-top-color: var(--gofast-yellow, #F4C524); border-radius: 50%; animation: gofast-md-giro .8s linear infinite; }
+@keyframes gofast-md-giro { to { transform: rotate(360deg); } }
+.gofast-md-select-cliente + .select2-container .select2-selection--single { height: 42px; display: flex; align-items: center; border: 1px solid var(--gofast-gray-400); border-radius: var(--radius-s); }
+.gofast-md-select-cliente + .select2-container .select2-selection__arrow { height: 40px; }
+.gofast-md-desktop { display: block; }
+.gofast-md-mobile { display: none; }
+.gofast-md-card { background: #fff; border: 1px solid var(--gofast-gray-400); border-left: 4px solid var(--gofast-gray-400); border-radius: var(--radius-m); padding: 14px; margin-bottom: 10px; cursor: pointer; }
+.gofast-md-card-excluido { opacity: .6; }
+.gofast-md-card-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.gofast-md-card-ruta { font-size: 14px; margin: 6px 0 8px; }
+.gofast-md-kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #f8f9fa; border-left: 4px solid var(--gofast-yellow); border-radius: var(--radius-s); padding: 12px; margin-bottom: 16px; font-size: 13px; }
+.gofast-md-kv small { display: block; color: #666; font-weight: 600; }
+@media (max-width: 768px) {
+    .gofast-md-desktop { display: none; }
+    .gofast-md-mobile { display: block; }
+    .gofast-md-kv { grid-template-columns: repeat(2, 1fr); }
+    .gofast-md-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .gofast-md-tabs .gofast-config-tab { white-space: nowrap; padding: 10px 14px; font-size: 13px; }
+    .gofast-md-descargas a { flex: 1 1 100%; text-align: center; }
+    .gofast-home .gofast-md-panel .gofast-table th, .gofast-home .gofast-md-panel .gofast-table td { white-space: nowrap; }
+    .gofast-home .gofast-pedidos-filtros-row > div { max-width: none !important; }
+    .gofast-home .gofast-pedidos-filtros-row.gofast-md-filtros-grid, .gofast-home .gofast-md-filtros-grid.gofast-md-filtros-cliente { grid-template-columns: minmax(0, 1fr); }
+    .gofast-md-actualizado { float: none !important; display: block; margin-top: 4px; }
+    .gofast-md-chips { gap: 6px; }
+    .gofast-md-chips-lbl { flex-basis: 100%; }
+    .gofast-md-chips button.gofast-md-chip { white-space: nowrap; padding: 7px 12px; }
+    .gofast-md-rango-libre { flex-basis: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 4px 6px; padding: 6px 8px; border-radius: var(--radius-m); max-width: 420px; }
+    .gofast-md-rango-libre input[type="date"] { width: 100%; min-width: 0; }
+    .gofast-md-rango-libre button.gofast-md-chip { grid-column: 1 / -1; }
+    .gofast-md-negocio small { white-space: nowrap; }
+    .gofast-md-negocios { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .gofast-md-negocio { padding: 8px 10px; gap: 8px; min-width: 0; }
+    .gofast-md-negocio b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+</style>
+    
+<div class="gofast-home">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <h1 style="margin-bottom:8px;">📊 Mis domicilios</h1>
+            <p class="gofast-home-text" style="margin:0;">
+                                    Vista del cliente <strong>Diana Rivas</strong>.
+                            </p>
+        </div>
+        <a href="https://gofast.test/admin-domicilios" class="gofast-btn-request" style="text-decoration:none;white-space:nowrap;width:auto;">
+            ← Todos los domicilios        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="gofast-box" style="margin-bottom:20px;">
+        <form method="get" class="gofast-pedidos-filtros">
+            <input type="hidden" name="tab" value="tarifa" class="gofast-md-tab-input">
+            <input type="hidden" name="periodo" value="mes">
+            
+                            <div class="gofast-pedidos-filtros-row gofast-md-filtros-grid gofast-md-filtros-cliente">
+                    <div>
+                        <label>Cliente</label>
+                        <select name="cliente_id" class="gofast-md-select-cliente" data-placeholder="🔍 Busca un cliente">
+                            <option value="0">Elige un cliente</option>
+                                                            <option value="59">
+                                    Alejandra Cabal · 3167171319                                </option>
+                                                            <option value="189">
+                                    Alex garcia · 3147153225                                </option>
+                                                            <option value="68">
+                                    Ana Cecilia Maldonado · 3007757917                                </option>
+                                                            <option value="132">
+                                    Andrea Escobar · 3117791645                                </option>
+                                                            <option value="151">
+                                    Asados San Rafael · 3226192379                                </option>
+                                                            <option value="56">
+                                    Baby kids · 3150600697                                </option>
+                                                            <option value="45">
+                                    Barril steak house · 3042605680                                </option>
+                                                            <option value="48">
+                                    Bastion tienda · 3054598718                                </option>
+                                                            <option value="159">
+                                    Brayan Serna · 3104641344                                </option>
+                                                            <option value="40">
+                                    Buona pizza · 3226710765                                </option>
+                                                            <option value="104">
+                                    Buona pizza · 3207081088                                </option>
+                                                            <option value="84">
+                                    Camilo Arturo Torres Gutierrez · 3162852583                                </option>
+                                                            <option value="173">
+                                    Cristian David Gallardo Jaramillo · 3233600243                                </option>
+                                                            <option value="11">
+                                    Daniela Abadía García · 3135289635                                </option>
+                                                            <option value="138">
+                                    Delicias del sur · 3156594116                                </option>
+                                                            <option value="9" selected="selected">
+                                    Diana Rivas · 3175763131                                </option>
+                                                            <option value="106">
+                                    El perfumero Tuluá · 3216516626                                </option>
+                                                            <option value="121">
+                                    El templo de la Belleza · 3042371528                                </option>
+                                                            <option value="61">
+                                    FORMULAS SAS · 3168538775                                </option>
+                                                            <option value="42">
+                                    Food garage · 3188986049                                </option>
+                                                            <option value="129">
+                                    Gisela cardona · 3155526800                                </option>
+                                                            <option value="57">
+                                    Granizados Te-Tato · 3016797507                                </option>
+                                                            <option value="27">
+                                    Guillermo Adolfo Arango Ruiz · 3189418131                                </option>
+                                                            <option value="146">
+                                    Heider · 3160601993                                </option>
+                                                            <option value="187">
+                                    Hospitalarios JE · 3103043094                                </option>
+                                                            <option value="128">
+                                    Jenny ortiz · 3505189591                                </option>
+                                                            <option value="107">
+                                    Johanna lopez · 3168045742                                </option>
+                                                            <option value="119">
+                                    Juan Felipe Cuero · 3127566421                                </option>
+                                                            <option value="125">
+                                    KOPIEN · 3174985000                                </option>
+                                                            <option value="67">
+                                    La tabla churrasqueria · 3188108287                                </option>
+                                                            <option value="147">
+                                    Lorena morales Galeano · 3148183799                                </option>
+                                                            <option value="65">
+                                    MAGIC MAKEUP STORE · 3225063520                                </option>
+                                                            <option value="126">
+                                    MIC CENTRO TULUA · 3218766932                                </option>
+                                                            <option value="105">
+                                    Maryuri mondragon · 3004618370                                </option>
+                                                            <option value="122">
+                                    María Paula · 3169233043                                </option>
+                                                            <option value="62">
+                                    Mi Heladería Crema y Café · 3136179602                                </option>
+                                                            <option value="66">
+                                    Monkeys pizza · 3182672334                                </option>
+                                                            <option value="82">
+                                    Mundo alitas · 3147172603                                </option>
+                                                            <option value="114">
+                                    NARETGR510061NERTHRRTH · 81714147382                                </option>
+                                                            <option value="78">
+                                    Nestor Gutierrez · 3167205342                                </option>
+                                                            <option value="94">
+                                    Obleas Alexa hechas con Amor ♥️ · 3218255187                                </option>
+                                                            <option value="41">
+                                    Plásticos y desechables tulua · 3122582445                                </option>
+                                                            <option value="140">
+                                    Publirochi estampados · 3172948007                                </option>
+                                                            <option value="141">
+                                    RISTOPIZZA LA GÓNDOLA · 3122563242                                </option>
+                                                            <option value="111">
+                                    Rikarepa · 3154369205                                </option>
+                                                            <option value="76">
+                                    Rincón de José ever · 3117672782                                </option>
+                                                            <option value="112">
+                                    Rm ricuras principe · 3216591530                                </option>
+                                                            <option value="80">
+                                    Shely Manuela Ortiz · 3153560796                                </option>
+                                                            <option value="117">
+                                    Súper descuentos 2 · 3137731179                                </option>
+                                                            <option value="60">
+                                    THE PIZZA COMPANY · 3168323063                                </option>
+                                                            <option value="51">
+                                    Tienda Dermatólogica QPIEL · 3160263632                                </option>
+                                                            <option value="71">
+                                    Todo Electricos · 3103731799                                </option>
+                                                            <option value="64">
+                                    VALANTO Diseño Gráfico · 3103891811                                </option>
+                                                            <option value="169">
+                                    ZENTROVAP · 3235974353                                </option>
+                                                            <option value="1">
+                                    cristhian · 3117631081                                </option>
+                                                            <option value="100">
+                                    felipe · 3133453453                                </option>
+                                                            <option value="53">
+                                    Élite · 3135178476                                </option>
+                                                    </select>
+                    </div>
+                    <div class="gofast-pedidos-filtros-actions">
+                        <button type="submit" class="gofast-btn-mini">Ver cliente</button>
+                    </div>
+                </div>
+            
+                            <div class="gofast-md-negocios">
+                                            <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=tarifa" class="gofast-md-negocio gofast-md-negocio-on">
+                            <span class="ico">📊</span>
+                            <span><b>Todos</b><small>172 domicilios</small></span>
+                        </a>
+                                            <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=tarifa&amp;negocio=7" class="gofast-md-negocio">
+                            <span class="ico">🏪</span>
+                            <span><b>Droguería J Farma</b><small>172 domicilios</small></span>
+                        </a>
+                                            <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=tarifa&amp;negocio=personal" class="gofast-md-negocio">
+                            <span class="ico">👤</span>
+                            <span><b>Pedidos personales</b><small>0 domicilios</small></span>
+                        </a>
+                                    </div>
+            
+                <div class="gofast-md-chips">
+        <span class="gofast-md-chips-lbl">Periodo</span>
+                    <button type="submit" name="periodo" value="hoy" class="gofast-md-chip">Hoy</button>
+                    <button type="submit" name="periodo" value="semana" class="gofast-md-chip">Esta semana</button>
+                    <button type="submit" name="periodo" value="mes" class="gofast-md-chip gofast-md-chip-on">Este mes</button>
+                    <button type="submit" name="periodo" value="mes_anterior" class="gofast-md-chip">Mes anterior</button>
+                    <button type="submit" name="periodo" value="anio" class="gofast-md-chip">Este año</button>
+                <span class="gofast-md-rango-libre">
+            <input type="date" name="desde" value="2026-09-01" aria-label="Desde">
+            <span>a</span>
+            <input type="date" name="hasta" value="2026-09-29" aria-label="Hasta">
+            <button type="submit" name="periodo" value="rango" class="gofast-md-chip">Ver fechas</button>
+        </span>
+    </div>
+            </form>
+        <div style="padding:10px;background:#e7f3ff;border-radius:6px;font-size:13px;">
+            <strong>Periodo:</strong> 01/09/2026 a 29/09/2026            <span style="color:#666;"> · comparado con 01/08/2026 a 29/08/2026</span>
+                    </div>
+    </div>
+
+    
+    <!-- Indicadores -->
+    <div class="gofast-dashboard-stats gofast-md-kpis gofast-md-kpis-5">
+        <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
+            <div style="font-size:30px;margin-bottom:6px;">💰</div>
+            <div style="font-size:23px;font-weight:700;color:#4CAF50;margin-bottom:4px;">$1.205.500</div>
+            <div style="font-size:13px;color:#666;">Total pagado</div>
+            <small style="color:#155724;font-weight:600;">▲ 0.5% vs. periodo anterior</small>        </div>
+        <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
+            <div style="font-size:30px;margin-bottom:6px;">📦</div>
+            <div style="font-size:23px;font-weight:700;color:#F4C524;margin-bottom:4px;">172</div>
+            <div style="font-size:13px;color:#666;">Domicilios</div>
+            <small style="color:#721c24;font-weight:600;">▼ 12.7% vs. periodo anterior</small>        </div>
+        <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
+            <div style="font-size:30px;margin-bottom:6px;">📍</div>
+            <div style="font-size:23px;font-weight:700;color:#2196F3;margin-bottom:4px;">344</div>
+            <div style="font-size:13px;color:#666;">Envíos (destinos)</div>
+            <small style="color:#155724;font-weight:600;">▲ 0.9% vs. periodo anterior</small>        </div>
+        <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
+            <div style="font-size:30px;margin-bottom:6px;">🧾</div>
+            <div style="font-size:23px;font-weight:700;color:#9C27B0;margin-bottom:4px;">$7.009</div>
+            <div style="font-size:13px;color:#666;">Promedio por domicilio</div>
+            <small style="color:#155724;font-weight:600;">▲ 15.2% vs. periodo anterior</small>        </div>
+        <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
+            <div style="font-size:30px;margin-bottom:6px;">➕</div>
+            <div style="font-size:23px;font-weight:700;color:#FF5722;margin-bottom:4px;">$1.000</div>
+            <div style="font-size:13px;color:#666;">Recargos</div>
+            <small style="color:#666;">0.1% del total</small>
+        </div>
+    </div>
+
+    
+    <!-- Gráficas -->
+            <div class="gofast-box" style="margin-bottom:20px;">
+            <h3 style="margin-top:0;">📈 Lo que pagaste por día</h3>
+                <div class="gofast-md-chart-wrap">
+    <div class="gofast-md-chart gofast-md-chart-muchas">
+                    <div class="gofast-md-chart-col" data-info="01/09/2026: $38.500 · 6 servicios" title="01/09/2026: $38.500 · 6 servicios">
+                <span class="gofast-md-chart-val">$39k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.407;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="02/09/2026: $63.000 · 10 servicios" title="02/09/2026: $63.000 · 10 servicios">
+                <span class="gofast-md-chart-val">$63k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.667;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="03/09/2026: $38.500 · 5 servicios" title="03/09/2026: $38.500 · 5 servicios">
+                <span class="gofast-md-chart-val">$39k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.407;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="04/09/2026: $35.000 · 7 servicios" title="04/09/2026: $35.000 · 7 servicios">
+                <span class="gofast-md-chart-val">$35k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.37;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="05/09/2026: $45.500 · 7 servicios" title="05/09/2026: $45.500 · 7 servicios">
+                <span class="gofast-md-chart-val">$46k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.481;"></div>
+            </div>
+                    <div class="gofast-md-chart-col gofast-md-chart-activa" data-info="06/09/2026: $94.500 · 13 servicios" title="06/09/2026: $94.500 · 13 servicios">
+                <span class="gofast-md-chart-val">$95k</span>
+                <div class="gofast-md-chart-bar gofast-md-chart-max" style="--h:1;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="07/09/2026: $42.000 · 7 servicios" title="07/09/2026: $42.000 · 7 servicios">
+                <span class="gofast-md-chart-val">$42k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.444;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="08/09/2026: $35.000 · 5 servicios" title="08/09/2026: $35.000 · 5 servicios">
+                <span class="gofast-md-chart-val">$35k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.37;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="09/09/2026: $56.000 · 6 servicios" title="09/09/2026: $56.000 · 6 servicios">
+                <span class="gofast-md-chart-val">$56k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.593;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="10/09/2026: $49.000 · 6 servicios" title="10/09/2026: $49.000 · 6 servicios">
+                <span class="gofast-md-chart-val">$49k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.519;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="11/09/2026: $56.000 · 8 servicios" title="11/09/2026: $56.000 · 8 servicios">
+                <span class="gofast-md-chart-val">$56k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.593;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="12/09/2026: $24.500 · 3 servicios" title="12/09/2026: $24.500 · 3 servicios">
+                <span class="gofast-md-chart-val">$25k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.259;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="13/09/2026: $7.000 · 2 servicios" title="13/09/2026: $7.000 · 2 servicios">
+                <span class="gofast-md-chart-val">$7k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.074;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="14/09/2026: $35.000 · 6 servicios" title="14/09/2026: $35.000 · 6 servicios">
+                <span class="gofast-md-chart-val">$35k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.37;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="15/09/2026: $56.000 · 9 servicios" title="15/09/2026: $56.000 · 9 servicios">
+                <span class="gofast-md-chart-val">$56k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.593;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="16/09/2026: $24.500 · 4 servicios" title="16/09/2026: $24.500 · 4 servicios">
+                <span class="gofast-md-chart-val">$25k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.259;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="17/09/2026: $66.500 · 9 servicios" title="17/09/2026: $66.500 · 9 servicios">
+                <span class="gofast-md-chart-val">$67k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.704;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="18/09/2026: $31.500 · 6 servicios" title="18/09/2026: $31.500 · 6 servicios">
+                <span class="gofast-md-chart-val">$32k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.333;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="19/09/2026: $28.000 · 3 servicios" title="19/09/2026: $28.000 · 3 servicios">
+                <span class="gofast-md-chart-val">$28k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.296;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="20/09/2026: $35.000 · 7 servicios" title="20/09/2026: $35.000 · 7 servicios">
+                <span class="gofast-md-chart-val">$35k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.37;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="21/09/2026: $35.000 · 4 servicios" title="21/09/2026: $35.000 · 4 servicios">
+                <span class="gofast-md-chart-val">$35k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.37;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="22/09/2026: $56.000 · 6 servicios" title="22/09/2026: $56.000 · 6 servicios">
+                <span class="gofast-md-chart-val">$56k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.593;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="23/09/2026: $46.500 · 7 servicios" title="23/09/2026: $46.500 · 7 servicios">
+                <span class="gofast-md-chart-val">$47k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.492;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="24/09/2026: $42.000 · 9 servicios" title="24/09/2026: $42.000 · 9 servicios">
+                <span class="gofast-md-chart-val">$42k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.444;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="25/09/2026: $24.500 · 2 servicios" title="25/09/2026: $24.500 · 2 servicios">
+                <span class="gofast-md-chart-val">$25k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.259;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="26/09/2026: $63.000 · 7 servicios" title="26/09/2026: $63.000 · 7 servicios">
+                <span class="gofast-md-chart-val">$63k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.667;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="27/09/2026: $4.000 · 1 servicio" title="27/09/2026: $4.000 · 1 servicio">
+                <span class="gofast-md-chart-val">$4k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.042;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="28/09/2026: $38.500 · 3 servicios" title="28/09/2026: $38.500 · 3 servicios">
+                <span class="gofast-md-chart-val">$39k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.407;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="29/09/2026: $35.000 · 4 servicios" title="29/09/2026: $35.000 · 4 servicios">
+                <span class="gofast-md-chart-val">$35k</span>
+                <div class="gofast-md-chart-bar" style="--h:0.37;"></div>
+            </div>
+            </div>
+    <div class="gofast-md-chart-labels">
+                    <span>01</span>
+                    <span></span>
+                    <span>03</span>
+                    <span></span>
+                    <span>05</span>
+                    <span></span>
+                    <span>07</span>
+                    <span></span>
+                    <span>09</span>
+                    <span></span>
+                    <span>11</span>
+                    <span></span>
+                    <span>13</span>
+                    <span></span>
+                    <span>15</span>
+                    <span></span>
+                    <span>17</span>
+                    <span></span>
+                    <span>19</span>
+                    <span></span>
+                    <span>21</span>
+                    <span></span>
+                    <span>23</span>
+                    <span></span>
+                    <span>25</span>
+                    <span></span>
+                    <span>27</span>
+                    <span></span>
+                    <span>29</span>
+            </div>
+    <div class="gofast-md-chart-info">📌 <span>06/09/2026: $94.500 · 13 servicios</span> <small>(toca una barra para ver su detalle)</small></div>
+    </div>
+                
+        </div>
+        <div class="gofast-md-grid-2">
+            <div class="gofast-box">
+                                <h3 style="margin-top:0;">🛣️ Trayectos más frecuentes</h3>
+                        <div class="gofast-md-top">
+            <span class="gofast-md-top-n">1</span>
+            <div style="flex:1;min-width:0;">
+                <div class="gofast-md-top-row">
+                    <span class="gofast-md-top-nombre">Siete de Agosto → Siete de Agosto</span>
+                    <strong>$1.198.000</strong>
+                </div>
+                <div class="gofast-md-barra"><span style="width:99.4%;"></span></div>
+                <small style="color:#666;">342 envíos · 99.4%</small>
+            </div>
+        </div>
+            <div class="gofast-md-top">
+            <span class="gofast-md-top-n">2</span>
+            <div style="flex:1;min-width:0;">
+                <div class="gofast-md-top-row">
+                    <span class="gofast-md-top-nombre">Siete de Agosto → Buenos Aires</span>
+                    <strong>$4.000</strong>
+                </div>
+                <div class="gofast-md-barra"><span style="width:0.3%;"></span></div>
+                <small style="color:#666;">1 envío · 0.3%</small>
+            </div>
+        </div>
+            <div class="gofast-md-top">
+            <span class="gofast-md-top-n">3</span>
+            <div style="flex:1;min-width:0;">
+                <div class="gofast-md-top-row">
+                    <span class="gofast-md-top-nombre">Siete de Agosto → Maracaibo</span>
+                    <strong>$3.500</strong>
+                </div>
+                <div class="gofast-md-barra"><span style="width:0.3%;"></span></div>
+                <small style="color:#666;">1 envío · 0.3%</small>
+            </div>
+        </div>
+                </div>
+            <div class="gofast-box">
+                <h3 style="margin-top:0;">📍 Barrios a los que más envías</h3>
+                        <div class="gofast-md-top">
+            <span class="gofast-md-top-n">1</span>
+            <div style="flex:1;min-width:0;">
+                <div class="gofast-md-top-row">
+                    <span class="gofast-md-top-nombre">Siete de Agosto</span>
+                    <strong>$1.198.000</strong>
+                </div>
+                <div class="gofast-md-barra"><span style="width:99.4%;"></span></div>
+                <small style="color:#666;">342 envíos · 99.4%</small>
+            </div>
+        </div>
+            <div class="gofast-md-top">
+            <span class="gofast-md-top-n">2</span>
+            <div style="flex:1;min-width:0;">
+                <div class="gofast-md-top-row">
+                    <span class="gofast-md-top-nombre">Buenos Aires</span>
+                    <strong>$4.000</strong>
+                </div>
+                <div class="gofast-md-barra"><span style="width:0.3%;"></span></div>
+                <small style="color:#666;">1 envío · 0.3%</small>
+            </div>
+        </div>
+            <div class="gofast-md-top">
+            <span class="gofast-md-top-n">3</span>
+            <div style="flex:1;min-width:0;">
+                <div class="gofast-md-top-row">
+                    <span class="gofast-md-top-nombre">Maracaibo</span>
+                    <strong>$3.500</strong>
+                </div>
+                <div class="gofast-md-barra"><span style="width:0.3%;"></span></div>
+                <small style="color:#666;">1 envío · 0.3%</small>
+            </div>
+        </div>
+                </div>
+        </div>
+    
+    <!-- Resúmenes -->
+    <div class="gofast-box" style="margin-bottom:20px;">
+        <div class="gofast-md-tabs">
+                            <button type="button" class="gofast-config-tab gofast-config-tab-active" data-md-tab="tarifa">
+                    💲 Por tarifa                </button>
+                            <button type="button" class="gofast-config-tab " data-md-tab="negocio">
+                    🏪 Por negocio                </button>
+                            <button type="button" class="gofast-config-tab " data-md-tab="destino">
+                    📍 Por destino                </button>
+                            <button type="button" class="gofast-config-tab " data-md-tab="trayecto">
+                    🛣️ Por trayecto                </button>
+                            <button type="button" class="gofast-config-tab " data-md-tab="mes">
+                    📅 Por mes                </button>
+                            <button type="button" class="gofast-config-tab " data-md-tab="estado">
+                    🚦 Por estado                </button>
+                            <button type="button" class="gofast-config-tab " data-md-tab="detalle">
+                    📋 Detalle                </button>
+                    </div>
+
+        <!-- Por tarifa -->
+        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="tarifa" style="display:block;">
+            <h3>💲 ¿Cuántos envíos de cada valor?</h3>
+                <div class="gofast-md-grid-2 gofast-md-tarifas">
+        <div>
+            <div class="gofast-table-wrap">
+                <table class="gofast-table">
+                    <thead>
+                        <tr>
+                            <th>Tarifa</th>
+                            <th style="text-align:right;">Envíos</th>
+                            <th style="text-align:right;">Subtotal</th>
+                            <th style="text-align:right;">% envíos</th>
+                            <th style="min-width:90px;">Peso</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                                            <tr>
+                            <td>
+                                <strong>$3.500</strong>
+                                                                                            </td>
+                            <td style="text-align:right;">343</td>
+                            <td style="text-align:right;">$1.200.500</td>
+                            <td style="text-align:right;color:#666;">99.7%</td>
+                            <td><div class="gofast-md-barra"><span style="width:100%;"></span></div></td>
+                        </tr>
+                                            <tr>
+                            <td>
+                                <strong>$4.000</strong>
+                                                                                            </td>
+                            <td style="text-align:right;">1</td>
+                            <td style="text-align:right;">$4.000</td>
+                            <td style="text-align:right;color:#666;">0.3%</td>
+                            <td><div class="gofast-md-barra"><span style="width:0%;"></span></div></td>
+                        </tr>
+                                        </tbody>
+                    <tfoot>
+                        <tr style="font-weight:700;background:#fff9d6;">
+                            <td>Total en tarifas</td>
+                            <td style="text-align:right;">344</td>
+                            <td style="text-align:right;">$1.204.500</td>
+                            <td style="text-align:right;">100%</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>+ Recargos</td><td></td>
+                            <td style="text-align:right;">$1.000</td>
+                            <td></td><td></td>
+                        </tr>
+                        <tr style="font-weight:700;background:#fff9d6;">
+                            <td>Total pagado</td><td></td>
+                            <td style="text-align:right;">$1.205.500</td>
+                            <td></td><td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <p class="gofast-md-nota">Se cuenta cada destino como un envío: un domicilio con 2 destinos suma 2 envíos. Los recargos se muestran aparte.</p>
+        </div>
+        <div class="gofast-md-tarifas-grafica">
+                <div class="gofast-md-chart-wrap">
+    <div class="gofast-md-chart">
+                    <div class="gofast-md-chart-col gofast-md-chart-activa" data-info="$3.500: 343 envíos" title="$3.500: 343 envíos">
+                <span class="gofast-md-chart-val">343</span>
+                <div class="gofast-md-chart-bar gofast-md-chart-max" style="--h:1;"></div>
+            </div>
+                    <div class="gofast-md-chart-col" data-info="$4.000: 1 envíos" title="$4.000: 1 envíos">
+                <span class="gofast-md-chart-val">1</span>
+                <div class="gofast-md-chart-bar" style="--h:0.003;"></div>
+            </div>
+            </div>
+    <div class="gofast-md-chart-labels">
+                    <span>$3.5k</span>
+                    <span>$4k</span>
+            </div>
+    <div class="gofast-md-chart-info">📌 <span>$3.500: 343 envíos</span> <small>(toca una barra para ver su detalle)</small></div>
+    </div>
+                <div class="gofast-md-mini">
+                <div><span>Tarifa más usada</span><b>$3.500 · 343 envíos</b></div>
+                <div><span>Recargos del periodo</span><b>$1.000</b></div>
+                <div><span>Tarifa promedio</span><b>$3.501</b></div>
+            </div>
+        </div>
+    </div>
+            <h4 style="margin:20px 0 8px;">➕ De dónde salen los recargos</h4>
+        <div class="gofast-table-wrap">
+            <table class="gofast-table">
+                <thead><tr><th>Recargo</th><th style="text-align:right;">Envíos</th><th style="text-align:right;">Valor</th></tr></thead>
+                <tbody>
+                                            <tr><td>Automáticos (lluvia, recargos por valor)</td><td style="text-align:right;">—</td><td style="text-align:right;">$1.000</td></tr>
+                                                        </tbody>
+                <tfoot><tr style="font-weight:700;background:#fff9d6;"><td>Total recargos</td><td></td><td style="text-align:right;">$1.000</td></tr></tfoot>
+            </table>
+        </div>
+                    </div>
+
+        <!-- Por negocio -->
+                <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="negocio" style="display:none;">
+            <h3>🏪 Domicilios por negocio</h3>
+                <div class="gofast-table-wrap">
+        <table class="gofast-table">
+            <thead>
+                <tr>
+                    <th>Negocio</th>
+                    <th style="text-align:right;">Servicios</th>                    <th style="text-align:right;">Envíos</th>
+                    <th style="text-align:right;">Total</th>
+                    <th style="text-align:right;">Promedio</th>
+                    <th style="min-width:120px;">% del total</th>
+                </tr>
+            </thead>
+            <tbody>
+                            <tr>
+                    <td>Droguería J Farma</td>
+                    <td style="text-align:right;">172</td>                    <td style="text-align:right;">344</td>
+                    <td style="text-align:right;font-weight:600;">$1.205.500</td>
+                    <td style="text-align:right;color:#666;">$7.009</td>
+                    <td><div class="gofast-md-barra"><span style="width:100%;"></span></div><small>100%</small></td>
+                </tr>
+                        </tbody>
+            <tfoot>
+                <tr style="font-weight:700;background:#fff9d6;">
+                    <td>Total</td>
+                    <td style="text-align:right;">172</td>                    <td style="text-align:right;">344</td>
+                    <td style="text-align:right;">$1.205.500</td>
+                    <td style="text-align:right;">$7.009</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+            </div>
+        
+        <!-- Por destino -->
+        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="destino" style="display:none;">
+            <h3>📍 A qué barrios envías más</h3>
+                <div class="gofast-table-wrap">
+        <table class="gofast-table">
+            <thead>
+                <tr>
+                    <th>Barrio destino</th>
+                                        <th style="text-align:right;">Envíos</th>
+                    <th style="text-align:right;">Total</th>
+                    <th style="text-align:right;">Promedio</th>
+                    <th style="min-width:120px;">% del total</th>
+                </tr>
+            </thead>
+            <tbody>
+                            <tr>
+                    <td>Siete de Agosto</td>
+                                        <td style="text-align:right;">342</td>
+                    <td style="text-align:right;font-weight:600;">$1.198.000</td>
+                    <td style="text-align:right;color:#666;">$3.503</td>
+                    <td><div class="gofast-md-barra"><span style="width:99.4%;"></span></div><small>99.4%</small></td>
+                </tr>
+                            <tr>
+                    <td>Buenos Aires</td>
+                                        <td style="text-align:right;">1</td>
+                    <td style="text-align:right;font-weight:600;">$4.000</td>
+                    <td style="text-align:right;color:#666;">$4.000</td>
+                    <td><div class="gofast-md-barra"><span style="width:0.3%;"></span></div><small>0.3%</small></td>
+                </tr>
+                            <tr>
+                    <td>Maracaibo</td>
+                                        <td style="text-align:right;">1</td>
+                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                    <td style="text-align:right;color:#666;">$3.500</td>
+                    <td><div class="gofast-md-barra"><span style="width:0.3%;"></span></div><small>0.3%</small></td>
+                </tr>
+                        </tbody>
+            <tfoot>
+                <tr style="font-weight:700;background:#fff9d6;">
+                    <td>Total</td>
+                                        <td style="text-align:right;">344</td>
+                    <td style="text-align:right;">$1.205.500</td>
+                    <td style="text-align:right;">$3.504</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+            </div>
+
+        <!-- Por trayecto -->
+        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="trayecto" style="display:none;">
+            <h3>🛣️ Trayectos más frecuentes</h3>
+                <div class="gofast-table-wrap">
+        <table class="gofast-table">
+            <thead>
+                <tr>
+                    <th>Origen → Destino</th>
+                    <th style="text-align:right;">Envíos</th>
+                    <th style="text-align:right;">Tarifa</th>
+                    <th style="text-align:right;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                            <tr>
+                    <td>Siete de Agosto → Siete de Agosto</td>
+                    <td style="text-align:right;">342</td>
+                    <td style="text-align:right;">$3.500</td>
+                    <td style="text-align:right;font-weight:600;">$1.198.000</td>
+                </tr>
+                            <tr>
+                    <td>Siete de Agosto → Buenos Aires</td>
+                    <td style="text-align:right;">1</td>
+                    <td style="text-align:right;">$4.000</td>
+                    <td style="text-align:right;font-weight:600;">$4.000</td>
+                </tr>
+                            <tr>
+                    <td>Siete de Agosto → Maracaibo</td>
+                    <td style="text-align:right;">1</td>
+                    <td style="text-align:right;">$3.500</td>
+                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                </tr>
+                        </tbody>
+        </table>
+    </div>
+                </div>
+
+        <!-- Por mes -->
+        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="mes" style="display:none;">
+            <h3>📅 Domicilios por mes</h3>
+                <div class="gofast-table-wrap">
+        <table class="gofast-table">
+            <thead>
+                <tr>
+                    <th>Mes</th>
+                    <th style="text-align:right;">Servicios</th>
+                    <th style="text-align:right;">Envíos</th>
+                    <th style="text-align:right;">Total</th>
+                    <th style="text-align:right;">Promedio</th>
+                    <th style="text-align:right;">Cambio vs. mes anterior</th>
+                </tr>
+            </thead>
+            <tbody>
+                            <tr>
+                    <td>Septiembre 2026</td>
+                    <td style="text-align:right;">172</td>
+                    <td style="text-align:right;">344</td>
+                    <td style="text-align:right;font-weight:600;">$1.205.500</td>
+                    <td style="text-align:right;color:#666;">$7.009</td>
+                    <td style="text-align:right;color:#999;">
+                        —                    </td>
+                </tr>
+                        </tbody>
+            <tfoot>
+                <tr style="font-weight:700;background:#fff9d6;">
+                    <td>Total</td>
+                    <td style="text-align:right;">172</td>
+                    <td style="text-align:right;">344</td>
+                    <td style="text-align:right;">$1.205.500</td>
+                    <td style="text-align:right;">$7.009</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <p class="gofast-md-nota">El cambio compara el total de cada mes con el mes anterior. Si el periodo empieza o termina a mitad de mes, ese mes aparece incompleto.</p>
+            </div>
+
+        <!-- Por estado -->
+        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="estado" style="display:none;">
+            <h3>🚦 Servicios por estado</h3>
+                <div class="gofast-table-wrap">
+        <table class="gofast-table">
+            <thead>
+                <tr>
+                    <th>Estado</th>
+                    <th style="text-align:right;">Servicios</th>
+                    <th style="text-align:right;">Envíos</th>
+                    <th style="text-align:right;">Valor</th>
+                    <th>¿Suma al total?</th>
+                </tr>
+            </thead>
+            <tbody>
+                            <tr class="">
+                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                    <td style="text-align:right;">172</td>
+                    <td style="text-align:right;">344</td>
+                    <td style="text-align:right;">$1.205.500</td>
+                    <td>✅ Sí</td>
+                </tr>
+                        </tbody>
+        </table>
+    </div>
+            </div>
+
+        <!-- Detalle -->
+        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="detalle" style="display:none;">
+            <h3>📋 Detalle de servicios</h3>
+                            <!-- Computador: tabla -->
+                <div class="gofast-md-desktop">
+                    <div class="gofast-table-wrap">
+                        <table class="gofast-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Fecha</th>
+                                    <th>Negocio</th>                                    <th>Origen → Destinos</th>
+                                    <th style="text-align:right;">Recargos</th>
+                                    <th style="text-align:right;">Total</th>
+                                    <th>Estado</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                                            <tr class="">
+                                    <td><strong>79372</strong></td>
+                                    <td style="white-space:nowrap;">29/09/2026 20:21</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(5)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$17.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="79372">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>79361</strong></td>
+                                    <td style="white-space:nowrap;">29/09/2026 19:45</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(3)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$10.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="79361">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>79356</strong></td>
+                                    <td style="white-space:nowrap;">29/09/2026 19:15</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="79356">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>79354</strong></td>
+                                    <td style="white-space:nowrap;">29/09/2026 18:59</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="79354">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>79163</strong></td>
+                                    <td style="white-space:nowrap;">28/09/2026 20:38</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(3)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$10.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="79163">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>79105</strong></td>
+                                    <td style="white-space:nowrap;">28/09/2026 16:59</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(7)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$24.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="79105">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>79073</strong></td>
+                                    <td style="white-space:nowrap;">28/09/2026 15:50</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="79073">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78741</strong></td>
+                                    <td style="white-space:nowrap;">27/09/2026 10:31</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Buenos Aires                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$4.000</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78741">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78660</strong></td>
+                                    <td style="white-space:nowrap;">26/09/2026 20:12</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(3)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$10.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78660">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78558</strong></td>
+                                    <td style="white-space:nowrap;">26/09/2026 15:12</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(4)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$14.000</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78558">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78534</strong></td>
+                                    <td style="white-space:nowrap;">26/09/2026 14:04</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78534">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78528</strong></td>
+                                    <td style="white-space:nowrap;">26/09/2026 13:50</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78528">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78510</strong></td>
+                                    <td style="white-space:nowrap;">26/09/2026 13:02</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(7)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$24.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78510">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78508</strong></td>
+                                    <td style="white-space:nowrap;">26/09/2026 12:56</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78508">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78486</strong></td>
+                                    <td style="white-space:nowrap;">26/09/2026 12:17</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78486">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78240</strong></td>
+                                    <td style="white-space:nowrap;">25/09/2026 15:57</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78240">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78188</strong></td>
+                                    <td style="white-space:nowrap;">25/09/2026 13:05</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(6)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$21.000</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78188">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78044</strong></td>
+                                    <td style="white-space:nowrap;">24/09/2026 20:43</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(2)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$7.000</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78044">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>78001</strong></td>
+                                    <td style="white-space:nowrap;">24/09/2026 18:41</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="78001">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>77994</strong></td>
+                                    <td style="white-space:nowrap;">24/09/2026 18:27</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto, Siete de Agosto                                        <small style="color:#666;">(2)</small>                                    </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$7.000</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="77994">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>77988</strong></td>
+                                    <td style="white-space:nowrap;">24/09/2026 17:55</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="77988">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>77964</strong></td>
+                                    <td style="white-space:nowrap;">24/09/2026 16:52</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="77964">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>77955</strong></td>
+                                    <td style="white-space:nowrap;">24/09/2026 16:24</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="77955">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>77934</strong></td>
+                                    <td style="white-space:nowrap;">24/09/2026 15:26</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="77934">Detalle</button></td>
+                                </tr>
+                                                            <tr class="">
+                                    <td><strong>77933</strong></td>
+                                    <td style="white-space:nowrap;">24/09/2026 15:19</td>
+                                    <td>Droguería J Farma</td>                                    <td>
+                                        Siete de Agosto → Siete de Agosto                                                                            </td>
+                                    <td style="text-align:right;color:#666;">—</td>
+                                    <td style="text-align:right;font-weight:600;">$3.500</td>
+                                    <td><span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span></td>
+                                    <td><button type="button" class="gofast-btn-mini gofast-btn-outline" data-md-detalle="77933">Detalle</button></td>
+                                </tr>
+                                                        </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Celular: tarjetas -->
+                <div class="gofast-md-mobile">
+                                            <div class="gofast-md-card" data-md-detalle="79372" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#79372 · 29/09 20:21</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$17.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="79361" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#79361 · 29/09 19:45</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$10.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="79356" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#79356 · 29/09 19:15</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="79354" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#79354 · 29/09 18:59</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="79163" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#79163 · 28/09 20:38</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$10.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="79105" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#79105 · 28/09 16:59</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$24.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="79073" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#79073 · 28/09 15:50</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78741" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78741 · 27/09 10:31</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Buenos Aires</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$4.000</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78660" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78660 · 26/09 20:12</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$10.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78558" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78558 · 26/09 15:12</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$14.000</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78534" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78534 · 26/09 14:04</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78528" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78528 · 26/09 13:50</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78510" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78510 · 26/09 13:02</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$24.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78508" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78508 · 26/09 12:56</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78486" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78486 · 26/09 12:17</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78240" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78240 · 25/09 15:57</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78188" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78188 · 25/09 13:05</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$21.000</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78044" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78044 · 24/09 20:43</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$7.000</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="78001" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#78001 · 24/09 18:41</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="77994" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#77994 · 24/09 18:27</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto, Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$7.000</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="77988" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#77988 · 24/09 17:55</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="77964" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#77964 · 24/09 16:52</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="77955" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#77955 · 24/09 16:24</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="77934" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#77934 · 24/09 15:26</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                            <div class="gofast-md-card" data-md-detalle="77933" style="border-left-color:#17a2b8;">
+                            <div class="gofast-md-card-row">
+                                <strong>#77933 · 24/09 15:19</strong>
+                                <span class="gofast-badge-estado gofast-badge-estado-asignado">Asignado</span>
+                            </div>
+                                                            <div style="font-size:12px;color:#666;margin-top:4px;">🏪 Droguería J Farma</div>
+                                                        <div class="gofast-md-card-ruta">Siete de Agosto → Siete de Agosto</div>
+                            <div class="gofast-md-card-row">
+                                <span style="font-size:12px;color:#666;">Sin recargo</span>
+                                <strong style="font-size:16px;">$3.500</strong>
+                            </div>
+                        </div>
+                                    </div>
+
+                <!-- Ventana de detalle -->
+                <div id="gofast-md-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;overflow-y:auto;padding:20px;">
+    <div style="max-width:640px;margin:20px auto;background:#fff;color:#000;border-radius:8px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
+            <h2 style="margin:0;font-size:20px;" id="gofast-md-modal-titulo"></h2>
+            <button type="button" class="gofast-icon-btn" data-md-cerrar aria-label="Cerrar">✕</button>
+        </div>
+        <div class="gofast-md-kv" id="gofast-md-modal-kv"></div>
+        <div class="gofast-table-wrap">
+            <table class="gofast-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Destino</th>
+                        <th style="text-align:right;">Tarifa</th>
+                        <th style="text-align:right;">Recargo</th>
+                        <th style="text-align:right;">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody id="gofast-md-modal-lineas"></tbody>
+            </table>
+        </div>
+        <p class="gofast-md-nota" id="gofast-md-modal-nota"></p>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">
+            <a href="#" id="gofast-md-modal-ver" class="gofast-btn-mini gofast-btn-outline" style="text-decoration:none;">Ver servicio completo</a>
+            <button type="button" class="gofast-btn-mini" data-md-cerrar>Cerrar</button>
+        </div>
+    </div>
+</div>
+                    <script>window.gofastMdDetalle = {"79372":{"id":79372,"fecha":"29\/09\/2026 20:21","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 5 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":17500,"cuenta":true,"aprox":false},"79361":{"id":79361,"fecha":"29\/09\/2026 19:45","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 3 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":10500,"cuenta":true,"aprox":false},"79356":{"id":79356,"fecha":"29\/09\/2026 19:15","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"79354":{"id":79354,"fecha":"29\/09\/2026 18:59","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"79163":{"id":79163,"fecha":"28\/09\/2026 20:38","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 3 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":10500,"cuenta":true,"aprox":false},"79105":{"id":79105,"fecha":"28\/09\/2026 16:59","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 7 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":24500,"cuenta":true,"aprox":false},"79073":{"id":79073,"fecha":"28\/09\/2026 15:50","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"78741":{"id":78741,"fecha":"27\/09\/2026 10:31","estado":"asignado","estado_l":"Asignado","mensajero":"Santiago Meneses De La Torre","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Buenos Aires","direccion":"","tarifa":4000,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":4000}],"total":4000,"cuenta":true,"aprox":false},"78660":{"id":78660,"fecha":"26\/09\/2026 20:12","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 3 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":10500,"cuenta":true,"aprox":false},"78558":{"id":78558,"fecha":"26\/09\/2026 15:12","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 4 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":14000,"cuenta":true,"aprox":false},"78534":{"id":78534,"fecha":"26\/09\/2026 14:04","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"78528":{"id":78528,"fecha":"26\/09\/2026 13:50","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"78510":{"id":78510,"fecha":"26\/09\/2026 13:02","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 7 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":24500,"cuenta":true,"aprox":false},"78508":{"id":78508,"fecha":"26\/09\/2026 12:56","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"78486":{"id":78486,"fecha":"26\/09\/2026 12:17","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"78240":{"id":78240,"fecha":"25\/09\/2026 15:57","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"78188":{"id":78188,"fecha":"25\/09\/2026 13:05","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 6 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":21000,"cuenta":true,"aprox":false},"78044":{"id":78044,"fecha":"24\/09\/2026 20:43","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 2 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":7000,"cuenta":true,"aprox":false},"78001":{"id":78001,"fecha":"24\/09\/2026 18:41","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"77994":{"id":77994,"fecha":"24\/09\/2026 18:27","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 2 destinos","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500},{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":7000,"cuenta":true,"aprox":false},"77988":{"id":77988,"fecha":"24\/09\/2026 17:55","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"77964":{"id":77964,"fecha":"24\/09\/2026 16:52","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"77955":{"id":77955,"fecha":"24\/09\/2026 16:24","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"77934":{"id":77934,"fecha":"24\/09\/2026 15:26","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false},"77933":{"id":77933,"fecha":"24\/09\/2026 15:19","estado":"asignado","estado_l":"Asignado","mensajero":"Alexander Garcia","negocio":"Droguería J Farma","solicitado":"🏪 Droguería J Farma","origen":"Siete de Agosto · Calle 5b # 25b02","tipo":"Urbano · 1 destino","lineas":[{"destino":"Siete de Agosto","direccion":"","tarifa":3500,"recargo_auto":0,"recargo_vol":0,"recargo":0,"recargo_nombre":"","valor":3500}],"total":3500,"cuenta":true,"aprox":false}};</script>
+
+                                    <div class="gofast-pagination" style="justify-content:center;margin-top:16px;">
+                                                    <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=detalle&amp;pg=1" class="gofast-page-link gofast-page-current">1</a>
+                                                    <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=detalle&amp;pg=2" class="gofast-page-link ">2</a>
+                                                    <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=detalle&amp;pg=3" class="gofast-page-link ">3</a>
+                                                    <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=detalle&amp;pg=4" class="gofast-page-link ">4</a>
+                                                    <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=detalle&amp;pg=5" class="gofast-page-link ">5</a>
+                                                    <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=detalle&amp;pg=6" class="gofast-page-link ">6</a>
+                                                    <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;tab=detalle&amp;pg=7" class="gofast-page-link ">7</a>
+                                            </div>
+                                <p class="gofast-md-nota">Los servicios en gris (pendientes, sin mensajero asignado) no se suman al total.</p>
+                    </div>
+    </div>
+
+    <!-- Descargas -->
+    <div class="gofast-box">
+        <h3>📥 Descargas</h3>
+        <p style="font-size:13px;color:#666;margin-top:0;">Con el periodo y el negocio elegidos arriba.</p>
+        <div class="gofast-md-descargas">
+            <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;gofast_md_export=imprimir" target="_blank" rel="noopener" class="gofast-btn-mini">🧾 Estado de cuenta (PDF)</a>
+            <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;gofast_md_export=tarifas" class="gofast-btn-mini gofast-btn-outline">📊 Resumen por tarifa (Excel)</a>
+            <a href="https://gofast.test/admin-domicilios/?cliente_id=9&amp;periodo=mes&amp;gofast_md_export=detalle" class="gofast-btn-mini gofast-btn-outline">📋 Detalle por envío (Excel)</a>
+        </div>
+    </div>
+
+    </div>
+
+<script>
+(function () {
+    var botones = document.querySelectorAll('[data-md-tab]');
+    botones.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var tab = btn.getAttribute('data-md-tab');
+            botones.forEach(function (b) { b.classList.toggle('gofast-config-tab-active', b === btn); });
+            document.querySelectorAll('[data-md-panel]').forEach(function (p) {
+                p.style.display = p.getAttribute('data-md-panel') === tab ? 'block' : 'none';
+            });
+            document.querySelectorAll('.gofast-md-tab-input').forEach(function (i) { i.value = tab; });
+        });
+    });
+    var modal = document.getElementById('gofast-md-modal');
+    var dinero = function (v) { return '$' + Number(v || 0).toLocaleString('es-CO'); };
+    var esc = function (t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; };
+
+    document.querySelectorAll('[data-md-detalle]').forEach(function (el) {
+        el.addEventListener('click', function () {
+            var s = (window.gofastMdDetalle || {})[el.getAttribute('data-md-detalle')];
+            if (!s || !modal) return;
+
+            document.getElementById('gofast-md-modal-titulo').innerHTML = 'Domicilio <strong>#' + s.id + '</strong> · ' + esc(s.negocio);
+            document.getElementById('gofast-md-modal-kv').innerHTML =
+                '<div><small>Fecha</small>' + esc(s.fecha) + '</div>' +
+                '<div><small>Estado</small><span class="gofast-badge-estado gofast-badge-estado-' + esc(s.estado) + '">' + esc(s.estado_l) + '</span></div>' +
+                '<div><small>Mensajero</small>' + esc(s.mensajero) + '</div>' +
+                '<div><small>Origen</small>' + esc(s.origen) + '</div>' +
+                '<div><small>Tipo</small>' + esc(s.tipo) + '</div>' +
+                '<div><small>Solicitado por</small>' + esc(s.solicitado) + '</div>';
+
+            var filas = s.lineas.map(function (l, i) {
+                return '<tr><td>' + (i + 1) + '</td><td>' + esc(l.destino) + (l.direccion ? '<br><small style="color:#666;">' + esc(l.direccion) + '</small>' : '') + '</td>' +
+                    '<td style="text-align:right;">' + dinero(l.tarifa) + '</td>' +
+                    '<td style="text-align:right;">' + (l.recargo ? dinero(l.recargo) : '—') + (l.recargo_nombre ? '<br><small style="color:#666;">' + esc(l.recargo_nombre) + '</small>' : '') + '</td>' +
+                    '<td style="text-align:right;">' + dinero(l.valor) + '</td></tr>';
+            }).join('');
+            filas += '<tr style="font-weight:700;background:#fff9d6;"><td colspan="4">Total pagado</td><td style="text-align:right;">' + dinero(s.total) + '</td></tr>';
+            document.getElementById('gofast-md-modal-lineas').innerHTML = filas;
+
+            var notas = [];
+            if (!s.cuenta) notas.push('Este servicio está pendiente (sin mensajero asignado): no se suma al total.');
+            if (s.aprox) notas.push('* La tarifa cambió después de este servicio: el valor de cada destino es aproximado; el total pagado es exacto.');
+            document.getElementById('gofast-md-modal-nota').textContent = notas.join(' ');
+            document.getElementById('gofast-md-modal-ver').href = 'https://gofast.test/servicio-registrado?id=' + s.id;
+            modal.style.display = 'block';
+        });
+    });
+    if (modal) {
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal || e.target.hasAttribute('data-md-cerrar')) modal.style.display = 'none';
+        });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') modal.style.display = 'none'; });
+    }
+
+    document.querySelectorAll('.gofast-md-rango-libre input[type="date"]').forEach(function (input) {
+        var form = input.form;
+        var oculto = form ? form.querySelector('input[type="hidden"][name="periodo"]') : null;
+        input.addEventListener('change', function () {
+            if (oculto) oculto.value = 'rango';
+        });
+        input.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            var boton = input.closest('.gofast-md-rango-libre').querySelector('button[value="rango"]');
+            if (boton) boton.click();
+        });
+    });
+    document.querySelectorAll('.gofast-md-chart-col').forEach(function (col) {
+        col.addEventListener('click', function () {
+            var wrap = col.closest('.gofast-md-chart-wrap');
+            if (!wrap) return;
+            wrap.querySelectorAll('.gofast-md-chart-activa').forEach(function (c) { c.classList.remove('gofast-md-chart-activa'); });
+            col.classList.add('gofast-md-chart-activa');
+            var info = wrap.querySelector('.gofast-md-chart-info span');
+            if (info) info.textContent = col.getAttribute('data-info');
+        });
+    });
+
+    var cargando = document.createElement('div');
+    cargando.className = 'gofast-md-cargando';
+    cargando.innerHTML = '<div><i></i>Cargando datos…</div>';
+    document.body.appendChild(cargando);
+    var mostrarCargando = function () { cargando.classList.add('on'); };
+    document.querySelectorAll('.gofast-home form.gofast-pedidos-filtros').forEach(function (f) {
+        f.addEventListener('submit', mostrarCargando);
+    });
+    document.querySelectorAll('.gofast-md-negocio, .gofast-pagination a, .gofast-md-actualizado a').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+            mostrarCargando();
+        });
+    });
+    window.addEventListener('pageshow', function () { cargando.classList.remove('on'); });
+
+    var intentos = 0;
+    var iniciarSelect2 = function () {
+        if (!(window.jQuery && jQuery.fn.select2)) {
+            if (++intentos < 20) setTimeout(iniciarSelect2, 250);
+            return;
+        }
+        jQuery('.gofast-md-select-cliente').each(function () {
+            if (jQuery(this).data('select2')) return;
+            jQuery(this).select2({ width: '100%', placeholder: jQuery(this).data('placeholder'), minimumResultsForSearch: 0 });
+        });
+    };
+    window.addEventListener('load', iniciarSelect2);
+})();
+</script>
+        </body></html>

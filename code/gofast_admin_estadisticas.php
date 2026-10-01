@@ -1,14 +1,14 @@
 <?php
 /***************************************************
- * GOFAST – DOMICILIOS (PANEL GENERAL DEL ADMIN)
- * Shortcode: [gofast_admin_domicilios]
- * URL: /admin-domicilios
+ * GOFAST – ESTADÍSTICAS DE CLIENTES (PANEL GENERAL DEL ADMIN)
+ * Shortcode: [gofast_admin_estadisticas]  (también acepta [gofast_admin_domicilios])
+ * URL: /admin-estadisticas
  *
- * Todos los domicilios de todos los clientes: indicadores con
+ * Todos los servicios de todos los clientes: indicadores con
  * comparación frente al periodo anterior, gráficas, resúmenes por
  * tarifa, cliente/negocio, mensajero, destino, trayecto, mes y estado.
  *
- * Requiere el snippet "Mis domicilios" activo (usa sus funciones gofast_md_*).
+ * Requiere el snippet "gofast_mis_estadisticas" activo (usa sus funciones gofast_md_*).
  * Totales: solo cuentan servicios asignados, en ruta o entregados.
  ***************************************************/
 
@@ -219,6 +219,7 @@ function gofast_ad_datos($f, $fresco = false) {
     }
 
     global $wpdb;
+    if (function_exists('set_time_limit')) @set_time_limit(120);
     $cat = gofast_ad_catalogos();
     $tarifas = gofast_md_tarifas();
 
@@ -277,6 +278,38 @@ function gofast_ad_datos($f, $fresco = false) {
 
     set_transient($clave, $res, 3 * MINUTE_IN_SECONDS);
     return $res;
+}
+
+/**
+ * Indicadores del periodo anterior con una sola consulta agregada.
+ */
+function gofast_ad_kpi_anterior($f, $desde, $hasta) {
+    global $wpdb;
+    list($where, $params) = gofast_ad_where($f, $desde, $hasta);
+    $fila = $wpdb->get_row($wpdb->prepare(
+        "SELECT COUNT(*) AS servicios,
+                COALESCE(SUM(total), 0) AS total,
+                COALESCE(SUM(GREATEST(COALESCE(JSON_LENGTH(destinos, '$.destinos'), 0), 1)), 0) AS envios
+         FROM servicios_gofast
+         WHERE $where AND tracking_estado IN ('asignado', 'en_ruta', 'entregado')",
+        $params
+    ));
+    $usuarios = (array) $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT user_id FROM servicios_gofast
+         WHERE $where AND user_id > 0 AND tracking_estado IN ('asignado', 'en_ruta', 'entregado')",
+        $params
+    ));
+    $cat = gofast_ad_catalogos();
+    $clientes = 0;
+    foreach ($usuarios as $uid) {
+        if (gofast_ad_es_cliente((int) $uid, $cat)) $clientes++;
+    }
+    return [
+        'servicios' => (int) ($fila->servicios ?? 0),
+        'total'     => (int) ($fila->total ?? 0),
+        'envios'    => (int) ($fila->envios ?? 0),
+        'clientes'  => $clientes,
+    ];
 }
 
 function gofast_ad_tipos_origen() {
@@ -361,7 +394,7 @@ function gofast_ad_tabla_grupos($filas, $titulo_col, $total, $enlaces = null, $a
                     <?php if ($enlaces !== null): ?>
                         <td>
                             <?php if (!empty($enlaces[$label])): ?>
-                                <a href="<?= esc_url(add_query_arg(array_filter(array_merge($args_enlace, $enlaces[$label])), home_url('/mis-domicilios'))) ?>" class="gofast-btn-mini gofast-btn-outline" style="text-decoration:none;white-space:nowrap;">Ver cliente</a>
+                                <a href="<?= esc_url(add_query_arg(array_filter(array_merge($args_enlace, $enlaces[$label])), home_url('/mis-estadisticas'))) ?>" class="gofast-btn-mini gofast-btn-outline" style="text-decoration:none;white-space:nowrap;">Ver cliente</a>
                             <?php endif; ?>
                         </td>
                     <?php endif; ?>
@@ -461,7 +494,7 @@ function gofast_ad_descargas() {
         exit;
     }
 
-    $archivo = 'gofast-admin-' . $tipo . '-' . $f['desde'] . '_' . $f['hasta'] . '.csv';
+    $archivo = 'gofast-estadisticas-clientes-' . $tipo . '-' . $f['desde'] . '_' . $f['hasta'] . '.csv';
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="' . $archivo . '"');
     header('Pragma: no-cache');
@@ -672,7 +705,7 @@ function gofast_admin_domicilios_shortcode() {
         return "<div class='gofast-box'>⚠️ Esta sección es solo para administradores.</div>";
     }
     if (!gofast_ad_disponible()) {
-        return "<div class='gofast-box'>⚠️ Activa el snippet <strong>Mis domicilios</strong>: este panel usa sus cálculos.</div>";
+        return "<div class='gofast-box'>⚠️ Activa el snippet <strong>gofast_mis_estadisticas</strong>: este panel usa sus cálculos.</div>";
     }
 
     $f = gofast_ad_filtros();
@@ -686,8 +719,7 @@ function gofast_admin_domicilios_shortcode() {
     $kpi = $datos['kpi'];
 
     list($ant_desde, $ant_hasta) = gofast_md_rango_anterior($f['desde'], $f['hasta']);
-    $datos_ant = gofast_ad_datos(array_merge($f, ['desde' => $ant_desde, 'hasta' => $ant_hasta]), !empty($_GET['fresco']));
-    $ant = $datos_ant['kpi'];
+    $ant = gofast_ad_kpi_anterior($f, $ant_desde, $ant_hasta);
     $promedio = $kpi['servicios'] ? round($kpi['total'] / $kpi['servicios']) : 0;
     $promedio_ant = $ant['servicios'] ? round($ant['total'] / $ant['servicios']) : 0;
 
@@ -726,11 +758,11 @@ function gofast_admin_domicilios_shortcode() {
 <div class="gofast-home">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <div>
-            <h1 style="margin-bottom:8px;">📊 Domicilios</h1>
+            <h1 style="margin-bottom:8px;">📊 Estadísticas de clientes</h1>
             <p class="gofast-home-text" style="margin:0;">Resumen de todos los domicilios: ingresos, clientes, mensajeros y tarifas.</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a href="<?= esc_url(home_url('/mis-domicilios')) ?>" class="gofast-btn-mini gofast-btn-outline" style="text-decoration:none;white-space:nowrap;">👤 Vista de un cliente</a>
+            <a href="<?= esc_url(home_url('/mis-estadisticas')) ?>" class="gofast-btn-mini gofast-btn-outline" style="text-decoration:none;white-space:nowrap;">👤 Vista de un cliente</a>
             <a href="<?= esc_url(home_url('/dashboard-admin')) ?>" class="gofast-btn-request" style="text-decoration:none;white-space:nowrap;width:auto;">← Volver al Dashboard</a>
         </div>
     </div>
@@ -740,8 +772,8 @@ function gofast_admin_domicilios_shortcode() {
         <form method="get" class="gofast-pedidos-filtros">
             <input type="hidden" name="tab" value="<?= esc_attr($tab) ?>" class="gofast-md-tab-input">
             <input type="hidden" name="periodo" value="<?= esc_attr($f['periodo']) ?>">
-            <div class="gofast-pedidos-filtros-row" style="margin-bottom:14px;">
-                <div style="max-width:240px;">
+            <div class="gofast-pedidos-filtros-row gofast-md-filtros-grid">
+                <div>
                     <label>Cliente</label>
                     <select name="cliente" class="gofast-md-select-cliente" data-placeholder="🔍 Todos">
                         <option value="0">Todos</option>
@@ -752,7 +784,7 @@ function gofast_admin_domicilios_shortcode() {
                     </select>
                 </div>
 
-                <div style="max-width:240px;">
+                <div>
                     <label>Negocio</label>
                     <select name="negocio" class="gofast-md-select-cliente" data-placeholder="🔍 Todos">
                         <option value="0">Todos</option>
@@ -762,7 +794,7 @@ function gofast_admin_domicilios_shortcode() {
                     </select>
                 </div>
 
-                <div style="max-width:220px;">
+                <div>
                     <label>Mensajero</label>
                     <select name="mensajero" class="gofast-md-select-cliente" data-placeholder="🔍 Todos">
                         <option value="0">Todos</option>
@@ -844,14 +876,13 @@ function gofast_admin_domicilios_shortcode() {
             <div style="font-size:30px;margin-bottom:6px;">➕</div>
             <div style="font-size:24px;font-weight:700;color:#FF5722;margin-bottom:4px;"><?= gofast_md_money($kpi['recargos']) ?></div>
             <div style="font-size:13px;color:#666;">Recargos</div>
-            <?= gofast_md_delta($kpi['recargos'], $ant['recargos']) ?>
             <small style="color:#666;"><?= $kpi['total'] > 0 ? round($kpi['recargos'] * 100 / $kpi['total'], 1) : 0 ?>% de los ingresos</small>
         </div>
         <div class="gofast-box gofast-ad-kpi" style="text-align:center;padding:18px;">
             <div style="font-size:30px;margin-bottom:6px;">👥</div>
             <div style="font-size:24px;font-weight:700;color:#00897B;margin-bottom:4px;"><?= number_format($datos['clientes'], 0, ',', '.') ?></div>
             <div style="font-size:13px;color:#666;">Clientes activos</div>
-            <?= gofast_md_delta($datos['clientes'], $datos_ant['clientes']) ?>
+            <?= gofast_md_delta($datos['clientes'], $ant['clientes']) ?>
             <?php if ($datos['clientes_nuevos'] > 0): ?>
                 <small style="color:#00897B;">🆕 <?= (int) $datos['clientes_nuevos'] ?> nuevo(s)</small>
             <?php endif; ?>
@@ -869,7 +900,7 @@ function gofast_admin_domicilios_shortcode() {
         <div class="gofast-box">
             <h3 style="margin-top:0;">📈 Ingresos por <?= $modo_grafica === 'dia' ? 'día' : 'mes' ?></h3>
             <?= gofast_md_grafica($puntos) ?>
-            <p class="gofast-md-nota">Pasa el cursor sobre una barra para ver el valor. La más alta va en tono oscuro.</p>
+            
         </div>
         <div class="gofast-box">
             <h3 style="margin-top:0;">🧭 Origen de los pedidos</h3>
@@ -910,7 +941,7 @@ function gofast_admin_domicilios_shortcode() {
         </div>
 
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="tarifa" style="display:<?= $tab === 'tarifa' ? 'block' : 'none' ?>;">
-            <h3>💲 Cuántos envíos de cada valor</h3>
+            <h3>💲 ¿Cuántos envíos de cada valor?</h3>
             <?= gofast_md_html_tarifas($datos) ?>
         </div>
 
@@ -1042,6 +1073,7 @@ function gofast_admin_domicilios_shortcode() {
     <?php
     return ob_get_clean();
 }
+add_shortcode('gofast_admin_estadisticas', 'gofast_admin_domicilios_shortcode');
 add_shortcode('gofast_admin_domicilios', 'gofast_admin_domicilios_shortcode');
 
 }

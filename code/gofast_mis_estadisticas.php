@@ -1,11 +1,11 @@
 <?php
 /***************************************************
- * GOFAST – MIS DOMICILIOS (VISTA CONTABLE DEL CLIENTE)
- * Shortcode: [gofast_mis_domicilios]
- * URL: /mis-domicilios
+ * GOFAST – MIS ESTADÍSTICAS (VISTA CONTABLE DEL CLIENTE)
+ * Shortcode: [gofast_mis_estadisticas]  (también acepta [gofast_mis_domicilios])
+ * URL: /mis-estadisticas
  *
- * Cliente: ve sus domicilios (personales y de sus negocios)
- * con resúmenes por tarifa, negocio, destino, trayecto, mes y estado.
+ * Cliente: ve sus servicios (personales y de sus negocios)
+ * con resúmenes por tarifa, negocio, destino, mes y estado.
  * Admin: puede ver la vista de cualquier cliente con ?cliente_id=ID
  *
  * Totales: solo cuentan servicios asignados, en ruta o entregados.
@@ -354,6 +354,7 @@ function gofast_md_resultado_vacio() {
         'envios'       => [],
         'kpi'          => ['servicios' => 0, 'envios' => 0, 'total' => 0, 'tarifas' => 0, 'recargos' => 0, 'recargos_auto' => 0, 'excluidos' => 0, 'aproximados' => 0],
         'recargos_vol' => [],
+        'por_recargo'  => [],
         'por_tarifa'   => [],
         'por_negocio'  => [],
         'por_destino'  => [],
@@ -420,6 +421,14 @@ function gofast_md_sumar(&$res, $sv, $guardar_detalle = true) {
             $res['recargos_vol'][$vk]['envios']++;
             $res['recargos_vol'][$vk]['valor'] += $l['recargo_vol'];
         }
+        $partes = [['Automático (lluvia / por valor)', $l['recargo_auto']], [$l['recargo_nombre'], $l['recargo_vol']]];
+        foreach ($partes as list($nombre, $valor)) {
+            if ($valor <= 0) continue;
+            $rk = $nombre . '|' . $valor;
+            if (!isset($res['por_recargo'][$rk])) $res['por_recargo'][$rk] = ['nombre' => $nombre, 'valor' => $valor, 'envios' => 0, 'total' => 0];
+            $res['por_recargo'][$rk]['envios']++;
+            $res['por_recargo'][$rk]['total'] += $valor;
+        }
     }
 
     if ($guardar_detalle) {
@@ -463,6 +472,9 @@ function gofast_md_ordenar(&$res) {
     uasort($res['por_tarifa'], function ($a, $b) {
         return [$a['inter'], $a['tarifa']] <=> [$b['inter'], $b['tarifa']];
     });
+    uasort($res['por_recargo'], function ($a, $b) {
+        return [$a['nombre'], $a['valor']] <=> [$b['nombre'], $b['valor']];
+    });
     $por_valor = function ($a, $b) { return $b['valor'] <=> $a['valor']; };
     $por_envios = function ($a, $b) { return [$b['envios'], $b['valor']] <=> [$a['envios'], $a['valor']]; };
     uasort($res['por_negocio'], $por_valor);
@@ -479,12 +491,14 @@ function gofast_md_datos($user_id, $filtros) {
     global $wpdb;
 
     $negocios = $wpdb->get_results($wpdb->prepare(
-        "SELECT id, nombre, activo FROM negocios_gofast WHERE user_id = %d ORDER BY nombre ASC",
+        "SELECT id, nombre, activo, nit FROM negocios_gofast WHERE user_id = %d ORDER BY nombre ASC",
         $user_id
     ));
     $negocios_map = [];
+    $negocios_nit = [];
     foreach ((array) $negocios as $n) {
         $negocios_map[(int) $n->id] = $n->nombre;
+        $negocios_nit[(int) $n->id] = (string) $n->nit;
     }
 
     $filas = $wpdb->get_results($wpdb->prepare(
@@ -501,6 +515,7 @@ function gofast_md_datos($user_id, $filtros) {
     $res = gofast_md_resultado_vacio();
     $res['negocios'] = $negocios;
     $res['negocios_map'] = $negocios_map;
+    $res['negocios_nit'] = $negocios_nit;
     $res['conteo_negocios'] = ['todos' => 0, 'personal' => 0];
 
     foreach ((array) $filas as $s) {
@@ -536,7 +551,12 @@ function gofast_md_sin_cache() {
     if (is_admin()) return;
     $post = get_post();
     $contenido = $post ? (string) $post->post_content : '';
-    if (!has_shortcode($contenido, 'gofast_mis_domicilios') && !has_shortcode($contenido, 'gofast_admin_domicilios')) return;
+    $propios = ['gofast_mis_estadisticas', 'gofast_admin_estadisticas', 'gofast_mis_domicilios', 'gofast_admin_domicilios'];
+    $es_propia = false;
+    foreach ($propios as $sc) {
+        if (has_shortcode($contenido, $sc)) { $es_propia = true; break; }
+    }
+    if (!$es_propia) return;
 
     if (!defined('DONOTCACHEPAGE')) {
         define('DONOTCACHEPAGE', true);
@@ -569,11 +589,11 @@ function gofast_md_descargas() {
     }
 
     if ($tipo === 'imprimir') {
-        gofast_md_estado_cuenta($ctx, $filtros, $datos);
+        gofast_md_estado_cuenta($ctx, $filtros, $datos, ($_GET['detalle'] ?? '1') !== '0');
         exit;
     }
 
-    $archivo = 'gofast-domicilios-' . $tipo . '-' . $filtros['desde'] . '_' . $filtros['hasta'] . '.csv';
+    $archivo = 'gofast-estadisticas-' . $tipo . '-' . $filtros['desde'] . '_' . $filtros['hasta'] . '.csv';
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="' . $archivo . '"');
     header('Pragma: no-cache');
@@ -606,8 +626,24 @@ function gofast_md_descargas() {
 }
 add_action('template_redirect', 'gofast_md_descargas');
 
-function gofast_md_estado_cuenta($ctx, $filtros, $datos) {
+function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
     $kpi = $datos['kpi'];
+    $con_nit = function ($id) use ($datos) {
+        $nit = $datos['negocios_nit'][$id] ?? '';
+        return ($datos['negocios_map'][$id] ?? '') . ($nit !== '' ? ' · NIT ' . $nit : '');
+    };
+    if ($filtros['negocio'] === 'personal') {
+        $lineas_negocio = ['Pedidos personales'];
+    } elseif ($filtros['negocio'] !== 'todos') {
+        $lineas_negocio = [$con_nit((int) $filtros['negocio'])];
+    } elseif ($datos['negocios_map']) {
+        $lineas_negocio = array_map($con_nit, array_keys($datos['negocios_map']));
+    } else {
+        $lineas_negocio = [$ctx['telefono']];
+    }
+    $num = function ($v) { return number_format((int) $v, 0, ',', '.'); };
+    $envios_con_recargo = array_sum(array_column($datos['por_recargo'], 'envios'));
+    $con_negocio = count($datos['por_negocio']) > 1;
     ?><!DOCTYPE html>
 <html lang="es">
 <head>
@@ -620,18 +656,20 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos) {
         .no-print { background: #f8f9fa; border-bottom: 2px solid #F4C524; padding: 14px; text-align: center; margin: -24px -24px 20px; }
         .no-print button { background: #28a745; color: #fff; border: 0; padding: 10px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; margin: 0 6px; }
         .no-print .gris { background: #6c757d; }
-        .cab { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #F4C524; padding-bottom: 12px; margin-bottom: 16px; }
-        .cab h1 { margin: 0 0 4px; font-size: 22px; }
         .muted { color: #666; }
-        .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 18px; }
-        .kpi { border: 1px solid #eee; border-radius: 8px; padding: 10px; text-align: center; }
-        .kpi b { display: block; font-size: 18px; margin-bottom: 2px; }
-        h2 { font-size: 15px; margin: 18px 0 8px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-        th, td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
-        th { background: #fafafa; }
-        td.n, th.n { text-align: right; }
-        tfoot td { font-weight: 700; border-top: 2px solid #ddd; }
+        .hoja { max-width: 860px; margin: 0 auto; }
+        .hoja-cab { display: flex; justify-content: space-between; gap: 16px; border-bottom: 3px solid #F4C524; padding-bottom: 10px; margin-bottom: 14px; }
+        .hoja-cab .logo { font-weight: 900; font-size: 22px; }
+        .hoja-cab .logo span { background: #F4C524; padding: 0 6px; border-radius: 4px; }
+        h2 { font-size: 14px; margin: 24px 0 8px; }
+        table.t { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+        table.t th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #888; padding: 8px 10px; border-bottom: 2px solid #eee; background: #fafafa; text-align: left; }
+        table.t td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+        table.t .n { text-align: right; white-space: nowrap; }
+        table.t tr.grupo td { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #555; background: #f6f6f6; padding: 6px 10px; }
+        table.t tr.sub td { font-weight: 700; border-top: 1px solid #ddd; }
+        table.t tr.total td { font-weight: 800; background: #fff9d6; }
+        table.det td { font-size: 12px; padding: 6px 8px; }
         @page { size: A4; margin: 12mm; }
         @media print { .no-print { display: none; } body { padding: 0; } h2 { page-break-after: avoid; } tr { page-break-inside: avoid; } }
     </style>
@@ -642,92 +680,108 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos) {
         <button class="gris" onclick="window.close()">✕ Cerrar</button>
     </div>
 
-    <div class="cab">
-        <div>
-            <h1>Estado de cuenta de domicilios</h1>
-            <div><strong><?= esc_html($ctx['nombre']) ?></strong> · <?= esc_html($ctx['telefono']) ?></div>
-            <?php if ($filtros['negocio'] !== 'todos'): ?>
-                <div><?= esc_html($filtros['negocio'] === 'personal' ? 'Pedidos personales' : ($datos['negocios_map'][(int) $filtros['negocio']] ?? '')) ?></div>
-            <?php endif; ?>
-            <div class="muted">Periodo: <?= esc_html(gofast_md_fecha_corta($filtros['desde'])) ?> a <?= esc_html(gofast_md_fecha_corta($filtros['hasta'])) ?></div>
+    <div class="hoja">
+        <div class="hoja-cab">
+            <div>
+                <div class="logo">GO <span>FAST</span></div>
+                <div class="muted">Estado de cuenta de servicios<?= $con_detalle ? ' · con detalle' : '' ?></div>
+            </div>
+            <div style="text-align:right;">
+                <b><?= esc_html($ctx['nombre']) ?></b><br>
+                <?php foreach ($lineas_negocio as $linea): ?>
+                    <span class="muted"><?= esc_html($linea) ?></span><br>
+                <?php endforeach; ?>
+                <span class="muted"><?= esc_html(gofast_md_fecha_corta($filtros['desde'])) ?> – <?= esc_html(gofast_md_fecha_corta($filtros['hasta'])) ?></span>
+            </div>
         </div>
-        <div class="muted" style="text-align:right;">
-            <strong style="color:#000;font-size:16px;">GO FAST</strong><br>
-            Generado: <?= esc_html(gofast_md_hoy('Y-m-d H:i')) ?>
-        </div>
-    </div>
 
-    <div class="kpis">
-        <div class="kpi"><b><?= number_format($kpi['servicios'], 0, ',', '.') ?></b>Servicios</div>
-        <div class="kpi"><b><?= number_format($kpi['envios'], 0, ',', '.') ?></b>Envíos</div>
-        <div class="kpi"><b><?= gofast_md_money($kpi['servicios'] ? round($kpi['total'] / $kpi['servicios']) : 0) ?></b>Promedio por domicilio</div>
-        <div class="kpi"><b><?= gofast_md_money($kpi['recargos']) ?></b>Recargos</div>
-        <div class="kpi"><b><?= gofast_md_money($kpi['total']) ?></b>Total</div>
-    </div>
-
-    <h2>Resumen por tarifa</h2>
-    <table>
-        <thead><tr><th>Tarifa</th><th class="n">Envíos</th><th class="n">Subtotal</th><th class="n">Recargos</th><th class="n">Total</th></tr></thead>
-        <tbody>
-        <?php foreach ($datos['por_tarifa'] as $t): ?>
-            <tr>
-                <td><?= gofast_md_money($t['tarifa']) ?><?= $t['inter'] ? ' (intermunicipal)' : '' ?></td>
-                <td class="n"><?= (int) $t['envios'] ?></td>
-                <td class="n"><?= gofast_md_money($t['subtotal']) ?></td>
-                <td class="n"><?= gofast_md_money($t['recargos']) ?></td>
-                <td class="n"><?= gofast_md_money($t['subtotal'] + $t['recargos']) ?></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-        <tfoot><tr><td>Total</td><td class="n"><?= (int) $kpi['envios'] ?></td><td class="n"><?= gofast_md_money($kpi['tarifas']) ?></td><td class="n"><?= gofast_md_money($kpi['recargos']) ?></td><td class="n"><?= gofast_md_money($kpi['tarifas'] + $kpi['recargos']) ?></td></tr></tfoot>
-    </table>
-
-    <?php if ($kpi['recargos'] > 0): ?>
-        <h2>Recargos</h2>
-        <table>
-            <thead><tr><th>Recargo</th><th class="n">Envíos</th><th class="n">Valor</th></tr></thead>
+        <table class="t">
+            <thead><tr><th>Concepto</th><th class="n">Cantidad</th><th class="n">Valor</th></tr></thead>
             <tbody>
-            <?php if ($kpi['recargos_auto'] > 0): ?>
-                <tr><td>Automáticos (lluvia, recargos por valor)</td><td class="n">—</td><td class="n"><?= gofast_md_money($kpi['recargos_auto']) ?></td></tr>
+                <tr class="grupo"><td colspan="3">Envíos por tarifa</td></tr>
+            <?php foreach ($datos['por_tarifa'] as $t): ?>
+                <tr>
+                    <td>Envíos <?= $t['inter'] ? 'intermunicipales ' : '' ?>de <?= gofast_md_money($t['tarifa']) ?></td>
+                    <td class="n"><?= $num($t['envios']) ?></td>
+                    <td class="n"><?= gofast_md_money($t['subtotal']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+                <tr class="sub"><td>Subtotal envíos</td><td class="n"><?= $num($kpi['envios']) ?></td><td class="n"><?= gofast_md_money($kpi['tarifas']) ?></td></tr>
+
+            <?php if ($kpi['recargos'] > 0): ?>
+                <tr class="grupo"><td colspan="3">Recargos</td></tr>
+                <?php foreach ($datos['por_recargo'] as $r): ?>
+                    <tr>
+                        <td><?= esc_html($r['nombre']) ?> de <?= gofast_md_money($r['valor']) ?></td>
+                        <td class="n"><?= $num($r['envios']) ?></td>
+                        <td class="n"><?= gofast_md_money($r['total']) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <tr class="sub"><td>Subtotal recargos</td><td class="n"><?= $num($envios_con_recargo) ?></td><td class="n"><?= gofast_md_money($kpi['recargos']) ?></td></tr>
             <?php endif; ?>
-            <?php foreach ($datos['recargos_vol'] as $nombre => $g): ?>
-                <tr><td><?= esc_html($nombre) ?></td><td class="n"><?= (int) $g['envios'] ?></td><td class="n"><?= gofast_md_money($g['valor']) ?></td></tr>
-            <?php endforeach; ?>
-            </tbody>
-            <tfoot><tr><td>Total recargos</td><td></td><td class="n"><?= gofast_md_money($kpi['recargos']) ?></td></tr></tfoot>
-        </table>
-    <?php endif; ?>
 
-    <?php if (count($datos['por_negocio']) > 1): ?>
-        <h2>Resumen por negocio</h2>
-        <table>
-            <thead><tr><th>Negocio</th><th class="n">Servicios</th><th class="n">Envíos</th><th class="n">Total</th></tr></thead>
-            <tbody>
-            <?php foreach ($datos['por_negocio'] as $nombre => $g): ?>
-                <tr><td><?= esc_html($nombre) ?></td><td class="n"><?= (int) $g['servicios'] ?></td><td class="n"><?= (int) $g['envios'] ?></td><td class="n"><?= gofast_md_money($g['valor']) ?></td></tr>
-            <?php endforeach; ?>
+            <?php if ($kpi['excluidos'] > 0): ?>
+                <tr><td>Pendientes sin mensajero (no se cobran)</td><td class="n"><?= $num($kpi['excluidos']) ?></td><td class="n">$0</td></tr>
+            <?php endif; ?>
+                <tr class="total"><td>Total del periodo</td><td class="n"><?= $num($kpi['envios']) ?> envíos</td><td class="n"><?= gofast_md_money($kpi['total']) ?></td></tr>
             </tbody>
         </table>
-    <?php endif; ?>
+        <p class="muted" style="margin-top:10px;">
+            Promedio por envío: <?= gofast_md_money($kpi['envios'] ? round($kpi['total'] / $kpi['envios']) : 0) ?>
+            · <?= $num($kpi['servicios']) ?> servicios
+            · Generado: <?= esc_html(gofast_md_hoy('d/m/Y H:i')) ?>
+        </p>
 
-    <h2>Detalle de servicios</h2>
-    <table>
-        <thead><tr><th>#</th><th>Fecha</th><th>Negocio</th><th>Origen</th><th>Destinos</th><th class="n">Total</th></tr></thead>
-        <tbody>
-        <?php foreach ($datos['servicios'] as $s): if (!$s['cuenta']) continue; ?>
-            <tr>
-                <td><?= (int) $s['id'] ?></td>
-                <td><?= esc_html(substr($s['fecha'], 0, 16)) ?></td>
-                <td><?= esc_html($s['negocio']) ?></td>
-                <td><?= esc_html($s['origen']) ?></td>
-                <td><?= esc_html(implode(', ', $s['destinos'])) ?></td>
-                <td class="n"><?= gofast_md_money($s['total']) ?></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-        <tfoot><tr><td colspan="5">Total</td><td class="n"><?= gofast_md_money($kpi['total']) ?></td></tr></tfoot>
-    </table>
-    <p class="muted">Incluye los servicios con mensajero asignado. No incluye los pendientes (sin mensajero asignado).</p>
+        <?php if ($con_detalle): ?>
+            <?php if ($con_negocio): ?>
+                <h2>Por negocio</h2>
+                <table class="t">
+                    <thead><tr><th>Negocio</th><th class="n">Servicios</th><th class="n">Envíos</th><th class="n">Valor</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($datos['por_negocio'] as $nombre => $g): ?>
+                        <tr><td><?= esc_html($nombre) ?></td><td class="n"><?= $num($g['servicios']) ?></td><td class="n"><?= $num($g['envios']) ?></td><td class="n"><?= gofast_md_money($g['valor']) ?></td></tr>
+                    <?php endforeach; ?>
+                        <tr class="total"><td>Total</td><td class="n"><?= $num($kpi['servicios']) ?></td><td class="n"><?= $num($kpi['envios']) ?></td><td class="n"><?= gofast_md_money($kpi['total']) ?></td></tr>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+
+            <h2>Detalle de servicios</h2>
+            <table class="t det">
+                <thead>
+                    <tr>
+                        <th>#</th><th>Fecha</th><?php if ($con_negocio): ?><th>Negocio</th><?php endif; ?><th>Origen → Destinos</th>
+                        <th class="n">Envíos</th><th class="n">Tarifas</th><th class="n">Recargos</th><th class="n">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($datos['servicios'] as $s): if (!$s['cuenta']) continue;
+                    $tar_s = array_sum(array_column($s['lineas'], 'tarifa'));
+                    $rec_s = array_sum(array_column($s['lineas'], 'recargo')); ?>
+                    <tr>
+                        <td><?= (int) $s['id'] ?></td>
+                        <td style="white-space:nowrap;"><?= esc_html(date('d/m/Y H:i', strtotime($s['fecha']))) ?></td>
+                        <?php if ($con_negocio): ?><td><?= esc_html($s['negocio']) ?></td><?php endif; ?>
+                        <td><?= esc_html($s['origen']) ?> → <?= esc_html(implode(', ', $s['destinos'])) ?></td>
+                        <td class="n"><?= count($s['lineas']) ?></td>
+                        <td class="n"><?= gofast_md_money($tar_s) ?></td>
+                        <td class="n"><?= $rec_s ? gofast_md_money($rec_s) : '—' ?></td>
+                        <td class="n"><b><?= gofast_md_money($s['total']) ?></b></td>
+                    </tr>
+                <?php endforeach; ?>
+                    <tr class="total">
+                        <td colspan="<?= $con_negocio ? 4 : 3 ?>">Total</td>
+                        <td class="n"><?= $num($kpi['envios']) ?></td>
+                        <td class="n"><?= gofast_md_money($kpi['tarifas']) ?></td>
+                        <td class="n"><?= gofast_md_money($kpi['recargos']) ?></td>
+                        <td class="n"><?= gofast_md_money($kpi['total']) ?></td>
+                    </tr>
+                </tbody>
+            </table>
+        <?php endif; ?>
+
+        <p class="muted">Incluye los servicios con mensajero asignado. No incluye los pendientes (sin mensajero asignado).</p>
+    </div>
 </body>
 </html><?php
 }
@@ -737,7 +791,7 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos) {
  */
 function gofast_md_tabla_resumen($filas, $titulo_col, $total_valor, $col_servicios = false) {
     if (!$filas) {
-        return "<p style='text-align:center;color:#666;padding:20px;'>No hay domicilios en este periodo.</p>";
+        return "<p style='text-align:center;color:#666;padding:20px;'>No hay servicios en este periodo.</p>";
     }
     ob_start();
     ?>
@@ -835,11 +889,23 @@ function gofast_md_css() {
 .gofast-md-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
 .gofast-md-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
 .gofast-md-grid .gofast-box, .gofast-md-grid-2 .gofast-box { margin: 0; }
-.gofast-md-chart { display: flex; align-items: flex-end; gap: 3px; height: 180px; border-bottom: 2px solid var(--gofast-gray-300); padding-top: 8px; }
-.gofast-md-chart-col { flex: 1; min-width: 3px; height: 100%; display: flex; align-items: flex-end; cursor: default; }
-.gofast-md-chart-bar { width: 100%; background: var(--gofast-yellow); border-radius: 4px 4px 0 0; min-height: 2px; transition: background .15s; }
+.gofast-md-chart { display: flex; align-items: flex-end; gap: 3px; height: 200px; border-bottom: 2px solid var(--gofast-gray-300); padding-top: 8px; }
+.gofast-md-chart-col { flex: 1; min-width: 3px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; cursor: pointer; }
+.gofast-md-chart-bar { width: 100%; height: calc((100% - var(--reserva, 20px)) * var(--h, 0)); background: var(--gofast-yellow); border-radius: 4px 4px 0 0; min-height: 2px; transition: background .15s; }
 .gofast-md-chart-max { background: #e0a800; }
-.gofast-md-chart-col:hover .gofast-md-chart-bar { background: #000; }
+.gofast-md-chart-val { display: block; text-align: center; font-size: 11px; font-weight: 700; color: #333; line-height: 1.1; margin-bottom: 3px; white-space: nowrap; }
+.gofast-md-chart-varias .gofast-md-chart-val { font-size: 10px; }
+.gofast-md-chart-muchas { --reserva: 46px; }
+.gofast-md-chart-muchas .gofast-md-chart-val { writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto 3px; font-size: 10px; font-weight: 600; }
+.gofast-md-chart-col:hover .gofast-md-chart-bar, .gofast-md-chart-activa .gofast-md-chart-bar { background: #000; }
+.gofast-md-chart-info { margin-top: 10px; padding: 8px 10px; background: #fff9d6; border-radius: 8px; font-size: 13px; }
+.gofast-md-chart-info small { color: #666; }
+@media (max-width: 600px) {
+    .gofast-md-chart-varias { --reserva: 46px; }
+    .gofast-md-chart-varias .gofast-md-chart-val { writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto 3px; }
+    .gofast-md-chart { gap: 2px; }
+    .gofast-md-chart-muchas .gofast-md-chart-val { font-size: 9px; }
+}
 .gofast-md-chart-labels { display: flex; gap: 3px; margin-top: 4px; }
 .gofast-md-chart-labels span { flex: 1; min-width: 3px; font-size: 10px; color: #666; text-align: center; white-space: nowrap; }
 .gofast-md-stack { display: flex; height: 26px; border-radius: 6px; overflow: hidden; background: var(--gofast-gray-300); margin: 8px 0 14px; }
@@ -852,12 +918,30 @@ function gofast_md_css() {
 .gofast-md-top-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 4px; }
 .gofast-md-top-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gofast-md-grid > *, .gofast-md-grid-2 > * { min-width: 0; }
+.gofast-md-tarifas { margin-bottom: 8px; align-items: start; }
+.gofast-md-tarifas-grafica { position: sticky; top: 20px; background: #fafafa; border: 1px solid var(--gofast-gray-400, #e5e5e5); border-radius: var(--radius-m, 10px); padding: 14px; }
+.gofast-md-mini { margin-top: 14px; }
+.gofast-md-mini > div { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+.gofast-md-mini > div:last-child { border-bottom: 0; }
+.gofast-md-mini span { color: #666; }
+.gofast-md-mini b { text-align: right; }
 .gofast-home .gofast-md-panel .gofast-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 @media (max-width: 900px) {
     .gofast-md-grid, .gofast-md-grid-2 { grid-template-columns: minmax(0, 1fr); }
 }
 .gofast-md-descargas { display: flex; gap: 8px; flex-wrap: wrap; }
 .gofast-md-descargas a { text-decoration: none; }
+.gofast-home .gofast-pedidos-filtros-row.gofast-md-filtros-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 16px; align-items: end; margin-bottom: 14px; }
+.gofast-home .gofast-md-filtros-grid > div { min-width: 0 !important; max-width: none !important; width: auto; }
+.gofast-home .gofast-md-filtros-grid.gofast-md-filtros-cliente { grid-template-columns: minmax(0, 360px) auto; justify-content: start; }
+.gofast-home .gofast-md-filtros-grid .gofast-pedidos-filtros-actions { display: flex; flex-direction: row !important; justify-content: flex-start !important; gap: 8px; }
+.gofast-home .gofast-md-filtros-grid .select2-container { width: 100% !important; max-width: 100%; }
+.gofast-home .gofast-md-filtros-grid .select2-selection__rendered { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gofast-md-cargando { position: fixed; inset: 0; z-index: 99999; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, .55); }
+.gofast-md-cargando.on { display: flex; }
+.gofast-md-cargando div { background: #fff; color: #1a1a1a; border-radius: 12px; padding: 18px 26px; font-weight: 600; display: flex; gap: 12px; align-items: center; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+.gofast-md-cargando i { width: 20px; height: 20px; border: 3px solid #eee; border-top-color: var(--gofast-yellow, #F4C524); border-radius: 50%; animation: gofast-md-giro .8s linear infinite; }
+@keyframes gofast-md-giro { to { transform: rotate(360deg); } }
 .gofast-md-select-cliente + .select2-container .select2-selection--single { height: 42px; display: flex; align-items: center; border: 1px solid var(--gofast-gray-400); border-radius: var(--radius-s); }
 .gofast-md-select-cliente + .select2-container .select2-selection__arrow { height: 40px; }
 .gofast-md-desktop { display: block; }
@@ -877,6 +961,7 @@ function gofast_md_css() {
     .gofast-md-descargas a { flex: 1 1 100%; text-align: center; }
     .gofast-home .gofast-md-panel .gofast-table th, .gofast-home .gofast-md-panel .gofast-table td { white-space: nowrap; }
     .gofast-home .gofast-pedidos-filtros-row > div { max-width: none !important; }
+    .gofast-home .gofast-pedidos-filtros-row.gofast-md-filtros-grid, .gofast-home .gofast-md-filtros-grid.gofast-md-filtros-cliente { grid-template-columns: minmax(0, 1fr); }
     .gofast-md-actualizado { float: none !important; display: block; margin-top: 4px; }
     .gofast-md-chips { gap: 6px; }
     .gofast-md-chips-lbl { flex-basis: 100%; }
@@ -927,19 +1012,34 @@ function gofast_md_puntos_grafica($res, $desde, $hasta) {
     return ['mes', $puntos];
 }
 
+function gofast_md_dinero_corto($v) {
+    $v = (int) $v;
+    if ($v >= 1000000) return '$' . rtrim(rtrim(number_format($v / 1000000, 1, ',', ''), '0'), ',') . 'M';
+    if ($v >= 1000) return '$' . rtrim(rtrim(number_format($v / 1000, $v < 10000 ? 1 : 0, ',', ''), '0'), ',') . 'k';
+    return '$' . $v;
+}
+
 function gofast_md_grafica($puntos) {
     if (!$puntos || !max(array_column($puntos, 'valor'))) {
-        return "<p style='text-align:center;color:#666;padding:40px 0;'>No hay domicilios en este periodo.</p>";
+        return "<p style='text-align:center;color:#666;padding:40px 0;'>No hay servicios en este periodo.</p>";
     }
     $max = max(array_column($puntos, 'valor'));
     $cada = max(1, (int) ceil(count($puntos) / 16));
+    $clase = count($puntos) > 12 ? ' gofast-md-chart-muchas' : (count($puntos) > 6 ? ' gofast-md-chart-varias' : '');
+    $info_max = '';
     ob_start();
     ?>
-    <div class="gofast-md-chart">
+    <div class="gofast-md-chart-wrap">
+    <div class="gofast-md-chart<?= $clase ?>">
         <?php foreach ($puntos as $pt):
-            $alto = round($pt['valor'] * 100 / $max, 1); ?>
-            <div class="gofast-md-chart-col" title="<?= esc_attr($pt['titulo'] ?? ($pt['largo'] . ': ' . gofast_md_money($pt['valor']) . ' · ' . $pt['servicios'] . ' servicios')) ?>">
-                <div class="gofast-md-chart-bar<?= $pt['valor'] === $max ? ' gofast-md-chart-max' : '' ?>" style="height:<?= $alto ?>%;"></div>
+            $alto = round($pt['valor'] / $max, 3);
+            $info = $pt['titulo'] ?? ($pt['largo'] . ': ' . gofast_md_money($pt['valor']) . ' · ' . $pt['servicios'] . ' ' . ($pt['servicios'] === 1 ? 'servicio' : 'servicios'));
+            $es_max = $pt['valor'] === $max;
+            if ($es_max && $info_max === '') $info_max = $info;
+            $etiqueta = $pt['valor'] > 0 ? ($pt['etiqueta'] ?? gofast_md_dinero_corto($pt['valor'])) : ''; ?>
+            <div class="gofast-md-chart-col<?= $es_max ? ' gofast-md-chart-activa' : '' ?>" data-info="<?= esc_attr($info) ?>" title="<?= esc_attr($info) ?>">
+                <span class="gofast-md-chart-val"><?= esc_html($etiqueta) ?></span>
+                <div class="gofast-md-chart-bar<?= $es_max ? ' gofast-md-chart-max' : '' ?>" style="--h:<?= $alto ?>;"></div>
             </div>
         <?php endforeach; ?>
     </div>
@@ -947,6 +1047,8 @@ function gofast_md_grafica($puntos) {
         <?php foreach ($puntos as $i => $pt): ?>
             <span><?= $i % $cada === 0 ? esc_html($pt['corto']) : '' ?></span>
         <?php endforeach; ?>
+    </div>
+    <div class="gofast-md-chart-info">📌 <span><?= esc_html($info_max) ?></span> <small>(toca una barra para ver su detalle)</small></div>
     </div>
     <?php
     return ob_get_clean();
@@ -1027,7 +1129,7 @@ function gofast_md_html_tarifas($datos) {
     ob_start();
     ?>
 <?php if (!$datos['por_tarifa']): ?>
-    <p style="text-align:center;color:#666;padding:20px;">No hay domicilios en este periodo.</p>
+    <p style="text-align:center;color:#666;padding:20px;">No hay servicios en este periodo.</p>
 <?php else:
     $puntos_t = [];
     $mas_usada = null;
@@ -1036,76 +1138,87 @@ function gofast_md_html_tarifas($datos) {
             'corto'     => '$' . rtrim(rtrim(number_format($t['tarifa'] / 1000, 1, '.', ''), '0'), '.') . 'k' . ($t['inter'] ? '*' : ''),
             'valor'     => $t['envios'],
             'servicios' => $t['envios'],
+            'etiqueta'  => number_format($t['envios'], 0, ',', '.'),
             'titulo'    => gofast_md_money($t['tarifa']) . ($t['inter'] ? ' (intermunicipal)' : '') . ': ' . $t['envios'] . ' envíos',
         ];
         if ($mas_usada === null || $t['envios'] > $mas_usada['envios']) $mas_usada = $t;
     } ?>
-    <div class="gofast-md-grid" style="margin-bottom:16px;">
+    <div class="gofast-md-grid-2 gofast-md-tarifas">
         <div>
-            <h4 style="margin:0 0 4px;">¿Cuántos envíos de cada valor?</h4>
+            <div class="gofast-table-wrap">
+                <table class="gofast-table">
+                    <thead>
+                        <tr>
+                            <th>Tarifa</th>
+                            <th style="text-align:right;">Envíos</th>
+                            <th style="text-align:right;">Subtotal</th>
+                            <th style="text-align:right;">Recargos</th>
+                            <th style="text-align:right;">% envíos</th>
+                            <th style="min-width:90px;">Peso</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($datos['por_tarifa'] as $t):
+                        $pct = $kpi['envios'] ? round($t['envios'] * 100 / $kpi['envios'], 1) : 0;
+                        $peso = $mas_usada['envios'] ? round($t['envios'] * 100 / $mas_usada['envios']) : 0; ?>
+                        <tr>
+                            <td>
+                                <strong><?= gofast_md_money($t['tarifa']) ?></strong>
+                                <?php if ($t['inter']): ?><small style="color:#666;"> · Intermunicipal</small><?php endif; ?>
+                                <?php if ($t['aprox']): ?><small style="color:#856404;" title="Servicios con varios destinos: valor repartido entre destinos"> *</small><?php endif; ?>
+                            </td>
+                            <td style="text-align:right;"><?= number_format($t['envios'], 0, ',', '.') ?></td>
+                            <td style="text-align:right;"><?= gofast_md_money($t['subtotal']) ?></td>
+                            <td style="text-align:right;color:#666;"><?= $t['recargos'] ? gofast_md_money($t['recargos']) : '—' ?></td>
+                            <td style="text-align:right;color:#666;"><?= $pct ?>%</td>
+                            <td><div class="gofast-md-barra"><span style="width:<?= min(100, $peso) ?>%;"></span></div></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr style="font-weight:700;">
+                            <td>Total</td>
+                            <td style="text-align:right;"><?= number_format($kpi['envios'], 0, ',', '.') ?></td>
+                            <td style="text-align:right;"><?= gofast_md_money($kpi['tarifas']) ?></td>
+                            <td style="text-align:right;"><?= gofast_md_money($kpi['recargos']) ?></td>
+                            <td style="text-align:right;">100%</td>
+                            <td></td>
+                        </tr>
+                        <tr style="font-weight:700;background:#fff9d6;">
+                            <td colspan="2">Total pagado (tarifas + recargos)</td>
+                            <td colspan="2" style="text-align:right;"><?= gofast_md_money($kpi['tarifas'] + $kpi['recargos']) ?></td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <p class="gofast-md-nota">Se cuenta cada destino como un envío: un servicio con 2 destinos suma 2 envíos. Los recargos se muestran aparte.</p>
+        </div>
+        <div class="gofast-md-tarifas-grafica">
             <?= gofast_md_grafica($puntos_t) ?>
+            <div class="gofast-md-mini">
+                <div><span>Tarifa más usada</span><b><?= gofast_md_money($mas_usada['tarifa']) ?> · <?= number_format($mas_usada['envios'], 0, ',', '.') ?> <?= $mas_usada['envios'] === 1 ? 'envío' : 'envíos' ?></b></div>
+                <div><span>Recargos del periodo</span><b><?= gofast_md_money($kpi['recargos']) ?></b></div>
+                <div><span>Tarifa promedio</span><b><?= gofast_md_money($kpi['envios'] ? round($kpi['tarifas'] / $kpi['envios']) : 0) ?></b></div>
+            </div>
         </div>
-        <div class="gofast-md-leyenda">
-            <div><span></span><span>Tarifa más usada</span><strong><?= gofast_md_money($mas_usada['tarifa']) ?></strong><small><?= number_format($mas_usada['envios'], 0, ',', '.') ?> envíos</small></div>
-            <div><span></span><span>Tarifa promedio</span><strong><?= gofast_md_money($kpi['envios'] ? round($kpi['tarifas'] / $kpi['envios']) : 0) ?></strong><small>sin recargos</small></div>
-            <div><span></span><span>Recargos del periodo</span><strong><?= gofast_md_money($kpi['recargos']) ?></strong><small>se muestran aparte de la tarifa</small></div>
-        </div>
-    </div>
-    <div class="gofast-table-wrap">
-        <table class="gofast-table">
-            <thead>
-                <tr>
-                    <th>Tarifa</th>
-                    <th style="text-align:right;">Envíos</th>
-                    <th style="text-align:right;">Subtotal</th>
-                    <th style="text-align:right;">Recargos</th>
-                    <th style="text-align:right;">Total</th>
-                    <th style="min-width:120px;">% de envíos</th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php foreach ($datos['por_tarifa'] as $t):
-                $pct = $kpi['envios'] ? round($t['envios'] * 100 / $kpi['envios'], 1) : 0; ?>
-                <tr>
-                    <td>
-                        <strong><?= gofast_md_money($t['tarifa']) ?></strong>
-                        <?php if ($t['inter']): ?><small style="color:#666;"> · Intermunicipal</small><?php endif; ?>
-                        <?php if ($t['aprox']): ?><small style="color:#856404;" title="Servicios con varios destinos: valor repartido entre destinos"> *</small><?php endif; ?>
-                    </td>
-                    <td style="text-align:right;"><?= number_format($t['envios'], 0, ',', '.') ?></td>
-                    <td style="text-align:right;"><?= gofast_md_money($t['subtotal']) ?></td>
-                    <td style="text-align:right;"><?= gofast_md_money($t['recargos']) ?></td>
-                    <td style="text-align:right;font-weight:600;"><?= gofast_md_money($t['subtotal'] + $t['recargos']) ?></td>
-                    <td><div class="gofast-md-barra"><span style="width:<?= min(100, $pct) ?>%;"></span></div><small><?= $pct ?>%</small></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-            <tfoot>
-                <tr style="font-weight:700;background:#fff9d6;">
-                    <td>Total</td>
-                    <td style="text-align:right;"><?= number_format($kpi['envios'], 0, ',', '.') ?></td>
-                    <td style="text-align:right;"><?= gofast_md_money($kpi['tarifas']) ?></td>
-                    <td style="text-align:right;"><?= gofast_md_money($kpi['recargos']) ?></td>
-                    <td style="text-align:right;"><?= gofast_md_money($kpi['tarifas'] + $kpi['recargos']) ?></td>
-                    <td></td>
-                </tr>
-            </tfoot>
-        </table>
     </div>
     <?php if ($kpi['recargos'] > 0): ?>
-        <h4 style="margin:20px 0 8px;">➕ De dónde salen los recargos</h4>
+        <h4 style="margin:20px 0 8px;">➕ ¿Cuántos recargos de cada valor?</h4>
         <div class="gofast-table-wrap">
             <table class="gofast-table">
-                <thead><tr><th>Recargo</th><th style="text-align:right;">Envíos</th><th style="text-align:right;">Valor</th></tr></thead>
+                <thead><tr><th>Recargo</th><th style="text-align:right;">Valor</th><th style="text-align:right;">Envíos</th><th style="text-align:right;">Subtotal</th></tr></thead>
                 <tbody>
-                    <?php if ($kpi['recargos_auto'] > 0): ?>
-                        <tr><td>Automáticos (lluvia, recargos por valor)</td><td style="text-align:right;">—</td><td style="text-align:right;"><?= gofast_md_money($kpi['recargos_auto']) ?></td></tr>
-                    <?php endif; ?>
-                    <?php foreach ($datos['recargos_vol'] as $nombre => $g): ?>
-                        <tr><td><?= esc_html($nombre) ?></td><td style="text-align:right;"><?= number_format($g['envios'], 0, ',', '.') ?></td><td style="text-align:right;"><?= gofast_md_money($g['valor']) ?></td></tr>
+                    <?php foreach ($datos['por_recargo'] ?? [] as $r): ?>
+                        <tr>
+                            <td><?= esc_html($r['nombre']) ?></td>
+                            <td style="text-align:right;"><strong><?= gofast_md_money($r['valor']) ?></strong></td>
+                            <td style="text-align:right;"><?= number_format($r['envios'], 0, ',', '.') ?></td>
+                            <td style="text-align:right;"><?= gofast_md_money($r['total']) ?></td>
+                        </tr>
                     <?php endforeach; ?>
                 </tbody>
-                <tfoot><tr style="font-weight:700;background:#fff9d6;"><td>Total recargos</td><td></td><td style="text-align:right;"><?= gofast_md_money($kpi['recargos']) ?></td></tr></tfoot>
+                <tfoot><tr style="font-weight:700;background:#fff9d6;"><td colspan="3">Total recargos</td><td style="text-align:right;"><?= gofast_md_money($kpi['recargos']) ?></td></tr></tfoot>
             </table>
         </div>
     <?php endif; ?>
@@ -1126,7 +1239,7 @@ function gofast_md_html_trayectos($datos) {
     ob_start();
     ?>
 <?php if (!$datos['por_trayecto']): ?>
-    <p style="text-align:center;color:#666;padding:20px;">No hay domicilios en este periodo.</p>
+    <p style="text-align:center;color:#666;padding:20px;">No hay servicios en este periodo.</p>
 <?php else: ?>
     <div class="gofast-table-wrap">
         <table class="gofast-table">
@@ -1168,7 +1281,7 @@ function gofast_md_html_meses($datos) {
     ob_start();
     ?>
 <?php if (!$datos['por_mes']): ?>
-    <p style="text-align:center;color:#666;padding:20px;">No hay domicilios en este periodo.</p>
+    <p style="text-align:center;color:#666;padding:20px;">No hay servicios en este periodo.</p>
 <?php else: ?>
     <div class="gofast-table-wrap">
         <table class="gofast-table">
@@ -1225,7 +1338,7 @@ function gofast_md_html_estados($datos) {
     ob_start();
     ?>
 <?php if (!$datos['por_estado']): ?>
-    <p style="text-align:center;color:#666;padding:20px;">No hay domicilios en este periodo.</p>
+    <p style="text-align:center;color:#666;padding:20px;">No hay servicios en este periodo.</p>
 <?php else: ?>
     <div class="gofast-table-wrap">
         <table class="gofast-table">
@@ -1325,7 +1438,7 @@ function gofast_md_js() {
             var s = (window.gofastMdDetalle || {})[el.getAttribute('data-md-detalle')];
             if (!s || !modal) return;
 
-            document.getElementById('gofast-md-modal-titulo').innerHTML = 'Domicilio <strong>#' + s.id + '</strong> · ' + esc(s.negocio);
+            document.getElementById('gofast-md-modal-titulo').innerHTML = 'Servicio <strong>#' + s.id + '</strong> · ' + esc(s.negocio);
             document.getElementById('gofast-md-modal-kv').innerHTML =
                 '<div><small>Fecha</small>' + esc(s.fecha) + '</div>' +
                 '<div><small>Estado</small><span class="gofast-badge-estado gofast-badge-estado-' + esc(s.estado) + '">' + esc(s.estado_l) + '</span></div>' +
@@ -1371,6 +1484,33 @@ function gofast_md_js() {
             if (boton) boton.click();
         });
     });
+    document.querySelectorAll('.gofast-md-chart-col').forEach(function (col) {
+        col.addEventListener('click', function () {
+            var wrap = col.closest('.gofast-md-chart-wrap');
+            if (!wrap) return;
+            wrap.querySelectorAll('.gofast-md-chart-activa').forEach(function (c) { c.classList.remove('gofast-md-chart-activa'); });
+            col.classList.add('gofast-md-chart-activa');
+            var info = wrap.querySelector('.gofast-md-chart-info span');
+            if (info) info.textContent = col.getAttribute('data-info');
+        });
+    });
+
+    var cargando = document.createElement('div');
+    cargando.className = 'gofast-md-cargando';
+    cargando.innerHTML = '<div><i></i>Cargando datos…</div>';
+    document.body.appendChild(cargando);
+    var mostrarCargando = function () { cargando.classList.add('on'); };
+    document.querySelectorAll('.gofast-home form.gofast-pedidos-filtros').forEach(function (f) {
+        f.addEventListener('submit', mostrarCargando);
+    });
+    document.querySelectorAll('.gofast-md-negocio, .gofast-pagination a, .gofast-md-actualizado a').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+            mostrarCargando();
+        });
+    });
+    window.addEventListener('pageshow', function () { cargando.classList.remove('on'); });
+
     var intentos = 0;
     var iniciarSelect2 = function () {
         if (!(window.jQuery && jQuery.fn.select2)) {
@@ -1449,7 +1589,7 @@ function gofast_mis_domicilios_shortcode() {
     $filtros = gofast_md_filtros();
     $labels = gofast_md_estado_labels();
     $tab = sanitize_key($_GET['tab'] ?? 'tarifa');
-    $tabs_ok = ['tarifa', 'negocio', 'destino', 'trayecto', 'mes', 'estado', 'detalle'];
+    $tabs_ok = ['tarifa', 'negocio', 'destino', 'mes', 'estado', 'detalle'];
     if (!in_array($tab, $tabs_ok, true)) $tab = 'tarifa';
 
     // Admin sin cliente elegido: selector de cliente
@@ -1467,8 +1607,8 @@ function gofast_mis_domicilios_shortcode() {
     $ant = $datos
         ? gofast_md_datos($ctx['user_id'], array_merge($filtros, ['desde' => $ant_desde, 'hasta' => $ant_hasta]))['kpi']
         : null;
-    $promedio = ($kpi && $kpi['servicios']) ? round($kpi['total'] / $kpi['servicios']) : 0;
-    $promedio_ant = ($ant && $ant['servicios']) ? round($ant['total'] / $ant['servicios']) : 0;
+    $promedio = ($kpi && $kpi['envios']) ? round($kpi['total'] / $kpi['envios']) : 0;
+    $promedio_ant = ($ant && $ant['envios']) ? round($ant['total'] / $ant['envios']) : 0;
 
     $base_args = array_filter([
         'cliente_id' => $ctx['es_admin'] ? $ctx['user_id'] : null,
@@ -1500,19 +1640,19 @@ function gofast_mis_domicilios_shortcode() {
 <div class="gofast-home">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <div>
-            <h1 style="margin-bottom:8px;">📊 Mis domicilios</h1>
+            <h1 style="margin-bottom:8px;">📊 <?= $ctx['es_admin'] ? 'Estadísticas de clientes' : 'Mis estadísticas' ?></h1>
             <p class="gofast-home-text" style="margin:0;">
                 <?php if ($ctx['es_admin'] && $ctx['user_id']): ?>
                     Vista del cliente <strong><?= esc_html($ctx['nombre']) ?></strong>.
                 <?php elseif ($ctx['es_admin']): ?>
                     Elige un cliente para ver sus domicilios tal como él los ve.
                 <?php else: ?>
-                    Resumen de los domicilios que has solicitado, listo para tu contabilidad.
+                    Resumen de los servicios que has solicitado, listo para tu contabilidad.
                 <?php endif; ?>
             </p>
         </div>
-        <a href="<?= esc_url(home_url($ctx['es_admin'] ? '/admin-domicilios' : '/mis-pedidos')) ?>" class="gofast-btn-request" style="text-decoration:none;white-space:nowrap;width:auto;">
-            <?= $ctx['es_admin'] ? '← Todos los domicilios' : '📦 Ver mis pedidos' ?>
+        <a href="<?= esc_url(home_url($ctx['es_admin'] ? '/admin-estadisticas' : '/mis-pedidos')) ?>" class="gofast-btn-request" style="text-decoration:none;white-space:nowrap;width:auto;">
+            <?= $ctx['es_admin'] ? '← Todos los clientes' : '📦 Ver mis pedidos' ?>
         </a>
     </div>
 
@@ -1526,8 +1666,8 @@ function gofast_mis_domicilios_shortcode() {
             <?php endif; ?>
 
             <?php if ($ctx['es_admin']): ?>
-                <div class="gofast-pedidos-filtros-row" style="margin-bottom:14px;">
-                    <div style="max-width:320px;">
+                <div class="gofast-pedidos-filtros-row gofast-md-filtros-grid gofast-md-filtros-cliente">
+                    <div>
                         <label>Cliente</label>
                         <select name="cliente_id" class="gofast-md-select-cliente" data-placeholder="🔍 Busca un cliente">
                             <option value="0">Elige un cliente</option>
@@ -1556,7 +1696,7 @@ function gofast_mis_domicilios_shortcode() {
                         $n_dom = (int) ($conteo[$clave] ?? 0); ?>
                         <a href="<?= $url_negocio($clave) ?>" class="gofast-md-negocio<?= $filtros['negocio'] === (string) $clave ? ' gofast-md-negocio-on' : '' ?>">
                             <span class="ico"><?= $t[0] ?></span>
-                            <span><b><?= esc_html($t[1]) ?></b><small><?= number_format($n_dom, 0, ',', '.') ?> <?= $n_dom === 1 ? 'domicilio' : 'domicilios' ?></small></span>
+                            <span><b><?= esc_html($t[1]) ?></b><small><?= number_format($n_dom, 0, ',', '.') ?> <?= $n_dom === 1 ? 'servicio' : 'servicios' ?></small></span>
                         </a>
                     <?php endforeach; ?>
                 </div>
@@ -1591,7 +1731,7 @@ function gofast_mis_domicilios_shortcode() {
         <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
             <div style="font-size:30px;margin-bottom:6px;">📦</div>
             <div style="font-size:23px;font-weight:700;color:#F4C524;margin-bottom:4px;"><?= number_format($kpi['servicios'], 0, ',', '.') ?></div>
-            <div style="font-size:13px;color:#666;">Domicilios</div>
+            <div style="font-size:13px;color:#666;">Servicios</div>
             <?= gofast_md_delta($kpi['servicios'], $ant['servicios']) ?>
         </div>
         <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
@@ -1603,7 +1743,7 @@ function gofast_mis_domicilios_shortcode() {
         <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
             <div style="font-size:30px;margin-bottom:6px;">🧾</div>
             <div style="font-size:23px;font-weight:700;color:#9C27B0;margin-bottom:4px;"><?= gofast_md_money($promedio) ?></div>
-            <div style="font-size:13px;color:#666;">Promedio por domicilio</div>
+            <div style="font-size:13px;color:#666;">Promedio por envío</div>
             <?= gofast_md_delta($promedio, $promedio_ant) ?>
         </div>
         <div class="gofast-box gofast-md-kpi" style="text-align:center;padding:18px;">
@@ -1620,31 +1760,6 @@ function gofast_mis_domicilios_shortcode() {
         </div>
     <?php endif; ?>
 
-    <!-- Gráficas -->
-    <?php if ($kpi['servicios'] > 0):
-        list($modo_grafica, $puntos) = gofast_md_puntos_grafica($datos, $filtros['desde'], $filtros['hasta']); ?>
-        <div class="gofast-box" style="margin-bottom:20px;">
-            <h3 style="margin-top:0;">📈 Lo que pagaste por <?= $modo_grafica === 'dia' ? 'día' : 'mes' ?></h3>
-            <?= gofast_md_grafica($puntos) ?>
-            <p class="gofast-md-nota">Pasa el cursor sobre una barra para ver el valor. La más alta va en tono oscuro.</p>
-        </div>
-        <div class="gofast-md-grid-2">
-            <div class="gofast-box">
-                <?php $con_reparto = count($datos['por_negocio']) > 1;
-                if ($con_reparto): ?>
-                    <h3 style="margin-top:0;">🏪 Reparto por negocio</h3>
-                    <?= gofast_md_apilada($datos['por_negocio'], $kpi['total']) ?>
-                <?php endif; ?>
-                <h3 style="margin-top:<?= $con_reparto ? '20px' : '0' ?>;">🛣️ Trayectos más frecuentes</h3>
-                <?= gofast_md_top($datos['por_trayecto'], $kpi['tarifas'] + $kpi['recargos'], $con_reparto ? 3 : 5, 'envios') ?>
-            </div>
-            <div class="gofast-box">
-                <h3 style="margin-top:0;">📍 Barrios a los que más envías</h3>
-                <?= gofast_md_top($datos['por_destino'], $kpi['tarifas'] + $kpi['recargos'], 5, 'envios') ?>
-            </div>
-        </div>
-    <?php endif; ?>
-
     <!-- Resúmenes -->
     <div class="gofast-box" style="margin-bottom:20px;">
         <div class="gofast-md-tabs">
@@ -1653,7 +1768,6 @@ function gofast_mis_domicilios_shortcode() {
                 'tarifa'   => '💲 Por tarifa',
                 'negocio'  => '🏪 Por negocio',
                 'destino'  => '📍 Por destino',
-                'trayecto' => '🛣️ Por trayecto',
                 'mes'      => '📅 Por mes',
                 'estado'   => '🚦 Por estado',
                 'detalle'  => '📋 Detalle',
@@ -1669,14 +1783,14 @@ function gofast_mis_domicilios_shortcode() {
 
         <!-- Por tarifa -->
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="tarifa" style="display:<?= $tab === 'tarifa' ? 'block' : 'none' ?>;">
-            <h3>💲 Cuántos envíos de cada valor</h3>
+            <h3>💲 ¿Cuántos envíos de cada valor?</h3>
             <?= gofast_md_html_tarifas($datos) ?>
         </div>
 
         <!-- Por negocio -->
         <?php if ($datos['negocios']): ?>
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="negocio" style="display:<?= $tab === 'negocio' ? 'block' : 'none' ?>;">
-            <h3>🏪 Domicilios por negocio</h3>
+            <h3>🏪 Servicios por negocio</h3>
             <?= gofast_md_tabla_resumen($datos['por_negocio'], 'Negocio', $kpi['total'], true) ?>
         </div>
         <?php endif; ?>
@@ -1687,15 +1801,9 @@ function gofast_mis_domicilios_shortcode() {
             <?= gofast_md_tabla_resumen($datos['por_destino'], 'Barrio destino', $kpi['tarifas'] + $kpi['recargos']) ?>
         </div>
 
-        <!-- Por trayecto -->
-        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="trayecto" style="display:<?= $tab === 'trayecto' ? 'block' : 'none' ?>;">
-            <h3>🛣️ Trayectos más frecuentes</h3>
-            <?= gofast_md_html_trayectos($datos) ?>
-        </div>
-
         <!-- Por mes -->
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="mes" style="display:<?= $tab === 'mes' ? 'block' : 'none' ?>;">
-            <h3>📅 Domicilios por mes</h3>
+            <h3>📅 Servicios por mes</h3>
             <?= gofast_md_html_meses($datos) ?>
         </div>
 
@@ -1709,7 +1817,7 @@ function gofast_mis_domicilios_shortcode() {
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="detalle" style="display:<?= $tab === 'detalle' ? 'block' : 'none' ?>;">
             <h3>📋 Detalle de servicios</h3>
             <?php if (!$datos['servicios']): ?>
-                <p style="text-align:center;color:#666;padding:20px;">No hay domicilios en este periodo.</p>
+                <p style="text-align:center;color:#666;padding:20px;">No hay servicios en este periodo.</p>
             <?php else:
                 $pagina_servicios = array_slice($datos['servicios'], ($pagina - 1) * $por_pagina, $por_pagina);
 
@@ -1798,12 +1906,26 @@ function gofast_mis_domicilios_shortcode() {
         </div>
     </div>
 
+    <!-- Gráficas -->
+    <?php if ($kpi['servicios'] > 0):
+        list($modo_grafica, $puntos) = gofast_md_puntos_grafica($datos, $filtros['desde'], $filtros['hasta']); ?>
+        <div class="gofast-box" style="margin-bottom:20px;">
+            <h3 style="margin-top:0;">📈 Lo que pagaste por <?= $modo_grafica === 'dia' ? 'día' : 'mes' ?></h3>
+            <?= gofast_md_grafica($puntos) ?>
+        </div>
+        <div class="gofast-box" style="margin-bottom:20px;">
+            <h3 style="margin-top:0;">📍 Barrios a los que más envías</h3>
+            <?= gofast_md_top($datos['por_destino'], $kpi['tarifas'] + $kpi['recargos'], 5, 'envios') ?>
+        </div>
+    <?php endif; ?>
+
     <!-- Descargas -->
     <div class="gofast-box">
         <h3>📥 Descargas</h3>
         <p style="font-size:13px;color:#666;margin-top:0;">Con el periodo y el negocio elegidos arriba.</p>
         <div class="gofast-md-descargas">
-            <a href="<?= $url_export('imprimir') ?>" target="_blank" rel="noopener" class="gofast-btn-mini">🧾 Estado de cuenta (PDF)</a>
+            <a href="<?= $url_export('imprimir') ?>" target="_blank" rel="noopener" class="gofast-btn-mini">🧾 Estado de cuenta con detalle (PDF)</a>
+            <a href="<?= esc_url(add_query_arg(array_merge($base_args, ['gofast_md_export' => 'imprimir', 'detalle' => '0']), $url_base)) ?>" target="_blank" rel="noopener" class="gofast-btn-mini">🧾 Estado de cuenta sin detalle · por tarifas (PDF)</a>
             <a href="<?= $url_export('tarifas') ?>" class="gofast-btn-mini gofast-btn-outline">📊 Resumen por tarifa (Excel)</a>
             <a href="<?= $url_export('detalle') ?>" class="gofast-btn-mini gofast-btn-outline">📋 Detalle por envío (Excel)</a>
         </div>
@@ -1816,6 +1938,7 @@ function gofast_mis_domicilios_shortcode() {
     <?php
     return ob_get_clean();
 }
+add_shortcode('gofast_mis_estadisticas', 'gofast_mis_domicilios_shortcode');
 add_shortcode('gofast_mis_domicilios', 'gofast_mis_domicilios_shortcode');
 
 }

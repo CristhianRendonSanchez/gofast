@@ -43,6 +43,7 @@ add_action('template_redirect', function() {
         $whatsapp   = gofast_clean_whatsapp($_POST['whatsapp'] ?? '');
         $barrio_id  = intval($_POST['barrio_id'] ?? 0);
         $direccion  = sanitize_text_field($_POST['direccion_full'] ?? '');
+        $nit        = preg_replace('/[^0-9\-]/', '', (string) ($_POST['nit'] ?? ''));
 
         // Si el usuario seleccionó "Otro", usar el valor escrito
         if ($tipo === "Otro" && !empty($tipo_otro)) {
@@ -50,7 +51,7 @@ add_action('template_redirect', function() {
         }
 
         // Validaciones mínimas
-        if (!$nombre || !$tipo || !$barrio_id || !$direccion) {
+        if (!$nombre || !$tipo || !$barrio_id || !$direccion || !preg_match('/^\d{5,15}(-\d)?$/', $nit)) {
             return; // vuelve al formulario
         }
 
@@ -70,6 +71,7 @@ add_action('template_redirect', function() {
                     "sector_id"     => $sector_id,
                     "direccion_full"=> $direccion,
                     "whatsapp"      => $whatsapp,
+                    "nit"           => $nit,
                     "updated_at"    => gofast_current_time('mysql')
                 ],
                 ["id" => $editing_id, "user_id" => $user_id]
@@ -86,6 +88,7 @@ add_action('template_redirect', function() {
                     "sector_id"     => $sector_id,
                     "direccion_full"=> $direccion,
                     "whatsapp"      => $whatsapp,
+                    "nit"           => $nit,
                     "activo"        => 1,
                     "created_at"    => gofast_current_time('mysql')
                 ]

@@ -97,7 +97,15 @@ function gofast_menu_topbar() {
             </button>
 
             <!-- MENÚ -->
-            <nav class="gofast-menu-links" aria-label="Menú principal">
+            <?php if ($rol === 'admin'): ?>
+            <style>
+                @media (min-width: 769px) {
+                    .gofast-menu-links.gofast-menu-admin { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+                    .gofast-menu-links.gofast-menu-admin .gofast-tab { padding: 9px 13px; font-size: 13px; }
+                }
+            </style>
+            <?php endif; ?>
+            <nav class="gofast-menu-links<?php echo $rol === 'admin' ? ' gofast-menu-admin' : ''; ?>" aria-label="Menú principal">
                 <!-- BOTÓN CERRAR (solo móvil) -->
                 <button class="gofast-menu-close" type="button" aria-label="Cerrar menú">
                     <span class="gofast-close-icon">×</span>
@@ -167,6 +175,12 @@ function gofast_menu_topbar() {
                     </a>
                     <a href="<?php echo esc_url( home_url('/admin-reportes') ); ?>" class="gofast-tab">
                         📊 Reportes
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/admin-estadisticas') ); ?>" class="gofast-tab">
+                        📈 Estadísticas
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/admin-listado-precios') ); ?>" class="gofast-tab">
+                        📄 Precios PDF
                     </a>
                     <a href="<?php echo esc_url( home_url('/?gofast_logout=1') ); ?>" class="gofast-tab">
                         🚪 Salir
