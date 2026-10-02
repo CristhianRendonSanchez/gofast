@@ -41,7 +41,7 @@ function gofast_footer_content() {
             
             <!-- COLUMNA 1: INFORMACIÓN -->
             <div class="gofast-footer-col">
-                <img src="https://gofastdomicilios.com/wp-content/uploads/2025/11/GoFast.png" 
+                <img src="https://gofastdomicilios.com/wp-content/uploads/2026/10/Sin-titulo-1536-x-1024-px-2-scaled-e1790909499877.png" 
                      alt="Go Fast Mensajería Express" 
                      class="gofast-footer-logo">
                 <p class="gofast-footer-text">

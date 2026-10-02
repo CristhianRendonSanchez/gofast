@@ -298,61 +298,66 @@ function gofast_admin_negocios_shortcode() {
                     <table class="gofast-table gofast-negocios-admin-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Nombre</th>
-                                <th>NIT</th>
-                                <th>Cliente</th>
-                                <th>Dirección</th>
-                                <th>Barrio</th>
-                                <th>Tipo</th>
-                                <th>WhatsApp</th>
-                                <th>Estado</th>
-                                <th>Fecha Registro</th>
-                                <th>Acciones</th>
+                                <th class="gn-col-negocio">Negocio</th>
+                                <th class="gn-col-dueno">Cliente</th>
+                                <th class="gn-col-ubicacion">Ubicación</th>
+                                <th class="gn-col-estado">Estado</th>
+                                <th class="gn-col-acciones">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($negocios as $n): ?>
+                            <?php foreach ($negocios as $n):
+                                $wa_negocio = gofast_clean_whatsapp($n->whatsapp);
+                            ?>
                                 <tr class="<?= $n->activo == 0 ? 'gofast-row-inactive' : '' ?>">
-                                    <td>#<?= esc_html($n->id) ?></td>
-                                    <td><strong><?= esc_html($n->nombre) ?></strong></td>
-                                    <td><?= !empty($n->nit) ? esc_html($n->nit) : '<span style="color:#999;">Sin NIT</span>' ?></td>
-                                    <td>
-                                        <?= esc_html($n->cliente_nombre ?? 'N/A') ?><br>
-                                        <small style="color: #666;"><?= esc_html($n->cliente_telefono ?? '') ?></small>
+                                    <td class="gn-col-negocio">
+                                        <strong class="gn-titulo"><?= esc_html($n->nombre) ?></strong>
+                                        <small class="gn-sub"><?= esc_html($n->tipo) ?> · #<?= esc_html($n->id) ?></small>
+                                        <small class="gn-sub">NIT: <?= !empty($n->nit) ? '<b>' . esc_html($n->nit) . '</b>' : '<span class="gn-falta">Sin NIT</span>' ?></small>
                                     </td>
-                                    <td><?= esc_html($n->direccion_full) ?></td>
-                                    <td><?= esc_html($n->barrio_nombre ?? 'N/A') ?></td>
-                                    <td><?= esc_html($n->tipo) ?></td>
-                                    <td><?= gofast_clean_whatsapp($n->whatsapp) ? esc_html(gofast_clean_whatsapp($n->whatsapp)) : '—' ?></td>
-                                    <td>
+                                    <td class="gn-col-dueno">
+                                        <span class="gn-titulo"><?= esc_html($n->cliente_nombre ?? 'N/A') ?></span>
+                                        <?php if (!empty($n->cliente_telefono)): ?>
+                                            <small class="gn-sub gn-tel">📞 <?= esc_html($n->cliente_telefono) ?></small>
+                                        <?php endif; ?>
+                                        <?php if ($wa_negocio): ?>
+                                            <small class="gn-sub">📱 Negocio: <?= esc_html($wa_negocio) ?></small>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="gn-col-ubicacion">
+                                        <span class="gn-titulo">📍 <?= esc_html($n->barrio_nombre ?? 'N/A') ?></span>
+                                        <small class="gn-sub gn-direccion" title="<?= esc_attr($n->direccion_full) ?>"><?= esc_html($n->direccion_full) ?></small>
+                                    </td>
+                                    <td class="gn-col-estado">
                                         <span class="gofast-badge-estado <?= $n->activo == 1 ? 'gofast-badge-estado-entregado' : 'gofast-badge-estado-cancelado' ?>">
                                             <?= $n->activo == 1 ? '✅ Activo' : '❌ Inactivo' ?>
                                         </span>
+                                        <small class="gn-sub">Desde <?= gofast_date_format($n->created_at, 'd/m/Y') ?></small>
                                     </td>
-                                    <td><?= gofast_date_format($n->created_at, 'd/m/Y') ?></td>
-                                    <td style="white-space:nowrap;">
+                                    <td class="gn-col-acciones">
+                                        <div class="gn-acciones">
                                         <button type="button" 
-                                                class="gofast-btn-mini gofast-btn-editar-negocio-admin" 
+                                                class="gofast-btn-editar-negocio-admin gn-accion gn-accion-editar" 
                                                 data-negocio-id="<?= esc_attr($n->id) ?>"
                                                 data-negocio-nombre="<?= esc_attr($n->nombre) ?>"
                                                 data-negocio-tipo="<?= esc_attr($n->tipo) ?>"
                                                 data-negocio-barrio-id="<?= esc_attr($n->barrio_id) ?>"
                                                 data-negocio-direccion="<?= esc_attr($n->direccion_full) ?>"
-                                                data-negocio-whatsapp="<?= esc_attr(gofast_clean_whatsapp($n->whatsapp)) ?>"
+                                                data-negocio-whatsapp="<?= esc_attr($wa_negocio) ?>"
                                                 data-negocio-nit="<?= esc_attr($n->nit ?? '') ?>"
                                                 data-negocio-activo="<?= esc_attr($n->activo) ?>"
-                                                style="background: var(--gofast-yellow); color: #000; margin-right: 4px;">
-                                            ✏️ Editar
+                                                title="Editar negocio">
+                                            ✏️<span>Editar</span>
                                         </button>
-                                        <form method="post" style="display:inline-block;" onsubmit="return confirm('¿Estás seguro de eliminar este negocio? Esta acción no se puede deshacer.');">
+                                        <form method="post" class="gn-accion-form" onsubmit="return confirm('¿Estás seguro de eliminar este negocio? Esta acción no se puede deshacer.');">
                                             <?php wp_nonce_field('gofast_eliminar_negocio', 'gofast_eliminar_negocio_nonce'); ?>
                                             <input type="hidden" name="gofast_eliminar_negocio" value="1">
                                             <input type="hidden" name="negocio_id" value="<?= esc_attr($n->id) ?>">
-                                            <button type="submit" class="gofast-btn-mini" style="background:#dc3545;color:#fff;">
-                                                🗑️ Eliminar
+                                            <button type="submit" class="gn-accion gn-accion-eliminar" title="Eliminar negocio">
+                                                🗑️<span>Eliminar</span>
                                             </button>
                                         </form>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -701,11 +706,34 @@ jQuery(document).ready(function($) {
 }
 
 .gofast-negocios-admin-table-wrapper .gofast-negocios-admin-table {
-    min-width: 1200px;
+    min-width: 0;
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     margin: 0;
 }
+
+.gofast-negocios-admin-table td { vertical-align: top; overflow-wrap: anywhere; }
+.gofast-negocios-admin-table .gn-col-negocio { width: 28%; }
+.gofast-negocios-admin-table .gn-col-dueno { width: 22%; }
+.gofast-negocios-admin-table .gn-col-ubicacion { width: auto; }
+.gofast-negocios-admin-table .gn-col-estado { width: 112px; }
+.gofast-negocios-admin-table .gn-col-acciones { width: 116px; }
+.gofast-negocios-admin-table .gn-titulo { display: block; font-weight: 700; line-height: 1.3; }
+.gofast-negocios-admin-table .gn-sub { display: block; color: #777; font-size: 11px; line-height: 1.4; margin-top: 2px; }
+.gofast-negocios-admin-table .gn-sub b { color: #333; }
+.gofast-negocios-admin-table .gn-falta { color: #c0392b; font-weight: 600; }
+.gofast-negocios-admin-table .gn-tel { color: #222; font-weight: 700; font-size: 12px; }
+.gofast-negocios-admin-table .gn-direccion { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gofast-negocios-admin-table .gofast-badge-estado { white-space: nowrap; }
+.gofast-negocios-admin-table .gn-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.gofast-negocios-admin-table .gn-accion-form { margin: 0; display: contents; }
+.gofast-negocios-admin-table .gn-accion { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 40px; width: 100%; margin: 0; padding: 4px 2px; border: 1px solid #e3e3e3; border-radius: 6px; background: #fff; color: #333; font-size: 15px; line-height: 1; cursor: pointer; box-shadow: none; }
+.gofast-negocios-admin-table .gn-accion span { font-size: 10px; font-weight: 600; white-space: nowrap; }
+.gofast-negocios-admin-table .gn-accion-editar { background: #F4C524; border-color: #F4C524; color: #000; }
+.gofast-negocios-admin-table .gn-accion-editar:hover { background: #e0b31a; }
+.gofast-negocios-admin-table .gn-accion-eliminar { background: #fff5f5; border-color: #f5c2c7; color: #b02a37; }
+.gofast-negocios-admin-table .gn-accion-eliminar:hover { background: #dc3545; border-color: #dc3545; color: #fff; }
 
 /* Vista Desktop: Mostrar tabla, ocultar cards */
 .gofast-negocios-admin-desktop {

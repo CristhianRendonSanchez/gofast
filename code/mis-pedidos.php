@@ -261,9 +261,12 @@ function gofast_pedidos_shortcode() {
                         ? (int) $json_destinos['origen']['sector_id'] 
                         : 0;
                     
+                    $negocio_anterior_id = (int) ($json_destinos['origen']['negocio_id'] ?? 0);
+                    $negocio_origen = null;
                     if (!empty($destinos_editados['origen'])) {
                         $origen_editado = $destinos_editados['origen'];
                         $nuevo_origen_barrio_id = (int) ($origen_editado['barrio_id'] ?? 0);
+                        $nuevo_negocio_id = (int) ($origen_editado['negocio_id'] ?? 0);
                         
                         if ($nuevo_origen_barrio_id > 0) {
                             // Obtener datos del nuevo barrio de origen
@@ -271,13 +274,28 @@ function gofast_pedidos_shortcode() {
                                 "SELECT id, nombre, sector_id FROM barrios WHERE id = %d", $nuevo_origen_barrio_id
                             ));
                             
+                            if ($nuevo_negocio_id > 0) {
+                                $negocio_origen = $wpdb->get_row($wpdb->prepare(
+                                    "SELECT n.id, n.nombre, n.direccion_full, n.whatsapp, n.user_id, u.telefono AS cliente_telefono
+                                     FROM negocios_gofast n
+                                     INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                                     WHERE n.id = %d AND (n.barrio_id = %d OR n.id = %d)",
+                                    $nuevo_negocio_id, $nuevo_origen_barrio_id, $negocio_anterior_id
+                                ));
+                            }
+                            
                             if ($nuevo_origen_data) {
                                 $sector_origen = (int) $nuevo_origen_data->sector_id;
+                                $direccion_origen_editada = trim((string) ($origen_editado['direccion'] ?? ''));
+                                if ($negocio_origen && $direccion_origen_editada === '') {
+                                    $direccion_origen_editada = (string) $negocio_origen->direccion_full;
+                                }
                                 $json_destinos['origen'] = [
                                     'barrio_id' => $nuevo_origen_barrio_id,
                                     'barrio_nombre' => $nuevo_origen_data->nombre,
                                     'sector_id' => $sector_origen,
-                                    'direccion' => $origen_editado['direccion'] ?? ''
+                                    'direccion' => $direccion_origen_editada,
+                                    'negocio_id' => $negocio_origen ? (int) $negocio_origen->id : null,
                                 ];
                             }
                         }
@@ -476,14 +494,25 @@ function gofast_pedidos_shortcode() {
                     $json_destinos['destinos'] = $destinos_finales;
                     $json_final = json_encode($json_destinos, JSON_UNESCAPED_UNICODE);
                     
+                        $datos_update = [
+                            'destinos' => $json_final,
+                            'total' => $total_nuevo
+                        ];
+                        $formatos_update = ['%s', '%d'];
+                        // Negocio nuevo en el origen: el servicio pasa al cliente propietario (igual que al crearlo)
+                        if ($negocio_origen && (int) $negocio_origen->id !== $negocio_anterior_id) {
+                            $dir_negocio = (string) $negocio_origen->direccion_full;
+                            $datos_update['user_id'] = (int) $negocio_origen->user_id;
+                            $datos_update['nombre_cliente'] = $negocio_origen->nombre;
+                            $datos_update['telefono_cliente'] = $negocio_origen->whatsapp ?: $negocio_origen->cliente_telefono;
+                            $datos_update['direccion_origen'] = $dir_negocio !== '' ? $negocio_origen->nombre . ' — ' . $dir_negocio : $negocio_origen->nombre;
+                            array_push($formatos_update, '%d', '%s', '%s', '%s');
+                        }
                         $actualizado = $wpdb->update(
                             'servicios_gofast',
-                            [
-                                'destinos' => $json_final,
-                                'total' => $total_nuevo
-                            ],
+                            $datos_update,
                             ['id' => $servicio_id],
-                            ['%s', '%d'],
+                            $formatos_update,
                             ['%d']
                         );
                         
@@ -826,6 +855,43 @@ function gofast_pedidos_shortcode() {
             
             // Obtener recargos seleccionables para el formulario de edición
             $recargos_seleccionables = $wpdb->get_results("SELECT id, nombre, valor_fijo FROM recargos WHERE activo = 1 AND tipo = 'por_volumen_peso' ORDER BY nombre ASC");
+
+            // Origen: negocios + barrios en un solo desplegable (igual que en Cotizar admin)
+            $negocio_origen_actual = (int) ($json_servicio['origen']['negocio_id'] ?? 0);
+            $barrio_origen_actual = (int) ($json_servicio['origen']['barrio_id'] ?? 0);
+            $negocios_origen = $wpdb->get_results(
+                "SELECT n.id, n.nombre, n.direccion_full, n.barrio_id, b.nombre AS barrio_nombre
+                 FROM negocios_gofast n
+                 INNER JOIN usuarios_gofast u ON n.user_id = u.id
+                 LEFT JOIN barrios b ON b.id = n.barrio_id
+                 WHERE (n.activo = 1 AND u.activo = 1) OR n.id = " . $negocio_origen_actual . "
+                 ORDER BY n.nombre ASC"
+            );
+            $opciones_origen_edicion = [];
+            foreach ((array) $negocios_origen as $neg) {
+                $es_actual = $negocio_origen_actual === (int) $neg->id;
+                $barrio_opcion = $es_actual && $barrio_origen_actual ? $barrio_origen_actual : (int) $neg->barrio_id;
+                if (!$barrio_opcion) continue;
+                $opciones_origen_edicion[] = [
+                    'valor'    => $barrio_opcion,
+                    'texto'    => '🏪 ' . $neg->nombre . ' — ' . (($barrio_opcion !== (int) $neg->barrio_id ? ($json_servicio['origen']['barrio_nombre'] ?? '') : $neg->barrio_nombre) ?: 'Sin barrio'),
+                    'negocio'  => (int) $neg->id,
+                    'dir'      => (string) $neg->direccion_full,
+                    'selected' => $negocio_origen_actual === (int) $neg->id,
+                ];
+            }
+            foreach ($barrios as $b) {
+                $opciones_origen_edicion[] = [
+                    'valor'    => (int) $b->id,
+                    'texto'    => $b->nombre,
+                    'negocio'  => 0,
+                    'dir'      => '',
+                    'selected' => !$negocio_origen_actual && $barrio_origen_actual === (int) $b->id,
+                ];
+            }
+            usort($opciones_origen_edicion, function ($a, $b) {
+                return strcasecmp(preg_replace('/^🏪 /u', '', $a['texto']), preg_replace('/^🏪 /u', '', $b['texto']));
+            });
     ?>
 <div class="gofast-home">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
@@ -880,17 +946,20 @@ function gofast_pedidos_shortcode() {
                 <h3 style="margin-bottom:12px;color:#2e7d32;">📍 Origen del Servicio</h3>
                 <div style="background:#e8f5e9;padding:16px;border-radius:8px;border:1px solid #c8e6c9;">
                     <div style="margin-bottom:12px;">
-                        <label style="display:block;margin-bottom:6px;font-weight:600;font-size:14px;">Barrio de origen:</label>
+                        <label style="display:block;margin-bottom:6px;font-weight:600;font-size:14px;">Barrio o negocio de origen:</label>
                         <select id="origen-barrio-select" class="gofast-select-origen" style="width:100%;padding:10px;font-size:14px;border:1px solid #ddd;border-radius:6px;">
                             <option value="">Seleccionar barrio...</option>
-                            <?php foreach ($barrios as $b): ?>
-                                <option value="<?php echo esc_attr($b->id); ?>" 
-                                        data-sector="<?php echo esc_attr($b->sector_id); ?>"
-                                        <?php echo (isset($json_servicio['origen']['barrio_id']) && $json_servicio['origen']['barrio_id'] == $b->id) ? 'selected' : ''; ?>>
-                                    <?php echo esc_html($b->nombre); ?>
+                            <?php foreach ($opciones_origen_edicion as $op): ?>
+                                <option value="<?php echo esc_attr($op['valor']); ?>"
+                                        <?php if ($op['negocio']): ?>data-negocio-id="<?php echo esc_attr($op['negocio']); ?>" data-negocio-direccion="<?php echo esc_attr($op['dir']); ?>"<?php endif; ?>
+                                        <?php echo $op['selected'] ? 'selected' : ''; ?>>
+                                    <?php echo esc_html($op['texto']); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <small style="color:#666;font-size:12px;display:block;margin-top:4px;">
+                            Si seleccionas un negocio, el servicio quedará asociado al cliente propietario y aparecerá en su historial.
+                        </small>
                     </div>
                     <div>
                         <label style="display:block;margin-bottom:6px;font-weight:600;font-size:14px;">Dirección específica (opcional):</label>
@@ -1061,6 +1130,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Inicializar Select2 en selectores existentes
     initSelect2(document.getElementById('origen-barrio-select'));
+    (function () {
+        const sel = document.getElementById('origen-barrio-select');
+        const dir = document.getElementById('origen-direccion');
+        if (!sel || !dir) return;
+        const alCambiar = function () {
+            const op = sel.options[sel.selectedIndex];
+            const dirNegocio = op ? (op.getAttribute('data-negocio-direccion') || '') : '';
+            if (dirNegocio && !dir.value.trim()) dir.value = dirNegocio;
+        };
+        if (window.jQuery) jQuery(sel).on('change', alCambiar); else sel.addEventListener('change', alCambiar);
+    })();
     document.querySelectorAll('.destino-barrio-select').forEach(function(select) {
         initSelect2(select);
     });
@@ -1141,8 +1221,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const origen = {
             barrio_id: parseInt(origenSelect.value) || 0,
-            barrio_nombre: selectedOrigen ? selectedOrigen.text : '',
-            direccion: origenDireccion.value.trim()
+            barrio_nombre: selectedOrigen ? selectedOrigen.text.trim() : '',
+            direccion: origenDireccion.value.trim(),
+            negocio_id: selectedOrigen ? parseInt(selectedOrigen.getAttribute('data-negocio-id') || 0) : 0
         };
         
         if (origen.barrio_id === 0) {
@@ -1441,20 +1522,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <table class="gofast-table gofast-pedidos-table">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>Fecha</th>
-                            <th>Cliente</th>
-                            <th>Teléfono</th>
-                            <th>Origen</th>
-                            <th>Destinos</th>
-                            <th>Mensajero</th>
-                            <th>Total</th>
-                            <th>Recargos</th>
-                            <th>Estado</th>
-                            <th>Ver</th>
-                            <?php if ($rol === 'admin'): ?>
-                                <th>Acciones</th>
-                            <?php endif; ?>
+                            <th class="gp-col-id">Servicio</th>
+                            <th class="gp-col-cliente">Cliente</th>
+                            <th class="gp-col-ruta">Origen → Destinos</th>
+                            <th class="gp-col-mensajero">Mensajero</th>
+                            <th class="gp-col-total">Total</th>
+                            <th class="gp-col-estado">Estado</th>
+                            <th class="gp-col-acciones">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1634,21 +1708,35 @@ document.addEventListener('DOMContentLoaded', function() {
                         $clase_sin_asignar = $sin_asignar ? 'gofast-pedido-sin-asignar' : '';
                         ?>
                         <tr class="<?= $clase_sin_asignar ?>">
-                            <td>
-                                #<?php echo (int) $p->id; ?>
+                            <td class="gp-col-id">
+                                <strong class="gp-fecha"><?php echo esc_html( gofast_date_format($p->fecha, 'd/m/Y') ); ?></strong>
+                                <small class="gp-sub"><?php echo esc_html( gofast_date_format($p->fecha, 'H:i') ); ?> · #<?php echo (int) $p->id; ?></small>
                                 <?php if ($sin_asignar): ?>
-                                    <br><span style="display:inline-block;background:#ffc107;color:#000;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;margin-top:2px;" title="Pedido sin asignar">⚠️ SIN ASIGNAR</span>
+                                    <span class="gp-badge gp-badge-alerta" title="Pedido sin asignar">⚠️ SIN ASIGNAR</span>
+                                <?php endif; ?>
+                                <?php if ($es_intermunicipal): ?>
+                                    <span class="gp-badge gp-badge-inter" title="Servicio intermunicipal">🌐 Inter</span>
                                 <?php endif; ?>
                             </td>
-                            <td><?php echo esc_html( gofast_date_format($p->fecha, 'Y-m-d H:i') ); ?></td>
-                            <td><?php echo esc_html($p->nombre_cliente ?: '—'); ?></td>
-                            <td><?php echo esc_html($p->telefono_cliente ?: '—'); ?></td>
-
-                            <td><?php echo esc_html($origen_barrio); ?></td>
-                            <td><?php echo esc_html($destinos_text); ?></td>
+                            <td class="gp-col-cliente">
+                                <span class="gp-texto"><?php echo esc_html($p->nombre_cliente ?: '—'); ?></span>
+                                <?php if (!empty($p->telefono_cliente)): ?>
+                                    <small class="gp-sub gp-tel">📞 <?php echo esc_html($p->telefono_cliente); ?></small>
+                                <?php endif; ?>
+                            </td>
+                            <td class="gp-col-ruta">
+                                <div class="gp-origen" title="<?php echo esc_attr($origen_barrio); ?>">📍 <?php echo esc_html($origen_barrio); ?></div>
+                                <div class="gp-destinos" title="<?php echo esc_attr($destinos_text); ?>">
+                                    <?php if ($destinos_text_parts): ?>
+                                        <?php foreach ($destinos_text_parts as $parte): ?>
+                                            <span>→ <?php echo esc_html($parte); ?></span>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>—<?php endif; ?>
+                                </div>
+                            </td>
 
                             <!-- Mensajero -->
-                            <td>
+                            <td class="gp-col-mensajero">
                                 <?php if ($rol === 'admin'): ?>
                                     <form method="post" class="gofast-estado-form">
                                         <?php wp_nonce_field('gofast_cambiar_estado', 'gofast_estado_nonce'); ?>
@@ -1690,22 +1778,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <?php endif; ?>
                             </td>
 
-                            <!-- Total -->
-                            <td>$<?php echo number_format($p->total, 0, ',', '.'); ?></td>
-
-                            <!-- Recargos -->
-                            <td>
+                            <!-- Total + recargos -->
+                            <td class="gp-col-total">
+                                <strong>$<?php echo number_format($p->total, 0, ',', '.'); ?></strong>
                                 <?php if ($tiene_recargos): ?>
-                                    <span style="display:inline-block;background:#fff3cd;color:#856404;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;" title="Total de recargos: $<?php echo number_format($total_recargos, 0, ',', '.'); ?>">
+                                    <span class="gp-badge gp-badge-recargo" title="Total de recargos: $<?php echo number_format($total_recargos, 0, ',', '.'); ?>">
                                         💰 $<?php echo number_format($total_recargos, 0, ',', '.'); ?>
                                     </span>
-                                <?php else: ?>
-                                    <span style="color:#999;font-size:12px;">—</span>
                                 <?php endif; ?>
                             </td>
 
                             <!-- Estado -->
-                            <td>
+                            <td class="gp-col-estado">
                                 <?php if ($rol === 'admin' || $rol === 'mensajero'): ?>
                                     <form method="post" class="gofast-estado-form">
                                         <?php wp_nonce_field('gofast_cambiar_estado', 'gofast_estado_nonce'); ?>
@@ -1732,43 +1816,34 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <?php endif; ?>
                             </td>
 
-                            <td>
-                                <a href="<?php echo $detalle_url; ?>" class="gofast-link-ver">Ver</a>
-                                <?php if ($rol === 'admin' || $rol === 'mensajero'): ?>
-                                    <?php 
-                                    $mensaje_whatsapp = gofast_generar_mensaje_whatsapp_mensajero($p, $wpdb);
-                                    if (!empty($mensaje_whatsapp)):
-                                        $telefono_mensajero = !empty($p->mensajero_id) ? $wpdb->get_var($wpdb->prepare("SELECT telefono FROM usuarios_gofast WHERE id = %d", $p->mensajero_id)) : '';
-                                        $telefono_empresa = "573194642513";
-                                        $telefono_destino = !empty($telefono_mensajero) ? preg_replace('/[^0-9]/', '', $telefono_mensajero) : $telefono_empresa;
-                                    ?>
-                                    <br>
-                                    <a href="#" 
-                                       class="gofast-link-ver btn-whatsapp-msg" 
-                                       data-phone="<?php echo esc_attr($telefono_destino); ?>"
-                                       data-msg="<?php echo htmlspecialchars(json_encode($mensaje_whatsapp, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>"
-                                       style="color:#25D366;font-size:11px;margin-top:4px;display:inline-block;">
-                                        💬 Mensaje
-                                    </a>
+                            <td class="gp-col-acciones">
+                                <div class="gp-acciones">
+                                    <a href="<?php echo $detalle_url; ?>" class="gp-accion" title="Ver servicio">👁️<span>Ver</span></a>
+                                    <?php if ($rol === 'admin' || $rol === 'mensajero'): ?>
+                                        <?php 
+                                        $mensaje_whatsapp = gofast_generar_mensaje_whatsapp_mensajero($p, $wpdb);
+                                        if (!empty($mensaje_whatsapp)):
+                                            $telefono_mensajero = !empty($p->mensajero_id) ? $wpdb->get_var($wpdb->prepare("SELECT telefono FROM usuarios_gofast WHERE id = %d", $p->mensajero_id)) : '';
+                                            $telefono_empresa = "573194642513";
+                                            $telefono_destino = !empty($telefono_mensajero) ? preg_replace('/[^0-9]/', '', $telefono_mensajero) : $telefono_empresa;
+                                        ?>
+                                        <a href="#" 
+                                           class="gp-accion gp-accion-wa btn-whatsapp-msg" 
+                                           title="Enviar mensaje por WhatsApp"
+                                           data-phone="<?php echo esc_attr($telefono_destino); ?>"
+                                           data-msg="<?php echo htmlspecialchars(json_encode($mensaje_whatsapp, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>">💬<span>Mensaje</span></a>
+                                        <?php endif; ?>
                                     <?php endif; ?>
-                                <?php endif; ?>
+                                    <?php if ($rol === 'admin'): ?>
+                                        <a href="<?php echo esc_url(add_query_arg('editar_servicio', $p->id)); ?>" class="gp-accion gp-accion-editar" title="Editar servicio">✏️<span>Editar</span></a>
+                                        <form method="post" class="gp-accion-form" onsubmit="return confirm('¿Estás seguro de eliminar este servicio? Esta acción no se puede deshacer.');">
+                                            <?php wp_nonce_field('gofast_eliminar_servicio', 'gofast_eliminar_nonce'); ?>
+                                            <input type="hidden" name="gofast_eliminar_id" value="<?php echo (int) $p->id; ?>">
+                                            <button type="submit" class="gp-accion gp-accion-eliminar" title="Eliminar servicio">🗑️<span>Eliminar</span></button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
                             </td>
-                            
-                            <?php if ($rol === 'admin'): ?>
-                                <td style="white-space:nowrap;">
-                                    <a href="<?php echo esc_url(add_query_arg('editar_servicio', $p->id)); ?>" 
-                                       class="gofast-btn-mini" style="text-decoration:none;display:inline-block;">
-                                        ✏️ Editar
-                                    </a>
-                                    <form method="post" style="display:inline-block;margin-left:4px;" onsubmit="return confirm('¿Estás seguro de eliminar este servicio? Esta acción no se puede deshacer.');">
-                                        <?php wp_nonce_field('gofast_eliminar_servicio', 'gofast_eliminar_nonce'); ?>
-                                        <input type="hidden" name="gofast_eliminar_id" value="<?php echo (int) $p->id; ?>">
-                                        <button type="submit" class="gofast-btn-mini" style="background:#dc3545;color:#fff;">
-                                            🗑️ Eliminar
-                                        </button>
-                                    </form>
-                                </td>
-                            <?php endif; ?>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -3081,10 +3156,55 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .gofast-pedidos-table-wrapper .gofast-pedidos-table {
-    min-width: 1000px;
+    min-width: 0;
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     margin: 0;
+}
+
+/* Tabla compacta: 7 columnas que caben sin scroll lateral */
+.gofast-pedidos-table th,
+.gofast-pedidos-table td { vertical-align: top; padding: 10px 8px; font-size: 13px; overflow-wrap: anywhere; }
+.gofast-pedidos-table th { font-size: 12px; white-space: nowrap; }
+.gofast-pedidos-table .gp-col-id { width: 92px; }
+.gofast-pedidos-table .gp-col-cliente { width: 15%; }
+.gofast-pedidos-table .gp-col-ruta { width: auto; }
+.gofast-pedidos-table .gp-col-mensajero { width: 150px; }
+.gofast-pedidos-table .gp-col-total { width: 96px; text-align: right; }
+.gofast-pedidos-table .gp-col-estado { width: 118px; }
+.gofast-pedidos-table .gp-col-acciones { width: 116px; }
+.gofast-pedidos-table .gp-sub { display: block; color: #777; font-size: 11px; line-height: 1.35; margin-top: 2px; }
+.gofast-pedidos-table .gp-texto { display: block; font-weight: 600; line-height: 1.3; }
+.gofast-pedidos-table .gp-fecha { display: block; font-weight: 700; white-space: nowrap; }
+.gofast-pedidos-table .gp-tel { color: #222; font-weight: 700; font-size: 12px; }
+.gofast-pedidos-table .gp-badge { display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.gofast-pedidos-table .gp-badge-alerta { background: #ffc107; color: #000; }
+.gofast-pedidos-table .gp-badge-inter { background: #f3e5f5; color: #6a1b9a; }
+.gofast-pedidos-table .gp-badge-recargo { background: #fff3cd; color: #856404; }
+.gofast-pedidos-table .gp-origen { font-weight: 600; font-size: 12px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gofast-pedidos-table .gp-destinos { font-size: 12px; color: #444; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.gofast-pedidos-table .gp-destinos span { display: block; }
+.gofast-pedidos-table .gofast-estado-form { display: block !important; width: 100%; }
+.gofast-pedidos-table .gofast-estado-form select,
+.gofast-pedidos-table .gofast-mensajero-select { width: 100% !important; min-width: 0 !important; max-width: 100%; box-sizing: border-box; }
+.gofast-pedidos-table .gp-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.gofast-pedidos-table .gp-accion-form { margin: 0; display: contents; }
+.gofast-pedidos-table .gp-accion { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 40px; padding: 4px 2px; border: 1px solid #e3e3e3; border-radius: 6px; background: #fff; color: #333; font-size: 15px; line-height: 1; text-decoration: none; cursor: pointer; box-shadow: none; width: 100%; margin: 0; }
+.gofast-pedidos-table .gp-accion span { font-size: 10px; font-weight: 600; color: #555; white-space: nowrap; }
+.gofast-pedidos-table .gp-accion:hover { background: #fff9d6; border-color: #F4C524; }
+.gofast-pedidos-table .gp-accion-wa span { color: #128C7E; }
+.gofast-pedidos-table .gp-accion-editar { background: #F4C524; border-color: #F4C524; }
+.gofast-pedidos-table .gp-accion-editar span { color: #000; }
+.gofast-pedidos-table .gp-accion-eliminar { background: #fff5f5; border-color: #f5c2c7; }
+.gofast-pedidos-table .gp-accion-eliminar span { color: #b02a37; }
+.gofast-pedidos-table .gp-accion-eliminar:hover { background: #dc3545; border-color: #dc3545; }
+.gofast-pedidos-table .gp-accion-eliminar:hover span { color: #fff; }
+@media (max-width: 1100px) {
+    .gofast-pedidos-table .gp-col-mensajero { width: 128px; }
+    .gofast-pedidos-table .gp-col-estado { width: 106px; }
+    .gofast-pedidos-table .gp-col-acciones { width: 112px; }
+    .gofast-pedidos-table .gp-accion span { font-size: 9px; }
 }
 
 /* Vista Desktop: Mostrar tabla, ocultar cards */

@@ -634,50 +634,48 @@ function gofast_usuarios_admin_shortcode() {
                         <table class="gofast-table gofast-usuarios-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Nombre</th>
-                                <th>Email</th>
-                                <th>Teléfono</th>
-                                <th>Rol</th>
-                                <th>Estado</th>
-                                <th>Registro</th>
-                                <th>Acciones</th>
+                                <th class="gu-col-usuario">Usuario</th>
+                                <th class="gu-col-contacto">Contacto</th>
+                                <th class="gu-col-rol">Rol y estado</th>
+                                <th class="gu-col-acciones">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php foreach ($usuarios as $u):
                             $es_yo = ((int) $u->id === (int) $_SESSION['gofast_user_id']);
+                            $rol_actual = strtolower($u->rol);
                             ?>
-                            <tr class="<?= $u->activo ? 'gofast-row-active' : 'gofast-row-inactive'; ?>">
-                                <td>#<?= (int) $u->id; ?></td>
-                                <td>
+                            <tr class="<?= $u->activo ? 'gofast-row-active' : 'gofast-row-inactive'; ?> gu-rol-<?= esc_attr($rol_actual); ?>">
+                                <td class="gu-col-usuario">
                                     <input type="text"
                                            name="usuarios[<?= esc_attr($u->id); ?>][nombre]"
                                            value="<?= esc_attr($u->nombre); ?>"
-                                           style="width:100%;padding:4px 8px;border:1px solid #ddd;border-radius:4px;">
+                                           class="gu-input-nombre"
+                                           aria-label="Nombre">
+                                    <small class="gu-sub">#<?= (int) $u->id; ?> · Registro <?= esc_html( gofast_date_format($u->fecha_registro, 'd/m/Y') ); ?><?= $es_yo ? ' · <b>(Tú)</b>' : ''; ?></small>
                                 </td>
-                                <td>
-                                    <input type="email"
-                                           name="usuarios[<?= esc_attr($u->id); ?>][email]"
-                                           value="<?= esc_attr($u->email); ?>"
-                                           style="width:100%;padding:4px 8px;border:1px solid #ddd;border-radius:4px;">
+                                <td class="gu-col-contacto">
+                                    <div class="gu-campo"><span class="gu-icono" title="Teléfono">📞</span>
+                                        <input type="text"
+                                               name="usuarios[<?= esc_attr($u->id); ?>][telefono]"
+                                               value="<?= esc_attr($u->telefono); ?>"
+                                               class="gu-input-tel"
+                                               aria-label="Teléfono">
+                                    </div>
+                                    <div class="gu-campo"><span class="gu-icono" title="Email">✉️</span>
+                                        <input type="email"
+                                               name="usuarios[<?= esc_attr($u->id); ?>][email]"
+                                               value="<?= esc_attr($u->email); ?>"
+                                               aria-label="Email">
+                                    </div>
                                 </td>
-                                <td>
-                                    <input type="text"
-                                           name="usuarios[<?= esc_attr($u->id); ?>][telefono]"
-                                           value="<?= esc_attr($u->telefono); ?>"
-                                           style="width:100%;padding:4px 8px;border:1px solid #ddd;border-radius:4px;">
-                                </td>
-                                <td>
-                                    <select name="usuarios[<?= esc_attr($u->id); ?>][rol]"
-                                            style="width:100%;padding:4px 8px;border:1px solid #ddd;border-radius:4px;">
-                                        <option value="cliente"<?php selected($u->rol, 'cliente'); ?>>Cliente</option>
-                                        <option value="mensajero"<?php selected($u->rol, 'mensajero'); ?>>Mensajero</option>
-                                        <option value="admin"<?php selected($u->rol, 'admin'); ?>>Admin</option>
+                                <td class="gu-col-rol">
+                                    <select name="usuarios[<?= esc_attr($u->id); ?>][rol]" aria-label="Rol">
+                                        <option value="cliente"<?php selected($u->rol, 'cliente'); ?>>👤 Cliente</option>
+                                        <option value="mensajero"<?php selected($u->rol, 'mensajero'); ?>>🏍 Mensajero</option>
+                                        <option value="admin"<?php selected($u->rol, 'admin'); ?>>👑 Admin</option>
                                     </select>
-                                </td>
-                                <td>
-                                    <label class="gofast-switch">
+                                    <label class="gofast-switch gu-switch">
                                         <input type="checkbox"
                                                name="usuarios[<?= esc_attr($u->id); ?>][activo]"
                                                value="1"
@@ -686,46 +684,45 @@ function gofast_usuarios_admin_shortcode() {
                                         <span class="gofast-switch-label">Activo</span>
                                     </label>
                                 </td>
-                                <td class="gofast-td-fecha"><?= esc_html( gofast_date_format($u->fecha_registro, 'Y-m-d') ); ?></td>
-                                <td class="gofast-td-acciones">
-                                    <div class="gofast-acciones-usuario">
-                                        <input type="password"
-                                               name="usuarios[<?= esc_attr($u->id); ?>][password]"
-                                               placeholder="Nueva contraseña (opcional)"
-                                               class="gofast-input-password">
+                                <td class="gu-col-acciones">
+                                    <input type="password"
+                                           name="usuarios[<?= esc_attr($u->id); ?>][password]"
+                                           placeholder="Nueva contraseña"
+                                           title="Opcional: déjala vacía para mantener la actual"
+                                           class="gofast-input-password">
+                                    <div class="gu-acciones">
                                         <button type="button"
-                                                class="gofast-btn-accion gofast-btn-actualizar"
+                                                class="gofast-btn-accion gofast-btn-actualizar gu-accion gu-accion-guardar"
                                                 data-usuario-id="<?= esc_attr($u->id); ?>"
                                                 data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
-                                                style="width:100%;margin-bottom:8px;">
-                                            💾 Actualizar
+                                                title="Guardar cambios de este usuario">
+                                            💾<span>Guardar</span>
                                         </button>
                                         <?php if (!$es_yo): ?>
-                                            <div class="gofast-botones-accion">
-                                                <?php if ($u->activo): ?>
-                                                    <button type="button"
-                                                            class="gofast-btn-accion gofast-btn-desactivar"
-                                                            data-usuario-id="<?= esc_attr($u->id); ?>"
-                                                            data-usuario-nombre="<?= esc_attr($u->nombre); ?>">
-                                                        ⏸️ Desactivar
-                                                    </button>
-                                                <?php else: ?>
-                                                    <button type="button"
-                                                            class="gofast-btn-accion gofast-btn-activar"
-                                                            data-usuario-id="<?= esc_attr($u->id); ?>"
-                                                            data-usuario-nombre="<?= esc_attr($u->nombre); ?>">
-                                                        ▶️ Activar
-                                                    </button>
-                                                <?php endif; ?>
+                                            <?php if ($u->activo): ?>
                                                 <button type="button"
-                                                        class="gofast-btn-accion gofast-btn-borrar"
+                                                        class="gofast-btn-accion gofast-btn-desactivar gu-accion gu-accion-pausar"
                                                         data-usuario-id="<?= esc_attr($u->id); ?>"
-                                                        data-usuario-nombre="<?= esc_attr($u->nombre); ?>">
-                                                    🗑️ Borrar
+                                                        data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
+                                                        title="Desactivar usuario">
+                                                    ⏸️<span>Desactivar</span>
                                                 </button>
-                                            </div>
-                                        <?php else: ?>
-                                            <span class="gofast-tu-usuario">(Tú)</span>
+                                            <?php else: ?>
+                                                <button type="button"
+                                                        class="gofast-btn-accion gofast-btn-activar gu-accion gu-accion-activar"
+                                                        data-usuario-id="<?= esc_attr($u->id); ?>"
+                                                        data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
+                                                        title="Activar usuario">
+                                                    ▶️<span>Activar</span>
+                                                </button>
+                                            <?php endif; ?>
+                                            <button type="button"
+                                                    class="gofast-btn-accion gofast-btn-borrar gu-accion gu-accion-borrar"
+                                                    data-usuario-id="<?= esc_attr($u->id); ?>"
+                                                    data-usuario-nombre="<?= esc_attr($u->nombre); ?>"
+                                                    title="Borrar permanentemente">
+                                                🗑️<span>Borrar</span>
+                                            </button>
                                         <?php endif; ?>
                                     </div>
                                 </td>
@@ -1092,8 +1089,47 @@ document.addEventListener('DOMContentLoaded', function(){
 }
 
 .gofast-usuarios-table-wrapper .gofast-usuarios-table {
-    min-width: 1000px;
+    min-width: 0;
     width: 100%;
+    table-layout: fixed;
+}
+
+.gofast-usuarios-table td { vertical-align: top; }
+.gofast-usuarios-table input[type="text"],
+.gofast-usuarios-table input[type="email"],
+.gofast-usuarios-table input[type="password"],
+.gofast-usuarios-table select { height: 34px !important; min-height: 0 !important; padding: 4px 8px !important; font-size: 13px !important; margin: 0 !important; box-sizing: border-box; }
+.gofast-usuarios-table .gu-col-usuario { width: 26%; }
+.gofast-usuarios-table .gu-col-contacto { width: auto; }
+.gofast-usuarios-table .gu-col-rol { width: 150px; }
+.gofast-usuarios-table .gu-col-acciones { width: 210px; }
+.gofast-usuarios-table tbody tr td:first-child { border-left: 4px solid transparent; }
+.gofast-usuarios-table tr.gu-rol-cliente td:first-child { border-left-color: #28a745; }
+.gofast-usuarios-table tr.gu-rol-mensajero td:first-child { border-left-color: #007bff; }
+.gofast-usuarios-table tr.gu-rol-admin td:first-child { border-left-color: #dc3545; }
+.gofast-usuarios-table .gu-input-nombre { font-weight: 700; }
+.gofast-usuarios-table .gu-input-tel { font-weight: 700; }
+.gofast-usuarios-table .gu-sub { display: block; color: #777; font-size: 11px; line-height: 1.4; margin-top: 4px; }
+.gofast-usuarios-table .gu-campo { display: flex; align-items: center; gap: 6px; }
+.gofast-usuarios-table .gu-campo + .gu-campo { margin-top: 6px; }
+.gofast-usuarios-table .gu-icono { flex: 0 0 auto; font-size: 13px; }
+.gofast-usuarios-table .gu-campo input { flex: 1 1 auto; min-width: 0; }
+.gofast-usuarios-table .gu-switch { margin-top: 8px; }
+.gofast-usuarios-table .gu-col-acciones .gofast-input-password { margin-bottom: 6px; }
+.gofast-usuarios-table .gu-acciones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.gofast-usuarios-table .gu-accion { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 40px; width: 100%; margin: 0; padding: 4px 2px; border: 1px solid #e3e3e3; border-radius: 6px; background: #fff; color: #333; font-size: 15px; line-height: 1; white-space: normal; }
+.gofast-usuarios-table .gu-accion span { font-size: 10px; font-weight: 600; white-space: nowrap; }
+.gofast-usuarios-table .gu-accion-guardar { background: #007bff; border-color: #007bff; color: #fff; }
+.gofast-usuarios-table .gu-accion-guardar:hover { background: #0056b3; }
+.gofast-usuarios-table .gu-accion-pausar { background: #fff8e1; border-color: #ffe08a; color: #7a5b00; }
+.gofast-usuarios-table .gu-accion-pausar:hover { background: #ffc107; color: #000; }
+.gofast-usuarios-table .gu-accion-activar { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; }
+.gofast-usuarios-table .gu-accion-activar:hover { background: #28a745; color: #fff; }
+.gofast-usuarios-table .gu-accion-borrar { background: #fff5f5; border-color: #f5c2c7; color: #b02a37; }
+.gofast-usuarios-table .gu-accion-borrar:hover { background: #dc3545; border-color: #dc3545; color: #fff; }
+@media (max-width: 1100px) {
+    .gofast-usuarios-table .gu-col-rol { width: 130px; }
+    .gofast-usuarios-table .gu-col-acciones { width: 180px; }
 }
 
 /* Vista Desktop: Mostrar tabla, ocultar cards */

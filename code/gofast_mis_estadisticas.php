@@ -1,4 +1,3 @@
-<?php
 /***************************************************
  * GOFAST – MIS ESTADÍSTICAS (VISTA CONTABLE DEL CLIENTE)
  * Shortcode: [gofast_mis_estadisticas]  (también acepta [gofast_mis_domicilios])
@@ -8,14 +7,14 @@
  * con resúmenes por tarifa, negocio, destino, mes y estado.
  * Admin: puede ver la vista de cualquier cliente con ?cliente_id=ID
  *
- * Totales: solo cuentan servicios asignados, en ruta o entregados.
+ * Totales: cuentan servicios pendientes, asignados, en ruta y entregados (no los cancelados).
  * Descargas: CSV (detalle y resumen por tarifa) y estado de cuenta imprimible.
  ***************************************************/
 
 if (!function_exists('gofast_md_estados_contables')) {
 
 function gofast_md_estados_contables() {
-    return ['asignado', 'en_ruta', 'entregado'];
+    return ['pendiente', 'asignado', 'en_ruta', 'entregado'];
 }
 
 function gofast_md_estado_labels() {
@@ -485,6 +484,23 @@ function gofast_md_ordenar(&$res) {
 }
 
 /**
+ * Separa por_tarifa en urbanos e intermunicipales, con sus subtotales.
+ */
+function gofast_md_tarifas_por_tipo($por_tarifa) {
+    $grupos = [];
+    foreach (['urbano' => false, 'inter' => true] as $tipo => $es_inter) {
+        $filas = array_filter($por_tarifa, function ($t) use ($es_inter) { return (bool) $t['inter'] === $es_inter; });
+        $grupos[$tipo] = [
+            'filas'    => $filas,
+            'envios'   => array_sum(array_column($filas, 'envios')),
+            'subtotal' => array_sum(array_column($filas, 'subtotal')),
+            'recargos' => array_sum(array_column($filas, 'recargos')),
+        ];
+    }
+    return $grupos;
+}
+
+/**
  * Datos de la vista cliente: una consulta a servicios_gofast (índice idx_user_fecha).
  */
 function gofast_md_datos($user_id, $filtros) {
@@ -644,6 +660,13 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
     $num = function ($v) { return number_format((int) $v, 0, ',', '.'); };
     $envios_con_recargo = array_sum(array_column($datos['por_recargo'], 'envios'));
     $con_negocio = count($datos['por_negocio']) > 1;
+    $grupos = gofast_md_tarifas_por_tipo($datos['por_tarifa']);
+    $hay_inter = !empty($grupos['inter']['filas']);
+    $servicios_cobrados = array_filter($datos['servicios'], function ($s) { return $s['cuenta']; });
+    $detalle_grupos = [
+        'urbano' => array_filter($servicios_cobrados, function ($s) { return !$s['inter']; }),
+        'inter'  => array_filter($servicios_cobrados, function ($s) { return $s['inter']; }),
+    ];
     ?><!DOCTYPE html>
 <html lang="es">
 <head>
@@ -698,15 +721,17 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
         <table class="t">
             <thead><tr><th>Concepto</th><th class="n">Cantidad</th><th class="n">Valor</th></tr></thead>
             <tbody>
-                <tr class="grupo"><td colspan="3">Envíos por tarifa</td></tr>
-            <?php foreach ($datos['por_tarifa'] as $t): ?>
+            <?php foreach ($grupos as $tipo => $g): if (!$g['filas']) continue; ?>
+                <tr class="grupo"><td colspan="3"><?= $tipo === 'inter' ? 'Envíos intermunicipales' : ($hay_inter ? 'Envíos urbanos por tarifa' : 'Envíos por tarifa') ?></td></tr>
+                <?php foreach ($g['filas'] as $t): ?>
                 <tr>
                     <td>Envíos <?= $t['inter'] ? 'intermunicipales ' : '' ?>de <?= gofast_md_money($t['tarifa']) ?></td>
                     <td class="n"><?= $num($t['envios']) ?></td>
                     <td class="n"><?= gofast_md_money($t['subtotal']) ?></td>
                 </tr>
+                <?php endforeach; ?>
+                <tr class="sub"><td><?= $tipo === 'inter' ? 'Subtotal intermunicipales' : ($hay_inter ? 'Subtotal urbanos' : 'Subtotal envíos') ?></td><td class="n"><?= $num($g['envios']) ?></td><td class="n"><?= gofast_md_money($g['subtotal']) ?></td></tr>
             <?php endforeach; ?>
-                <tr class="sub"><td>Subtotal envíos</td><td class="n"><?= $num($kpi['envios']) ?></td><td class="n"><?= gofast_md_money($kpi['tarifas']) ?></td></tr>
 
             <?php if ($kpi['recargos'] > 0): ?>
                 <tr class="grupo"><td colspan="3">Recargos</td></tr>
@@ -721,7 +746,7 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
             <?php endif; ?>
 
             <?php if ($kpi['excluidos'] > 0): ?>
-                <tr><td>Pendientes sin mensajero (no se cobran)</td><td class="n"><?= $num($kpi['excluidos']) ?></td><td class="n">$0</td></tr>
+                <tr><td>Cancelados (no se cobran)</td><td class="n"><?= $num($kpi['excluidos']) ?></td><td class="n">$0</td></tr>
             <?php endif; ?>
                 <tr class="total"><td>Total del periodo</td><td class="n"><?= $num($kpi['envios']) ?> envíos</td><td class="n"><?= gofast_md_money($kpi['total']) ?></td></tr>
             </tbody>
@@ -746,7 +771,9 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
                 </table>
             <?php endif; ?>
 
-            <h2>Detalle de servicios</h2>
+            <?php foreach ($detalle_grupos as $tipo => $lista): if (!$lista) continue;
+                $tot = ['envios' => 0, 'tarifas' => 0, 'recargos' => 0, 'total' => 0]; ?>
+            <h2><?= $tipo === 'inter' ? 'Detalle de servicios intermunicipales' : ($hay_inter ? 'Detalle de servicios urbanos' : 'Detalle de servicios') ?></h2>
             <table class="t det">
                 <thead>
                     <tr>
@@ -755,9 +782,13 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($datos['servicios'] as $s): if (!$s['cuenta']) continue;
+                <?php foreach ($lista as $s):
                     $tar_s = array_sum(array_column($s['lineas'], 'tarifa'));
-                    $rec_s = array_sum(array_column($s['lineas'], 'recargo')); ?>
+                    $rec_s = array_sum(array_column($s['lineas'], 'recargo'));
+                    $tot['envios'] += count($s['lineas']);
+                    $tot['tarifas'] += $tar_s;
+                    $tot['recargos'] += $rec_s;
+                    $tot['total'] += $s['total']; ?>
                     <tr>
                         <td><?= (int) $s['id'] ?></td>
                         <td style="white-space:nowrap;"><?= esc_html(date('d/m/Y H:i', strtotime($s['fecha']))) ?></td>
@@ -770,17 +801,16 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
                     </tr>
                 <?php endforeach; ?>
                     <tr class="total">
-                        <td colspan="<?= $con_negocio ? 4 : 3 ?>">Total</td>
-                        <td class="n"><?= $num($kpi['envios']) ?></td>
-                        <td class="n"><?= gofast_md_money($kpi['tarifas']) ?></td>
-                        <td class="n"><?= gofast_md_money($kpi['recargos']) ?></td>
-                        <td class="n"><?= gofast_md_money($kpi['total']) ?></td>
+                        <td colspan="<?= $con_negocio ? 4 : 3 ?>"><?= $tipo === 'inter' ? 'Total intermunicipales' : ($hay_inter ? 'Total urbanos' : 'Total') ?></td>
+                        <td class="n"><?= $num($tot['envios']) ?></td>
+                        <td class="n"><?= gofast_md_money($tot['tarifas']) ?></td>
+                        <td class="n"><?= gofast_md_money($tot['recargos']) ?></td>
+                        <td class="n"><?= gofast_md_money($tot['total']) ?></td>
                     </tr>
                 </tbody>
             </table>
+            <?php endforeach; ?>
         <?php endif; ?>
-
-        <p class="muted">Incluye los servicios con mensajero asignado. No incluye los pendientes (sin mensajero asignado).</p>
     </div>
 </body>
 </html><?php
@@ -789,7 +819,7 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
 /**
  * Tabla de resumen genérica: filas [label => ['envios', 'valor', ...]]
  */
-function gofast_md_tabla_resumen($filas, $titulo_col, $total_valor, $col_servicios = false) {
+function gofast_md_tabla_resumen($filas, $titulo_col, $total_valor, $col_servicios = false, $etiqueta_total = 'Total', $totales_extra = []) {
     if (!$filas) {
         return "<p style='text-align:center;color:#666;padding:20px;'>No hay servicios en este periodo.</p>";
     }
@@ -828,17 +858,70 @@ function gofast_md_tabla_resumen($filas, $titulo_col, $total_valor, $col_servici
             </tbody>
             <tfoot>
                 <tr style="font-weight:700;background:#fff9d6;">
-                    <td>Total</td>
+                    <td><?= esc_html($etiqueta_total) ?></td>
                     <?php if ($col_servicios): ?><td style="text-align:right;"><?= number_format($sum['servicios'], 0, ',', '.') ?></td><?php endif; ?>
                     <td style="text-align:right;"><?= number_format($sum['envios'], 0, ',', '.') ?></td>
                     <td style="text-align:right;"><?= gofast_md_money($sum['valor']) ?></td>
                     <td style="text-align:right;"><?= gofast_md_money($base ? round($sum['valor'] / $base) : 0) ?></td>
                     <td></td>
                 </tr>
+                <?php foreach ($totales_extra as $t):
+                    $pct_t = $total_valor > 0 ? round($t['valor'] * 100 / $total_valor, 1) : 0; ?>
+                <tr style="font-weight:800;background:#ffefa3;">
+                    <td><?= esc_html($t['label']) ?></td>
+                    <?php if ($col_servicios): ?><td></td><?php endif; ?>
+                    <td style="text-align:right;"><?= number_format($t['envios'], 0, ',', '.') ?></td>
+                    <td style="text-align:right;"><?= gofast_md_money($t['valor']) ?></td>
+                    <td style="text-align:right;"><?= gofast_md_money($t['envios'] ? round($t['valor'] / $t['envios']) : 0) ?></td>
+                    <td><small><?= $pct_t ?>%</small></td>
+                </tr>
+                <?php endforeach; ?>
             </tfoot>
         </table>
     </div>
     <?php
+    return ob_get_clean();
+}
+
+/**
+ * Pestaña "Por destino": intermunicipales primero y los 10 barrios locales con más envíos.
+ */
+function gofast_md_html_destinos($datos) {
+    $total_valor = $datos['kpi']['tarifas'] + $datos['kpi']['recargos'];
+    $inter = [];
+    $locales = [];
+    foreach ($datos['por_destino'] as $label => $g) {
+        if (strpos($label, '🌐 ') === 0) $inter[substr($label, strlen('🌐 '))] = $g;
+        else $locales[$label] = $g;
+    }
+    if (!$inter && !$locales) {
+        return "<p style='text-align:center;color:#666;padding:20px;'>No hay servicios en este periodo.</p>";
+    }
+    $top = array_slice($locales, 0, 10, true);
+    ob_start();
+    if ($inter): ?>
+        <h4 style="margin:0 0 8px;">🌐 Destinos intermunicipales</h4>
+        <?= gofast_md_tabla_resumen($inter, 'Municipio / destino', $total_valor, false, 'Total intermunicipales') ?>
+    <?php endif;
+    if ($locales):
+        $suma = function ($filas) {
+            return ['envios' => array_sum(array_column($filas, 'envios')), 'valor' => array_sum(array_column($filas, 'valor'))];
+        };
+        $extra = [];
+        if (count($locales) > 10) {
+            $extra[] = ['label' => 'Total general · ' . number_format(count($locales), 0, ',', '.') . ' barrios'] + $suma($locales);
+        }
+        if ($inter) {
+            $todo = $suma($locales);
+            $i = $suma($inter);
+            $extra[] = ['label' => 'Total general con intermunicipales', 'envios' => $todo['envios'] + $i['envios'], 'valor' => $todo['valor'] + $i['valor']];
+        } ?>
+        <h4 style="margin:<?= $inter ? '20px' : '0' ?> 0 8px;">🏙️ Los <?= count($top) ?> barrios locales con más envíos</h4>
+        <?= gofast_md_tabla_resumen($top, 'Barrio destino', $total_valor, false, count($locales) > 10 ? 'Total de estos 10 barrios' : ($inter ? 'Total locales' : 'Total general'), $extra) ?>
+        <?php if (count($locales) > 10): ?>
+            <p class="gofast-md-nota">Se muestran los 10 barrios con más envíos de <?= number_format(count($locales), 0, ',', '.') ?> barrios a los que se envió en el periodo. El detalle por envío (Excel) los incluye todos.</p>
+        <?php endif;
+    endif;
     return ob_get_clean();
 }
 
@@ -1142,9 +1225,19 @@ function gofast_md_html_tarifas($datos) {
             'titulo'    => gofast_md_money($t['tarifa']) . ($t['inter'] ? ' (intermunicipal)' : '') . ': ' . $t['envios'] . ' envíos',
         ];
         if ($mas_usada === null || $t['envios'] > $mas_usada['envios']) $mas_usada = $t;
-    } ?>
+    }
+    $grupos = gofast_md_tarifas_por_tipo($datos['por_tarifa']);
+    $hay_inter = !empty($grupos['inter']['filas']);
+    $hay_urbano = !empty($grupos['urbano']['filas']);
+    $titulos = ['urbano' => '🏙️ Envíos urbanos', 'inter' => '🌐 Envíos intermunicipales'];
+    ?>
     <div class="gofast-md-grid-2 gofast-md-tarifas">
         <div>
+            <?php foreach ($grupos as $tipo => $g):
+                if (!$g['filas']) continue;
+                $es_ultimo = ($tipo === 'inter' || !$hay_inter);
+                $pct_g = $kpi['envios'] ? round($g['envios'] * 100 / $kpi['envios'], 1) : 0; ?>
+            <?php if ($hay_inter): ?><h4 style="margin:<?= $tipo === 'inter' && $hay_urbano ? '18px' : '0' ?> 0 8px;"><?= $titulos[$tipo] ?></h4><?php endif; ?>
             <div class="gofast-table-wrap">
                 <table class="gofast-table">
                     <thead>
@@ -1158,13 +1251,12 @@ function gofast_md_html_tarifas($datos) {
                         </tr>
                     </thead>
                     <tbody>
-                    <?php foreach ($datos['por_tarifa'] as $t):
+                    <?php foreach ($g['filas'] as $t):
                         $pct = $kpi['envios'] ? round($t['envios'] * 100 / $kpi['envios'], 1) : 0;
                         $peso = $mas_usada['envios'] ? round($t['envios'] * 100 / $mas_usada['envios']) : 0; ?>
                         <tr>
                             <td>
                                 <strong><?= gofast_md_money($t['tarifa']) ?></strong>
-                                <?php if ($t['inter']): ?><small style="color:#666;"> · Intermunicipal</small><?php endif; ?>
                                 <?php if ($t['aprox']): ?><small style="color:#856404;" title="Servicios con varios destinos: valor repartido entre destinos"> *</small><?php endif; ?>
                             </td>
                             <td style="text-align:right;"><?= number_format($t['envios'], 0, ',', '.') ?></td>
@@ -1176,8 +1268,19 @@ function gofast_md_html_tarifas($datos) {
                     <?php endforeach; ?>
                     </tbody>
                     <tfoot>
+                        <?php if ($hay_inter): ?>
                         <tr style="font-weight:700;">
-                            <td>Total</td>
+                            <td><?= $tipo === 'inter' ? 'Subtotal intermunicipales' : 'Subtotal urbanos' ?></td>
+                            <td style="text-align:right;"><?= number_format($g['envios'], 0, ',', '.') ?></td>
+                            <td style="text-align:right;"><?= gofast_md_money($g['subtotal']) ?></td>
+                            <td style="text-align:right;"><?= gofast_md_money($g['recargos']) ?></td>
+                            <td style="text-align:right;"><?= $pct_g ?>%</td>
+                            <td></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if ($es_ultimo): ?>
+                        <tr style="font-weight:700;">
+                            <td>Total<?= $hay_inter ? ' (urbanos + intermunicipales)' : '' ?></td>
                             <td style="text-align:right;"><?= number_format($kpi['envios'], 0, ',', '.') ?></td>
                             <td style="text-align:right;"><?= gofast_md_money($kpi['tarifas']) ?></td>
                             <td style="text-align:right;"><?= gofast_md_money($kpi['recargos']) ?></td>
@@ -1189,9 +1292,11 @@ function gofast_md_html_tarifas($datos) {
                             <td colspan="2" style="text-align:right;"><?= gofast_md_money($kpi['tarifas'] + $kpi['recargos']) ?></td>
                             <td colspan="2"></td>
                         </tr>
+                        <?php endif; ?>
                     </tfoot>
                 </table>
             </div>
+            <?php endforeach; ?>
             <p class="gofast-md-nota">Se cuenta cada destino como un envío: un servicio con 2 destinos suma 2 envíos. Los recargos se muestran aparte.</p>
         </div>
         <div class="gofast-md-tarifas-grafica">
@@ -1457,7 +1562,7 @@ function gofast_md_js() {
             document.getElementById('gofast-md-modal-lineas').innerHTML = filas;
 
             var notas = [];
-            if (!s.cuenta) notas.push('Este servicio está pendiente (sin mensajero asignado): no se suma al total.');
+            if (!s.cuenta) notas.push('Este servicio está cancelado: no se suma al total.');
             if (s.aprox) notas.push('* La tarifa cambió después de este servicio: el valor de cada destino es aproximado; el total pagado es exacto.');
             document.getElementById('gofast-md-modal-nota').textContent = notas.join(' ');
             document.getElementById('gofast-md-modal-ver').href = '<?= esc_js(home_url('/servicio-registrado')) ?>?id=' + s.id;
@@ -1756,7 +1861,7 @@ function gofast_mis_domicilios_shortcode() {
 
     <?php if ($kpi['excluidos'] > 0): ?>
         <div class="gofast-alert-info">
-            ℹ️ <?= (int) $kpi['excluidos'] ?> servicio(s) pendientes (sin mensajero asignado) no se suman al total. Puedes verlos en la pestaña <strong>Por estado</strong> y en <strong>Detalle</strong>.
+            ℹ️ <?= (int) $kpi['excluidos'] ?> servicio(s) cancelados no se suman al total. Puedes verlos en la pestaña <strong>Por estado</strong> y en <strong>Detalle</strong>.
         </div>
     <?php endif; ?>
 
@@ -1797,8 +1902,8 @@ function gofast_mis_domicilios_shortcode() {
 
         <!-- Por destino -->
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="destino" style="display:<?= $tab === 'destino' ? 'block' : 'none' ?>;">
-            <h3>📍 A qué barrios envías más</h3>
-            <?= gofast_md_tabla_resumen($datos['por_destino'], 'Barrio destino', $kpi['tarifas'] + $kpi['recargos']) ?>
+            <h3>📍 A dónde envías más</h3>
+            <?= gofast_md_html_destinos($datos) ?>
         </div>
 
         <!-- Por mes -->
@@ -1901,7 +2006,7 @@ function gofast_mis_domicilios_shortcode() {
                         <?php endfor; ?>
                     </div>
                 <?php endif; ?>
-                <p class="gofast-md-nota">Los servicios en gris (pendientes, sin mensajero asignado) no se suman al total.</p>
+                <p class="gofast-md-nota">Los servicios en gris (cancelados) no se suman al total.</p>
             <?php endif; ?>
         </div>
     </div>

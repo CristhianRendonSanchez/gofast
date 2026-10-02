@@ -275,6 +275,15 @@ function gofast_home_shortcode() {
                             </span>
                         </a>
                     </li>
+                    <li>
+                        <a href="<?php echo esc_url( home_url('/mis-estadisticas') ); ?>" class="gofast-home-panel-link">
+                            <span class="gofast-home-panel-icon">📈</span>
+                            <span class="gofast-home-panel-text">
+                                <strong>Mis estadísticas</strong>
+                                <small>Resumen y estado de cuenta</small>
+                            </span>
+                        </a>
+                    </li>
 
                 <?php elseif ($rol === 'mensajero'): ?>
 

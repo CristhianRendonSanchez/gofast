@@ -88,7 +88,7 @@ function gofast_menu_topbar() {
         <div class="gofast-menu-inner">
             <!-- LOGO -->
             <a href="<?php echo esc_url( home_url('/') ); ?>" class="gofast-logo" aria-label="Ir al inicio">
-                <img src="https://gofastdomicilios.com/wp-content/uploads/2025/11/GoFast.png" alt="Go Fast Mensajería Express">
+                <img src="https://gofastdomicilios.com/wp-content/uploads/2026/10/Sin-titulo-1536-x-1024-px-2-scaled-e1790909499877.png" alt="Go Fast Mensajería Express">
             </a>
 
             <!-- BOTÓN HAMBURGUESA (solo móvil) -->
@@ -130,6 +130,9 @@ function gofast_menu_topbar() {
                     </a>
                     <a href="<?php echo esc_url( home_url('/mi-negocio') ); ?>" class="gofast-tab">
                         🏪 Mi negocio
+                    </a>
+                    <a href="<?php echo esc_url( home_url('/mis-estadisticas') ); ?>" class="gofast-tab">
+                        📈 Mis estadísticas
                     </a>
                     <a href="<?php echo esc_url( home_url('/cotizar') ); ?>" class="gofast-tab">
                         🛵 Nuevo envío

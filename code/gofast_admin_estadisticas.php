@@ -1,4 +1,3 @@
-<?php
 /***************************************************
  * GOFAST – ESTADÍSTICAS DE CLIENTES (PANEL GENERAL DEL ADMIN)
  * Shortcode: [gofast_admin_estadisticas]  (también acepta [gofast_admin_domicilios])
@@ -9,7 +8,7 @@
  * tarifa, cliente/negocio, mensajero, destino, trayecto, mes y estado.
  *
  * Requiere el snippet "gofast_mis_estadisticas" activo (usa sus funciones gofast_md_*).
- * Totales: solo cuentan servicios asignados, en ruta o entregados.
+ * Totales: cuentan servicios pendientes, asignados, en ruta y entregados (no los cancelados).
  ***************************************************/
 
 if (!function_exists('gofast_ad_filtros')) {
@@ -159,6 +158,23 @@ function gofast_ad_etiqueta($sv, $cat) {
     return gofast_ad_origen($sv, $cat)[1];
 }
 
+/**
+ * Orden de "Por cliente / negocio": negocios y clientes primero (por valor),
+ * después los sin registro, los creados por admin y al final los tomados por mensajeros.
+ */
+function gofast_ad_priorizar($por_negocio) {
+    $nivel = function ($label) {
+        foreach (['🏪' => 0, '👤' => 0, '📝' => 1, '🛠' => 2, '🏍' => 3] as $icono => $n) {
+            if (strpos($label, $icono) === 0) return $n;
+        }
+        return 2;
+    };
+    uksort($por_negocio, function ($a, $b) use ($por_negocio, $nivel) {
+        return [$nivel($a), $por_negocio[$b]['valor']] <=> [$nivel($b), $por_negocio[$a]['valor']];
+    });
+    return $por_negocio;
+}
+
 function gofast_ad_texto_plano($etiqueta) {
     return preg_replace('/^[^\p{L}\p{N}]+\s/u', '', $etiqueta);
 }
@@ -259,6 +275,7 @@ function gofast_ad_datos($f, $fresco = false) {
     });
 
     gofast_md_ordenar($res);
+    $res['por_negocio'] = gofast_ad_priorizar($res['por_negocio']);
     uasort($res['por_mensajero'], function ($a, $b) { return $b['valor'] <=> $a['valor']; });
 
     // Clientes cuyo primer domicilio cae dentro del periodo
@@ -291,12 +308,12 @@ function gofast_ad_kpi_anterior($f, $desde, $hasta) {
                 COALESCE(SUM(total), 0) AS total,
                 COALESCE(SUM(GREATEST(COALESCE(JSON_LENGTH(destinos, '$.destinos'), 0), 1)), 0) AS envios
          FROM servicios_gofast
-         WHERE $where AND tracking_estado IN ('asignado', 'en_ruta', 'entregado')",
+         WHERE $where AND (tracking_estado IN ('pendiente', 'asignado', 'en_ruta', 'entregado') OR tracking_estado IS NULL OR tracking_estado = '')",
         $params
     ));
     $usuarios = (array) $wpdb->get_col($wpdb->prepare(
         "SELECT DISTINCT user_id FROM servicios_gofast
-         WHERE $where AND user_id > 0 AND tracking_estado IN ('asignado', 'en_ruta', 'entregado')",
+         WHERE $where AND user_id > 0 AND (tracking_estado IN ('pendiente', 'asignado', 'en_ruta', 'entregado') OR tracking_estado IS NULL OR tracking_estado = '')",
         $params
     ));
     $cat = gofast_ad_catalogos();
@@ -356,7 +373,7 @@ function gofast_ad_origen_html($res) {
 }
 
 /**
- * Tabla de cliente/negocio o mensajero con ticket promedio y enlace opcional.
+ * Tabla de cliente/negocio o mensajero con promedio por envío y enlace opcional.
  */
 function gofast_ad_tabla_grupos($filas, $titulo_col, $total, $enlaces = null, $args_enlace = [], $limite = 300) {
     if (!$filas) {
@@ -373,7 +390,7 @@ function gofast_ad_tabla_grupos($filas, $titulo_col, $total, $enlaces = null, $a
                     <th style="text-align:right;">Servicios</th>
                     <th style="text-align:right;">Envíos</th>
                     <th style="text-align:right;">Total</th>
-                    <th style="text-align:right;">Promedio</th>
+                    <th style="text-align:right;">Promedio por envío</th>
                     <th style="min-width:120px;">% del total</th>
                     <?php if ($enlaces !== null): ?><th></th><?php endif; ?>
                 </tr>
@@ -389,12 +406,19 @@ function gofast_ad_tabla_grupos($filas, $titulo_col, $total, $enlaces = null, $a
                     <td style="text-align:right;"><?= number_format($g['servicios'], 0, ',', '.') ?></td>
                     <td style="text-align:right;"><?= number_format($g['envios'], 0, ',', '.') ?></td>
                     <td style="text-align:right;font-weight:600;"><?= gofast_md_money($g['valor']) ?></td>
-                    <td style="text-align:right;color:#666;"><?= gofast_md_money($g['servicios'] ? round($g['valor'] / $g['servicios']) : 0) ?></td>
+                    <td style="text-align:right;color:#666;"><?= gofast_md_money($g['envios'] ? round($g['valor'] / $g['envios']) : 0) ?></td>
                     <td><div class="gofast-md-barra"><span style="width:<?= min(100, $pct) ?>%;"></span></div><small><?= $pct ?>%</small></td>
                     <?php if ($enlaces !== null): ?>
                         <td>
-                            <?php if (!empty($enlaces[$label])): ?>
-                                <a href="<?= esc_url(add_query_arg(array_filter(array_merge($args_enlace, $enlaces[$label])), home_url('/mis-estadisticas'))) ?>" class="gofast-btn-mini gofast-btn-outline" style="text-decoration:none;white-space:nowrap;">Ver cliente</a>
+                            <?php if (!empty($enlaces[$label])):
+                                $args_fila = array_filter(array_merge($args_enlace, $enlaces[$label]));
+                                $args_pdf = array_merge($args_fila, ['negocio' => $args_fila['negocio'] ?? 'personal', 'gofast_md_export' => 'imprimir']);
+                                $url_md = home_url('/mis-estadisticas'); ?>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+                                    <a href="<?= esc_url(add_query_arg($args_fila, $url_md)) ?>" class="gofast-btn-mini gofast-btn-outline" style="text-decoration:none;white-space:nowrap;">Ver cliente</a>
+                                    <a href="<?= esc_url(add_query_arg($args_pdf, $url_md)) ?>" target="_blank" rel="noopener" class="gofast-btn-mini" style="text-decoration:none;white-space:nowrap;" title="Estado de cuenta con detalle (PDF)">🧾 Con detalle</a>
+                                    <a href="<?= esc_url(add_query_arg(array_merge($args_pdf, ['detalle' => '0']), $url_md)) ?>" target="_blank" rel="noopener" class="gofast-btn-mini" style="text-decoration:none;white-space:nowrap;" title="Estado de cuenta sin detalle, por tarifas (PDF)">🧾 Sin detalle</a>
+                                </div>
                             <?php endif; ?>
                         </td>
                     <?php endif; ?>
@@ -629,13 +653,17 @@ function gofast_ad_informe($f, $d) {
         <div class="kpi"><b><?= number_format($d['clientes'], 0, ',', '.') ?></b>Clientes activos</div>
     </div>
 
-    <h2>Resumen por tarifa</h2>
+    <?php
+    $grupos = gofast_md_tarifas_por_tipo($d['por_tarifa']);
+    $hay_inter = !empty($grupos['inter']['filas']);
+    foreach ($grupos as $tipo => $g): if (!$g['filas']) continue; ?>
+    <h2><?= $tipo === 'inter' ? 'Envíos intermunicipales' : ($hay_inter ? 'Resumen por tarifa · urbanos' : 'Resumen por tarifa') ?></h2>
     <table>
         <thead><tr><th>Tarifa</th><th class="n">Envíos</th><th class="n">Subtotal</th><th class="n">Recargos</th><th class="n">Total</th></tr></thead>
         <tbody>
-        <?php foreach ($d['por_tarifa'] as $t): ?>
+        <?php foreach ($g['filas'] as $t): ?>
             <tr>
-                <td><?= gofast_md_money($t['tarifa']) ?><?= $t['inter'] ? ' (intermunicipal)' : '' ?></td>
+                <td><?= gofast_md_money($t['tarifa']) ?></td>
                 <td class="n"><?= number_format($t['envios'], 0, ',', '.') ?></td>
                 <td class="n"><?= gofast_md_money($t['subtotal']) ?></td>
                 <td class="n"><?= gofast_md_money($t['recargos']) ?></td>
@@ -643,8 +671,16 @@ function gofast_ad_informe($f, $d) {
             </tr>
         <?php endforeach; ?>
         </tbody>
-        <tfoot><tr><td>Total</td><td class="n"><?= number_format($kpi['envios'], 0, ',', '.') ?></td><td class="n"><?= gofast_md_money($kpi['tarifas']) ?></td><td class="n"><?= gofast_md_money($kpi['recargos']) ?></td><td class="n"><?= gofast_md_money($kpi['tarifas'] + $kpi['recargos']) ?></td></tr></tfoot>
+        <tfoot>
+            <?php if ($hay_inter): ?>
+            <tr><td><?= $tipo === 'inter' ? 'Subtotal intermunicipales' : 'Subtotal urbanos' ?></td><td class="n"><?= number_format($g['envios'], 0, ',', '.') ?></td><td class="n"><?= gofast_md_money($g['subtotal']) ?></td><td class="n"><?= gofast_md_money($g['recargos']) ?></td><td class="n"><?= gofast_md_money($g['subtotal'] + $g['recargos']) ?></td></tr>
+            <?php endif; ?>
+            <?php if ($tipo === 'inter' || !$hay_inter): ?>
+            <tr><td>Total<?= $hay_inter ? ' (urbanos + intermunicipales)' : '' ?></td><td class="n"><?= number_format($kpi['envios'], 0, ',', '.') ?></td><td class="n"><?= gofast_md_money($kpi['tarifas']) ?></td><td class="n"><?= gofast_md_money($kpi['recargos']) ?></td><td class="n"><?= gofast_md_money($kpi['tarifas'] + $kpi['recargos']) ?></td></tr>
+            <?php endif; ?>
+        </tfoot>
     </table>
+    <?php endforeach; ?>
 
     <div class="dos">
         <div>
@@ -694,7 +730,7 @@ function gofast_ad_informe($f, $d) {
         <?php endforeach; ?>
         </tbody>
     </table>
-    <p class="muted">Los totales incluyen los servicios con mensajero asignado. No incluyen los pendientes (sin mensajero asignado).</p>
+    <p class="muted">Los totales incluyen los servicios pendientes, asignados, en ruta y entregados. No incluyen los cancelados.</p>
 </body>
 </html><?php
 }
@@ -712,7 +748,7 @@ function gofast_admin_domicilios_shortcode() {
     $cat = gofast_ad_catalogos();
     $labels = gofast_md_estado_labels();
     $tab = sanitize_key($_GET['tab'] ?? 'tarifa');
-    $tabs_ok = ['tarifa', 'cliente', 'mensajero', 'destino', 'trayecto', 'mes', 'estado', 'detalle'];
+    $tabs_ok = ['tarifa', 'cliente', 'mensajero', 'destino', 'mes', 'estado', 'detalle'];
     if (!in_array($tab, $tabs_ok, true)) $tab = 'tarifa';
 
     $datos = gofast_ad_datos($f, !empty($_GET['fresco']));
@@ -720,8 +756,8 @@ function gofast_admin_domicilios_shortcode() {
 
     list($ant_desde, $ant_hasta) = gofast_md_rango_anterior($f['desde'], $f['hasta']);
     $ant = gofast_ad_kpi_anterior($f, $ant_desde, $ant_hasta);
-    $promedio = $kpi['servicios'] ? round($kpi['total'] / $kpi['servicios']) : 0;
-    $promedio_ant = $ant['servicios'] ? round($ant['total'] / $ant['servicios']) : 0;
+    $promedio = $kpi['envios'] ? round($kpi['total'] / $kpi['envios']) : 0;
+    $promedio_ant = $ant['envios'] ? round($ant['total'] / $ant['envios']) : 0;
 
     list($modo_grafica, $puntos) = gofast_md_puntos_grafica($datos, $f['desde'], $f['hasta']);
 
@@ -869,7 +905,7 @@ function gofast_admin_domicilios_shortcode() {
         <div class="gofast-box gofast-ad-kpi" style="text-align:center;padding:18px;">
             <div style="font-size:30px;margin-bottom:6px;">🧾</div>
             <div style="font-size:24px;font-weight:700;color:#9C27B0;margin-bottom:4px;"><?= gofast_md_money($promedio) ?></div>
-            <div style="font-size:13px;color:#666;">Promedio por servicio</div>
+            <div style="font-size:13px;color:#666;">Promedio por envío</div>
             <?= gofast_md_delta($promedio, $promedio_ant) ?>
         </div>
         <div class="gofast-box gofast-ad-kpi" style="text-align:center;padding:18px;">
@@ -891,33 +927,9 @@ function gofast_admin_domicilios_shortcode() {
 
     <?php if ($kpi['excluidos'] > 0): ?>
         <div class="gofast-alert-info">
-            ℹ️ <?= number_format($kpi['excluidos'], 0, ',', '.') ?> servicio(s) pendientes (sin mensajero asignado) no se suman a los totales. Puedes verlos en <strong>Por estado</strong> y en <strong>Detalle</strong>.
+            ℹ️ <?= number_format($kpi['excluidos'], 0, ',', '.') ?> servicio(s) cancelados no se suman a los totales. Puedes verlos en <strong>Por estado</strong> y en <strong>Detalle</strong>.
         </div>
     <?php endif; ?>
-
-    <!-- Gráficas -->
-    <div class="gofast-md-grid">
-        <div class="gofast-box">
-            <h3 style="margin-top:0;">📈 Ingresos por <?= $modo_grafica === 'dia' ? 'día' : 'mes' ?></h3>
-            <?= gofast_md_grafica($puntos) ?>
-            
-        </div>
-        <div class="gofast-box">
-            <h3 style="margin-top:0;">🧭 Origen de los pedidos</h3>
-            <?= gofast_ad_origen_html($datos) ?>
-        </div>
-    </div>
-
-    <div class="gofast-md-grid-2">
-        <div class="gofast-box">
-            <h3 style="margin-top:0;">🏆 Clientes y negocios que más piden</h3>
-            <?= gofast_md_top(array_intersect_key($datos['por_negocio'], $datos['enlaces']), $kpi['total']) ?>
-        </div>
-        <div class="gofast-box">
-            <h3 style="margin-top:0;">🏍️ Mensajeros con más servicios</h3>
-            <?= gofast_md_top($datos['por_mensajero'], $kpi['total']) ?>
-        </div>
-    </div>
 
     <!-- Resúmenes -->
     <div class="gofast-box" style="margin-bottom:20px;">
@@ -928,7 +940,6 @@ function gofast_admin_domicilios_shortcode() {
                 'cliente'   => '🏪 Por cliente / negocio',
                 'mensajero' => '🏍️ Por mensajero',
                 'destino'   => '📍 Por destino',
-                'trayecto'  => '🛣️ Por trayecto',
                 'mes'       => '📅 Por mes',
                 'estado'    => '🚦 Por estado',
                 'detalle'   => '📋 Detalle',
@@ -947,7 +958,7 @@ function gofast_admin_domicilios_shortcode() {
 
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="cliente" style="display:<?= $tab === 'cliente' ? 'block' : 'none' ?>;">
             <h3>🏪 Domicilios por cliente o negocio</h3>
-            <p class="gofast-md-nota" style="margin-top:0;">🏪 negocio · 👤 cliente registrado · 🏍️ pedido que el mensajero tomó y registró a su nombre · 🛠️ creado por un admin · 📝 sin cuenta. "Ver cliente" abre la vista que ve ese cliente.</p>
+            <p class="gofast-md-nota" style="margin-top:0;">🏪 negocio · 👤 cliente registrado · 🏍️ pedido que el mensajero tomó y registró a su nombre · 🛠️ creado por un admin · 📝 sin cuenta. Primero negocios y clientes, después los tomados por mensajeros. "Ver cliente" abre la vista que ve ese cliente; "Con detalle" y "Sin detalle" descargan su estado de cuenta del periodo.</p>
             <?= gofast_ad_tabla_grupos($datos['por_negocio'], 'Cliente / negocio', $kpi['total'], $datos['enlaces'], $args_cliente) ?>
         </div>
 
@@ -957,16 +968,8 @@ function gofast_admin_domicilios_shortcode() {
         </div>
 
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="destino" style="display:<?= $tab === 'destino' ? 'block' : 'none' ?>;">
-            <h3>📍 Barrios con más envíos</h3>
-            <?= gofast_md_tabla_resumen(array_slice($datos['por_destino'], 0, 200, true), 'Barrio destino', $kpi['tarifas'] + $kpi['recargos']) ?>
-            <?php if (count($datos['por_destino']) > 200): ?>
-                <p class="gofast-md-nota">Se muestran los 200 barrios con más envíos de <?= count($datos['por_destino']) ?>.</p>
-            <?php endif; ?>
-        </div>
-
-        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="trayecto" style="display:<?= $tab === 'trayecto' ? 'block' : 'none' ?>;">
-            <h3>🛣️ Trayectos más frecuentes</h3>
-            <?= gofast_md_html_trayectos($datos) ?>
+            <h3>📍 Destinos con más envíos</h3>
+            <?= gofast_md_html_destinos($datos) ?>
         </div>
 
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="mes" style="display:<?= $tab === 'mes' ? 'block' : 'none' ?>;">
@@ -1052,8 +1055,36 @@ function gofast_admin_domicilios_shortcode() {
                 <script>window.gofastMdDetalle = <?= wp_json_encode($detalle_js) ?>;</script>
 
                 <?= gofast_ad_paginacion($total_paginas, $pagina, $args, $url_base) ?>
-                <p class="gofast-md-nota">Los servicios en gris (pendientes, sin mensajero asignado) no se suman a los totales.</p>
+                <p class="gofast-md-nota">Los servicios en gris (cancelados) no se suman a los totales.</p>
             <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Gráficas -->
+    <div class="gofast-box" style="margin-bottom:20px;">
+        <h3 style="margin-top:0;">📈 Ingresos por <?= $modo_grafica === 'dia' ? 'día' : 'mes' ?></h3>
+        <?= gofast_md_grafica($puntos) ?>
+    </div>
+    <div class="gofast-box" style="margin-bottom:20px;">
+        <h3 style="margin-top:0;">📍 Barrios con más envíos</h3>
+        <?= gofast_md_top($datos['por_destino'], $kpi['tarifas'] + $kpi['recargos'], 5, 'envios') ?>
+    </div>
+
+    <!-- Información adicional (solo admin) -->
+    <h3 style="margin:28px 0 12px;">ℹ️ Información adicional</h3>
+    <div class="gofast-box" style="margin-bottom:20px;">
+        <h3 style="margin-top:0;">🧭 Origen de los pedidos</h3>
+        <?= gofast_ad_origen_html($datos) ?>
+    </div>
+
+    <div class="gofast-md-grid-2">
+        <div class="gofast-box">
+            <h3 style="margin-top:0;">🏆 Clientes y negocios que más piden</h3>
+            <?= gofast_md_top(array_intersect_key($datos['por_negocio'], $datos['enlaces']), $kpi['total']) ?>
+        </div>
+        <div class="gofast-box">
+            <h3 style="margin-top:0;">🏍️ Mensajeros con más servicios</h3>
+            <?= gofast_md_top($datos['por_mensajero'], $kpi['total']) ?>
         </div>
     </div>
 
@@ -1066,6 +1097,26 @@ function gofast_admin_domicilios_shortcode() {
             <a href="<?= $url_export('resumen') ?>" class="gofast-btn-mini gofast-btn-outline">📊 Resúmenes (Excel)</a>
             <a href="<?= $url_export('detalle') ?>" class="gofast-btn-mini gofast-btn-outline">📋 Detalle por envío (Excel)</a>
         </div>
+        <?php if ($f['cliente'] > 0):
+            $args_md = array_filter([
+                'cliente_id' => $f['cliente'],
+                'periodo'    => $f['periodo'],
+                'desde'      => $args['desde'] ?? null,
+                'hasta'      => $args['hasta'] ?? null,
+                'negocio'    => $f['negocio'] > 0 ? $f['negocio'] : null,
+            ]);
+            $url_md = function ($extra) use ($args_md, $url_base) {
+                return esc_url(add_query_arg(array_merge($args_md, $extra), $url_base));
+            };
+        ?>
+            <h4 style="margin:18px 0 6px;">👤 Lo que descarga el cliente · <?= esc_html($cat['usuarios'][$f['cliente']]->nombre ?? '#' . $f['cliente']) ?></h4>
+            <div class="gofast-md-descargas">
+                <a href="<?= $url_md(['gofast_md_export' => 'imprimir']) ?>" target="_blank" rel="noopener" class="gofast-btn-mini">🧾 Estado de cuenta con detalle (PDF)</a>
+                <a href="<?= $url_md(['gofast_md_export' => 'imprimir', 'detalle' => '0']) ?>" target="_blank" rel="noopener" class="gofast-btn-mini">🧾 Estado de cuenta sin detalle · por tarifas (PDF)</a>
+                <a href="<?= $url_md(['gofast_md_export' => 'tarifas']) ?>" class="gofast-btn-mini gofast-btn-outline">📊 Resumen por tarifa (Excel)</a>
+                <a href="<?= $url_md(['gofast_md_export' => 'detalle']) ?>" class="gofast-btn-mini gofast-btn-outline">📋 Detalle por envío (Excel)</a>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
