@@ -1753,7 +1753,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <?php endforeach; ?>
                                         </select>
                                         <?php if (!empty($p->mensajero_id) && $asignado_por !== '—'): ?>
-                                            <div style="font-size:10px;color:#666;margin-top:2px;">
+                                            <div style="font-size:11px;color:#666;margin-top:2px;">
                                                 <?php if ($asignado_por_tipo === 'auto'): ?>
                                                     <span style="color:#28a745;">✓ Auto-asignado</span>
                                                 <?php else: ?>
@@ -1766,7 +1766,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <div>
                                         <?php echo esc_html($mensajero_nombre); ?>
                                         <?php if (!empty($p->mensajero_id) && $asignado_por !== '—'): ?>
-                                            <div style="font-size:10px;color:#666;margin-top:2px;">
+                                            <div style="font-size:11px;color:#666;margin-top:2px;">
                                                 <?php if ($asignado_por_tipo === 'auto'): ?>
                                                     <span style="color:#28a745;">(Auto-asignado)</span>
                                                 <?php else: ?>
@@ -3165,25 +3165,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* Tabla compacta: 7 columnas que caben sin scroll lateral */
 .gofast-pedidos-table th,
-.gofast-pedidos-table td { vertical-align: top; padding: 10px 8px; font-size: 13px; overflow-wrap: anywhere; }
-.gofast-pedidos-table th { font-size: 12px; white-space: nowrap; }
-.gofast-pedidos-table .gp-col-id { width: 92px; }
+.gofast-pedidos-table td { vertical-align: top; padding: 10px 8px; font-size: 14px; overflow-wrap: anywhere; }
+.gofast-pedidos-table th { font-size: 13px; white-space: nowrap; }
+.gofast-pedidos-table .gp-col-id { width: 100px; }
 .gofast-pedidos-table .gp-col-cliente { width: 15%; }
 .gofast-pedidos-table .gp-col-ruta { width: auto; }
 .gofast-pedidos-table .gp-col-mensajero { width: 150px; }
 .gofast-pedidos-table .gp-col-total { width: 96px; text-align: right; }
 .gofast-pedidos-table .gp-col-estado { width: 118px; }
 .gofast-pedidos-table .gp-col-acciones { width: 116px; }
-.gofast-pedidos-table .gp-sub { display: block; color: #777; font-size: 11px; line-height: 1.35; margin-top: 2px; }
+.gofast-pedidos-table .gp-sub { display: block; color: #777; font-size: 12px; line-height: 1.35; margin-top: 2px; }
 .gofast-pedidos-table .gp-texto { display: block; font-weight: 600; line-height: 1.3; }
 .gofast-pedidos-table .gp-fecha { display: block; font-weight: 700; white-space: nowrap; }
-.gofast-pedidos-table .gp-tel { color: #222; font-weight: 700; font-size: 12px; }
-.gofast-pedidos-table .gp-badge { display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.gofast-pedidos-table .gp-tel { color: #222; font-weight: 700; font-size: 13px; }
+.gofast-pedidos-table .gp-badge { display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .gofast-pedidos-table .gp-badge-alerta { background: #ffc107; color: #000; }
 .gofast-pedidos-table .gp-badge-inter { background: #f3e5f5; color: #6a1b9a; }
 .gofast-pedidos-table .gp-badge-recargo { background: #fff3cd; color: #856404; }
-.gofast-pedidos-table .gp-origen { font-weight: 600; font-size: 12px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gofast-pedidos-table .gp-destinos { font-size: 12px; color: #444; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.gofast-pedidos-table .gp-origen { font-weight: 600; font-size: 13px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gofast-pedidos-table .gp-destinos { font-size: 13px; color: #444; line-height: 1.35; }
 .gofast-pedidos-table .gp-destinos span { display: block; }
 .gofast-pedidos-table .gofast-estado-form { display: block !important; width: 100%; }
 .gofast-pedidos-table .gofast-estado-form select,
@@ -3191,7 +3191,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .gofast-pedidos-table .gp-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .gofast-pedidos-table .gp-accion-form { margin: 0; display: contents; }
 .gofast-pedidos-table .gp-accion { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 40px; padding: 4px 2px; border: 1px solid #e3e3e3; border-radius: 6px; background: #fff; color: #333; font-size: 15px; line-height: 1; text-decoration: none; cursor: pointer; box-shadow: none; width: 100%; margin: 0; }
-.gofast-pedidos-table .gp-accion span { font-size: 10px; font-weight: 600; color: #555; white-space: nowrap; }
+.gofast-pedidos-table .gp-accion span { font-size: 11px; font-weight: 600; color: #555; white-space: nowrap; }
 .gofast-pedidos-table .gp-accion:hover { background: #fff9d6; border-color: #F4C524; }
 .gofast-pedidos-table .gp-accion-wa span { color: #128C7E; }
 .gofast-pedidos-table .gp-accion-editar { background: #F4C524; border-color: #F4C524; }
@@ -3204,7 +3204,7 @@ document.addEventListener('DOMContentLoaded', function() {
     .gofast-pedidos-table .gp-col-mensajero { width: 128px; }
     .gofast-pedidos-table .gp-col-estado { width: 106px; }
     .gofast-pedidos-table .gp-col-acciones { width: 112px; }
-    .gofast-pedidos-table .gp-accion span { font-size: 9px; }
+    .gofast-pedidos-table .gp-accion span { font-size: 10px; }
 }
 
 /* Vista Desktop: Mostrar tabla, ocultar cards */

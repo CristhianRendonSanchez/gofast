@@ -1,0 +1,18 @@
+---
+description: Validar localmente cada cambio antes de llevarlo a Hostinger
+alwaysApply: true
+---
+
+# Validar en local después de cada cambio
+
+- Responder siempre en español.
+- Después de CADA cambio en `code/*.php`, validarlo en local antes de dar la tarea por terminada:
+  1. `php -l` sobre el archivo (los snippets sin `<?php` se copian a un temporal con `<?php` antepuesto).
+  2. Abrir la página en el servidor local y revisar que no haya errores PHP en el HTML.
+  3. Verlo en el navegador (captura de pantalla) y, si hay cifras, comprobar que cuadren.
+- Servidor local: `%TEMP%\phpport\php.exe -S 127.0.0.1:8099 -t %TEMP%\preview_srv %TEMP%\preview_srv\router.php`
+  - Rutas: `/admin-estadisticas/`, `/mis-estadisticas/`, `/mis-pedidos/`.
+  - Sesión simulada: `/?como=admin` o `/?como=cliente&uid=117`.
+  - Base SQLite local de solo lectura (`%TEMP%\gofast.sqlite`); el router nunca escribe.
+- Si una página nueva aún no está en el router, agregarla antes de validar.
+- Solo después de validar en local se indica qué snippets subir a Hostinger.

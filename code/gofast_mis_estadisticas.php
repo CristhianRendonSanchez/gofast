@@ -196,7 +196,193 @@ function gofast_md_filtros() {
     if ($negocio !== 'todos' && $negocio !== 'personal') {
         $negocio = (string) max(0, (int) $negocio);
     }
-    return ['periodo' => $periodo, 'desde' => $desde, 'hasta' => $hasta, 'negocio' => $negocio];
+    $recargo = sanitize_key($_GET['recargo'] ?? '');
+    $tipo = sanitize_key($_GET['tipo'] ?? '');
+    // La franja horaria es solo para el admin
+    $es_admin = strtolower($_SESSION['gofast_user_rol'] ?? '') === 'admin';
+    return [
+        'periodo'   => $periodo,
+        'desde'     => $desde,
+        'hasta'     => $hasta,
+        'negocio'   => $negocio,
+        'mensajero' => max(-1, (int) ($_GET['mensajero'] ?? 0)),
+        'recargo'   => in_array($recargo, ['con', 'sin'], true) ? $recargo : '',
+        'tipo'      => in_array($tipo, ['urbano', 'inter'], true) ? $tipo : '',
+        'horas'     => $es_admin ? gofast_md_horas_get() : [],
+    ];
+}
+
+/**
+ * Franjas horarias elegidas en el filtro: lista de [desde, hasta) en minutos del día (0-1439),
+ * hasta excluido; si hasta es menor o igual que desde, la franja cruza la medianoche.
+ * Llega como horas=08:30-10:14,14:00-15:59 (minuto final incluido), como horas sueltas de los
+ * enlaces anteriores (8-11, hora final excluida) o como franja=manana|tarde|noche.
+ * Sin franjas = todo el día.
+ */
+function gofast_md_horas_get() {
+    $franja = sanitize_key($_GET['franja'] ?? '');
+    $texto = (string) ($_GET['horas'] ?? '');
+    if ($texto === '' && isset(gofast_md_franjas()[$franja])) {
+        list(, $desde, $hasta) = gofast_md_franjas()[$franja];
+        $texto = $desde . '-' . $hasta;
+    }
+    return gofast_md_horas_parse($texto);
+}
+
+function gofast_md_horas_parse($texto) {
+    $minuto = function ($t) {
+        if (!preg_match('/^(\d{1,2})(?::(\d{2}))?$/', trim($t), $m)) return null;
+        $h = (int) $m[1];
+        $i = isset($m[2]) ? (int) $m[2] : 0;
+        if ($h > 24 || $i > 59 || ($h === 24 && $i > 0)) return null;
+        return ($h * 60 + $i) % 1440;
+    };
+    $tramos = [];
+    foreach (array_slice(explode(',', $texto), 0, 8) as $parte) {
+        $ab = explode('-', $parte);
+        if (count($ab) !== 2) continue;
+        $a = $minuto($ab[0]);
+        $b = $minuto($ab[1]);
+        if ($a === null || $b === null) continue;
+        if (strpos($ab[1], ':') !== false) $b = ($b + 1) % 1440;
+        if ($a === $b) return [];
+        $tramos[$a . '-' . $b] = [$a, $b];
+    }
+    ksort($tramos, SORT_NATURAL);
+    return array_values($tramos);
+}
+
+/** ¿La fecha (Y-m-d H:i:s) cae en alguna de las franjas? */
+function gofast_md_horas_dentro($tramos, $fecha) {
+    $m = (int) substr($fecha, 11, 2) * 60 + (int) substr($fecha, 14, 2);
+    foreach ($tramos as $t) {
+        if ($t[0] < $t[1] ? ($m >= $t[0] && $m < $t[1]) : ($m >= $t[0] || $m < $t[1])) return true;
+    }
+    return false;
+}
+
+function gofast_md_hhmm($minutos) {
+    return sprintf('%02d:%02d', intdiv($minutos, 60), $minutos % 60);
+}
+
+/** Minuto final incluido de una franja (hasta - 1). */
+function gofast_md_horas_fin($t) {
+    return gofast_md_hhmm(($t[1] + 1439) % 1440);
+}
+
+/** horas=... para la URL (08:30-10:14,14:00-15:59). */
+function gofast_md_horas_arg($tramos) {
+    return implode(',', array_map(function ($t) { return gofast_md_hhmm($t[0]) . '-' . gofast_md_horas_fin($t); }, $tramos));
+}
+
+/** Texto legible: 08:30 a 10:14, 14:00 a 15:59. */
+function gofast_md_horas_texto($tramos) {
+    if (!$tramos) return 'Todo el día';
+    return implode(', ', array_map(function ($t) { return gofast_md_hhmm($t[0]) . ' a ' . gofast_md_horas_fin($t); }, $tramos));
+}
+
+/**
+ * Selector de franja horaria (admin): una o varias franjas "desde - hasta" con listas de hora y
+ * minuto (24 h), atajos de mañana, tarde y noche. Las filas no se envían: el JS arma horas=...
+ * en el campo oculto. Sin franjas se muestra una fila de todo el día (00:00 a 23:59).
+ */
+function gofast_md_html_horas($tramos) {
+    $hm = function ($minutos, $etiqueta) {
+        $h = intdiv($minutos, 60);
+        $m = $minutos % 60;
+        $html = '<span class="gofast-md-horas-hm" aria-label="' . esc_attr($etiqueta) . '"><select data-md-h aria-label="' . esc_attr($etiqueta) . ' (hora)">';
+        for ($i = 0; $i < 24; $i++) $html .= sprintf('<option value="%02d"%s>%02d</option>', $i, $i === $h ? ' selected' : '', $i);
+        $html .= '</select>:<select data-md-m aria-label="' . esc_attr($etiqueta) . ' (minuto)">';
+        for ($i = 0; $i < 60; $i++) $html .= sprintf('<option value="%02d"%s>%02d</option>', $i, $i === $m ? ' selected' : '', $i);
+        return $html . '</select></span>';
+    };
+    $fila = function ($desde = 0, $hasta = 1439) use ($hm) {
+        return '<div class="gofast-md-horas-fila" data-md-horas-fila>'
+            . $hm($desde, 'Desde') . '<span>a</span>' . $hm($hasta, 'Hasta')
+            . '<button type="button" data-md-horas-quitar title="Quitar esta franja" aria-label="Quitar esta franja">✕</button>'
+            . '</div>';
+    };
+    ob_start();
+    ?>
+    <details class="gofast-md-horas" data-md-horas>
+        <summary>🕐 <span data-md-horas-txt><?= esc_html(gofast_md_horas_texto($tramos)) ?></span></summary>
+        <div class="gofast-md-horas-panel">
+            <input type="hidden" name="horas" value="<?= esc_attr(gofast_md_horas_arg($tramos)) ?>">
+            <div class="gofast-md-horas-atajos">
+                <span>Atajos:</span>
+                <?php foreach (gofast_md_franjas() as $fr): ?>
+                    <button type="button" data-md-horas-atajo="<?= esc_attr(gofast_md_horas_arg([[$fr[1] * 60, $fr[2] * 60]])) ?>"><?= esc_html(preg_replace('/ \(.*\)$/', '', $fr[0])) ?></button>
+                <?php endforeach; ?>
+            </div>
+            <div data-md-horas-filas>
+                <?php
+                if (!$tramos) echo $fila();
+                foreach ($tramos as $t) echo $fila($t[0], ($t[1] + 1439) % 1440);
+                ?>
+            </div>
+            <template data-md-horas-molde><?= $fila() ?></template>
+            <div class="gofast-md-horas-acciones">
+                <button type="button" data-md-horas-agregar>+ Agregar franja</button>
+                <button type="button" data-md-horas-limpiar>Todo el día</button>
+                <button type="submit" class="gofast-btn-mini">Aplicar</button>
+            </div>
+            <small>Incluye la hora inicial y la final (08:00 a 09:59). Si la final es menor que la inicial, la franja cruza la medianoche (22:00 a 01:59). 00:00 a 23:59 es todo el día.</small>
+        </div>
+    </details>
+    <?php
+    return ob_get_clean();
+}
+
+/**
+ * Franjas horarias: [etiqueta, hora inicial, hora final exclusiva]. La noche cruza la medianoche.
+ */
+function gofast_md_franjas() {
+    return [
+        'manana' => ['🌅 Mañana (6:00 a 11:59)', 6, 12],
+        'tarde'  => ['☀️ Tarde (12:00 a 17:59)', 12, 18],
+        'noche'  => ['🌙 Noche (18:00 a 5:59)', 18, 6],
+    ];
+}
+
+/**
+ * Textos de los filtros de mensajero y recargo activos (para avisos y PDF).
+ */
+function gofast_md_filtros_texto($filtros) {
+    $textos = [];
+    $mensajero = $filtros['mensajero'] ?? 0;
+    if ($mensajero === -1) {
+        $textos[] = '🏍️ Sin mensajero asignado';
+    } elseif ($mensajero > 0) {
+        $textos[] = '🏍️ ' . (gofast_md_nombres_usuarios([$mensajero])[$mensajero] ?? 'Mensajero #' . $mensajero);
+    }
+    if (($filtros['recargo'] ?? '') !== '') {
+        $textos[] = $filtros['recargo'] === 'con' ? '➕ Solo con recargo' : '➖ Solo sin recargo';
+    }
+    if (($filtros['tipo'] ?? '') !== '') {
+        $textos[] = $filtros['tipo'] === 'inter' ? '🌐 Solo intermunicipales' : '🏙️ Solo urbanos';
+    }
+    if (!empty($filtros['horas'])) {
+        $textos[] = '🕐 ' . gofast_md_horas_texto($filtros['horas']);
+    }
+    return $textos;
+}
+
+/**
+ * ¿El servicio pasa los filtros de mensajero y recargo? (vista cliente y admin)
+ */
+function gofast_md_pasa_filtros_extra($sv, $filtros) {
+    $mensajero = $filtros['mensajero'] ?? 0;
+    if ($mensajero === -1 && $sv['mensajero_id'] > 0) return false;
+    if ($mensajero > 0 && $sv['mensajero_id'] !== $mensajero) return false;
+    $recargo = $filtros['recargo'] ?? '';
+    if ($recargo !== '') {
+        $con = array_sum(array_column($sv['lineas'], 'recargo')) > 0;
+        if (($recargo === 'con') !== $con) return false;
+    }
+    $tipo = $filtros['tipo'] ?? '';
+    if ($tipo !== '' && ($tipo === 'inter') !== $sv['inter']) return false;
+    if (!empty($filtros['horas']) && !gofast_md_horas_dentro($filtros['horas'], $sv['fecha'])) return false;
+    return true;
 }
 
 /**
@@ -533,6 +719,7 @@ function gofast_md_datos($user_id, $filtros) {
     $res['negocios_map'] = $negocios_map;
     $res['negocios_nit'] = $negocios_nit;
     $res['conteo_negocios'] = ['todos' => 0, 'personal' => 0];
+    $res['mensajeros_periodo'] = [];
 
     foreach ((array) $filas as $s) {
         $sv = gofast_md_calcular($s, $tarifas);
@@ -546,6 +733,9 @@ function gofast_md_datos($user_id, $filtros) {
         if ($filtros['negocio'] === 'personal' && $sv['negocio_id'] > 0) continue;
         if ($filtros['negocio'] !== 'todos' && $filtros['negocio'] !== 'personal' && $sv['negocio_id'] !== (int) $filtros['negocio']) continue;
 
+        if ($sv['mensajero_id'] > 0) $res['mensajeros_periodo'][$sv['mensajero_id']] = true;
+        if (!gofast_md_pasa_filtros_extra($sv, $filtros)) continue;
+
         $sv['negocio'] = $sv['negocio_id'] > 0
             ? ($negocios_map[$sv['negocio_id']] ?? ('Negocio #' . $sv['negocio_id']))
             : 'Personal / sin negocio';
@@ -555,6 +745,29 @@ function gofast_md_datos($user_id, $filtros) {
     }
 
     gofast_md_ordenar($res);
+    $res['por_mensajero'] = gofast_md_por_mensajero($res['servicios']);
+    return $res;
+}
+
+/** Resumen por mensajero de los servicios que cuentan (vista cliente): nombre => servicios, envíos y valor. */
+function gofast_md_por_mensajero($servicios) {
+    $por_id = [];
+    foreach ($servicios as $sv) {
+        if (!$sv['cuenta']) continue;
+        $mid = $sv['mensajero_id'] > 0 ? $sv['mensajero_id'] : 0;
+        if (!isset($por_id[$mid])) $por_id[$mid] = ['servicios' => 0, 'envios' => 0, 'valor' => 0];
+        $por_id[$mid]['servicios']++;
+        $por_id[$mid]['envios'] += count($sv['lineas']);
+        $por_id[$mid]['valor'] += $sv['total'];
+    }
+    $nombres = gofast_md_nombres_usuarios(array_keys($por_id));
+    $res = [];
+    foreach ($por_id as $mid => $g) {
+        $nombre = $mid ? ($nombres[$mid] ?? 'Mensajero #' . $mid) : 'Sin asignar';
+        if (isset($res[$nombre])) $nombre .= ' #' . $mid;
+        $res[$nombre] = $g;
+    }
+    uasort($res, function ($a, $b) { return $b['valor'] <=> $a['valor']; });
     return $res;
 }
 
@@ -715,6 +928,9 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
                     <span class="muted"><?= esc_html($linea) ?></span><br>
                 <?php endforeach; ?>
                 <span class="muted"><?= esc_html(gofast_md_fecha_corta($filtros['desde'])) ?> – <?= esc_html(gofast_md_fecha_corta($filtros['hasta'])) ?></span>
+                <?php foreach (gofast_md_filtros_texto($filtros) as $texto): ?>
+                    <br><span class="muted"><?= esc_html($texto) ?></span>
+                <?php endforeach; ?>
             </div>
         </div>
 
@@ -819,7 +1035,148 @@ function gofast_md_estado_cuenta($ctx, $filtros, $datos, $con_detalle = true) {
 /**
  * Tabla de resumen genérica: filas [label => ['envios', 'valor', ...]]
  */
-function gofast_md_tabla_resumen($filas, $titulo_col, $total_valor, $col_servicios = false, $etiqueta_total = 'Total', $totales_extra = []) {
+/**
+ * Barra de filtro propia de un tab: buscador y chips. Filtra en el navegador las filas
+ * del tab; si el tab tiene secciones (data-md-seccion), los chips muestran u ocultan secciones.
+ * Con $lista se muestra una lista desplegable que deja solo la fila con ese nombre (data-md-nombre).
+ */
+function gofast_md_tabfiltro($chips = [], $placeholder = '🔍 Buscar…', $lista = [], $lista_todos = 'Todos') {
+    ob_start();
+    ?>
+    <div class="gofast-md-tabfiltro" data-md-tabfiltro>
+        <?php if ($lista): ?>
+            <select data-md-lista class="gofast-md-select2" style="width:260px;" aria-label="<?= esc_attr($lista_todos) ?>">
+                <option value=""><?= esc_html($lista_todos) ?></option>
+                <?php foreach ($lista as $nombre): ?>
+                    <option value="<?= esc_attr($nombre) ?>"><?= esc_html($nombre) ?></option>
+                <?php endforeach; ?>
+            </select>
+        <?php endif; ?>
+        <?php if ($placeholder !== ''): ?>
+            <input type="search" data-md-buscar placeholder="<?= esc_attr($placeholder) ?>" aria-label="Buscar en este tab">
+        <?php endif; ?>
+        <?php if ($chips): ?>
+            <span class="gofast-md-tabchips">
+                <?php $primero = true;
+                foreach ($chips as $valor => $label): ?>
+                    <button type="button" data-md-grupo="<?= esc_attr($valor) ?>" class="<?= $primero ? 'on' : '' ?>"><?= esc_html($label) ?></button>
+                <?php $primero = false;
+                endforeach; ?>
+            </span>
+        <?php endif; ?>
+        <small data-md-conteo></small>
+    </div>
+    <?php
+    return ob_get_clean();
+}
+
+/**
+ * Filtros propios del tab Detalle leídos de GET: estado, mensajero (-1 = sin asignar),
+ * barrio de destino y texto (# de servicio, dirección, negocio).
+ */
+function gofast_md_det_filtros() {
+    $estado = sanitize_key($_GET['det_estado'] ?? '');
+    if (!isset(gofast_md_estado_labels()[$estado])) $estado = '';
+    $mensajero = (int) ($_GET['det_mensajero'] ?? 0);
+    return [
+        'estado'    => $estado,
+        'mensajero' => $mensajero >= -1 ? $mensajero : 0,
+        'barrio'    => trim(sanitize_text_field(wp_unslash($_GET['det_barrio'] ?? ''))),
+        'q'         => trim(sanitize_text_field(wp_unslash($_GET['det_q'] ?? ''))),
+    ];
+}
+
+function gofast_md_det_args($det) {
+    return array_filter([
+        'det_estado'    => $det['estado'],
+        'det_mensajero' => $det['mensajero'] ? (string) $det['mensajero'] : '',
+        'det_barrio'    => $det['barrio'],
+        'det_q'         => $det['q'],
+    ], 'strlen');
+}
+
+/** Barrios de destino del periodo (sin el prefijo 🌐 de los intermunicipales), en orden alfabético. */
+function gofast_md_barrios_destino($datos) {
+    $barrios = [];
+    foreach (array_keys($datos['por_destino'] ?? []) as $label) {
+        $barrios[preg_replace('/^🌐 /u', '', (string) $label)] = true;
+    }
+    $barrios = array_keys($barrios);
+    natcasesort($barrios);
+    return array_values($barrios);
+}
+
+/** Filtra los servicios del tab Detalle (vista cliente) con gofast_md_det_filtros(). */
+function gofast_md_filtrar_detalle($servicios, $det) {
+    $estado = $det['estado'];
+    $q = $det['q'];
+    if ($estado === '' && $q === '' && !$det['mensajero'] && $det['barrio'] === '') return $servicios;
+    $q_num = ltrim($q, '#');
+    $q_low = function_exists('mb_strtolower') ? mb_strtolower($q) : strtolower($q);
+    return array_values(array_filter($servicios, function ($s) use ($det, $estado, $q, $q_num, $q_low) {
+        if ($estado !== '' && $s['estado'] !== $estado) return false;
+        if ($det['mensajero'] === -1 && $s['mensajero_id'] > 0) return false;
+        if ($det['mensajero'] > 0 && $s['mensajero_id'] !== $det['mensajero']) return false;
+        if ($det['barrio'] !== '' && !in_array($det['barrio'], $s['destinos'], true)) return false;
+        if ($q === '') return true;
+        if (ctype_digit($q_num) && (string) $s['id'] === $q_num) return true;
+        $texto = $s['negocio'] . ' ' . $s['origen'] . ' ' . implode(' ', $s['destinos']);
+        foreach ($s['lineas'] as $l) $texto .= ' ' . ($l['direccion'] ?? '');
+        $texto = function_exists('mb_strtolower') ? mb_strtolower($texto) : strtolower($texto);
+        return strpos($texto, $q_low) !== false;
+    }));
+}
+
+/**
+ * Formulario de filtro del tab Detalle, compartido por la vista cliente y la de admin.
+ * $mensajeros: id => nombre; $barrios: lista de barrios de destino.
+ */
+function gofast_md_html_filtro_detalle($args, $url_base, $det, $mostrados, $total, $mensajeros = [], $barrios = []) {
+    $partes = wp_parse_url($url_base);
+    $accion = strtok($url_base, '?');
+    $ocultos = [];
+    if (!empty($partes['query'])) parse_str($partes['query'], $ocultos);
+    $ocultos = array_merge($ocultos, $args);
+    unset($ocultos['det_estado'], $ocultos['det_mensajero'], $ocultos['det_barrio'], $ocultos['det_q'], $ocultos['pg']);
+    if ($det['barrio'] !== '' && !in_array($det['barrio'], $barrios, true)) $barrios[] = $det['barrio'];
+    ob_start();
+    ?>
+    <form method="get" action="<?= esc_url($accion) ?>" class="gofast-md-tabfiltro">
+        <?php foreach ($ocultos as $k => $v):
+            if (is_array($v) || $v === '' || $v === null) continue; ?>
+            <input type="hidden" name="<?= esc_attr($k) ?>" value="<?= esc_attr($v) ?>">
+        <?php endforeach; ?>
+        <select name="det_estado" aria-label="Estado" data-md-autoenvio>
+            <option value="">Todos los estados</option>
+            <?php foreach (gofast_md_estado_labels() as $k => $label): ?>
+                <option value="<?= esc_attr($k) ?>"<?php selected($det['estado'], $k); ?>><?= esc_html($label) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <select name="det_mensajero" aria-label="Mensajero" class="gofast-md-select2" style="width:200px;" data-md-autoenvio>
+            <option value="">Todos los mensajeros</option>
+            <option value="-1"<?php selected($det['mensajero'], -1); ?>>Sin asignar</option>
+            <?php foreach ($mensajeros as $mid => $mnombre): ?>
+                <option value="<?= (int) $mid ?>"<?php selected($det['mensajero'], (int) $mid); ?>><?= esc_html($mnombre) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <select name="det_barrio" aria-label="Barrio de destino" class="gofast-md-select2" style="width:200px;" data-md-autoenvio>
+            <option value="">Todos los barrios</option>
+            <?php foreach ($barrios as $b): ?>
+                <option value="<?= esc_attr($b) ?>"<?php selected($det['barrio'], $b); ?>><?= esc_html($b) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <input type="search" name="det_q" value="<?= esc_attr($det['q']) ?>" placeholder="🔍 # de servicio o dirección…" aria-label="Buscar servicio">
+        <button type="submit" class="gofast-btn-mini">Buscar</button>
+        <?php if (gofast_md_det_args($det)): ?>
+            <a href="<?= esc_url(add_query_arg($ocultos, $accion)) ?>" class="gofast-btn-mini gofast-btn-outline">Quitar</a>
+            <small><?= number_format($mostrados, 0, ',', '.') ?> de <?= number_format($total, 0, ',', '.') ?> servicios</small>
+        <?php endif; ?>
+    </form>
+    <?php
+    return ob_get_clean();
+}
+
+function gofast_md_tabla_resumen($filas, $titulo_col, $total_valor, $col_servicios = false, $etiqueta_total = 'Total', $totales_extra = [], $filas_extra = []) {
     if (!$filas) {
         return "<p style='text-align:center;color:#666;padding:20px;'>No hay servicios en este periodo.</p>";
     }
@@ -845,12 +1202,24 @@ function gofast_md_tabla_resumen($filas, $titulo_col, $total_valor, $col_servici
                 $sum['servicios'] += $g['servicios'] ?? 0;
                 $sum['envios'] += $g['envios'];
                 $sum['valor'] += $g['valor']; ?>
-                <tr>
+                <tr data-valor="<?= (int) $g['valor'] ?>" data-md-nombre="<?= esc_attr($label) ?>">
                     <td><?= esc_html($label) ?></td>
                     <?php if ($col_servicios): ?><td style="text-align:right;"><?= number_format($g['servicios'], 0, ',', '.') ?></td><?php endif; ?>
                     <td style="text-align:right;"><?= number_format($g['envios'], 0, ',', '.') ?></td>
                     <td style="text-align:right;font-weight:600;"><?= gofast_md_money($g['valor']) ?></td>
                     <td style="text-align:right;color:#666;"><?= gofast_md_money($base ? round($g['valor'] / $base) : 0) ?></td>
+                    <td><div class="gofast-md-barra"><span style="width:<?= min(100, $pct) ?>%;"></span></div><small><?= $pct ?>%</small></td>
+                </tr>
+            <?php endforeach;
+            foreach ($filas_extra as $label => $g):
+                $pct = $total_valor > 0 ? round($g['valor'] * 100 / $total_valor, 1) : 0;
+                $base_e = $col_servicios ? $g['servicios'] : $g['envios']; ?>
+                <tr class="gofast-md-fila-extra" data-valor="<?= (int) $g['valor'] ?>" style="display:none;">
+                    <td><?= esc_html($label) ?></td>
+                    <?php if ($col_servicios): ?><td style="text-align:right;"><?= number_format($g['servicios'], 0, ',', '.') ?></td><?php endif; ?>
+                    <td style="text-align:right;"><?= number_format($g['envios'], 0, ',', '.') ?></td>
+                    <td style="text-align:right;font-weight:600;"><?= gofast_md_money($g['valor']) ?></td>
+                    <td style="text-align:right;color:#666;"><?= gofast_md_money($base_e ? round($g['valor'] / $base_e) : 0) ?></td>
                     <td><div class="gofast-md-barra"><span style="width:<?= min(100, $pct) ?>%;"></span></div><small><?= $pct ?>%</small></td>
                 </tr>
             <?php endforeach;
@@ -898,10 +1267,17 @@ function gofast_md_html_destinos($datos) {
         return "<p style='text-align:center;color:#666;padding:20px;'>No hay servicios en este periodo.</p>";
     }
     $top = array_slice($locales, 0, 10, true);
+    $resto = array_slice($locales, 10, null, true);
     ob_start();
+    echo gofast_md_tabfiltro(
+        ($inter && $locales) ? ['' => 'Todos', 'urbano' => '🏙️ Locales', 'inter' => '🌐 Intermunicipales'] : [],
+        '🔍 Buscar un barrio o municipio…'
+    );
     if ($inter): ?>
+        <div data-md-seccion="inter">
         <h4 style="margin:0 0 8px;">🌐 Destinos intermunicipales</h4>
         <?= gofast_md_tabla_resumen($inter, 'Municipio / destino', $total_valor, false, 'Total intermunicipales') ?>
+        </div>
     <?php endif;
     if ($locales):
         $suma = function ($filas) {
@@ -916,12 +1292,14 @@ function gofast_md_html_destinos($datos) {
             $i = $suma($inter);
             $extra[] = ['label' => 'Total general con intermunicipales', 'envios' => $todo['envios'] + $i['envios'], 'valor' => $todo['valor'] + $i['valor']];
         } ?>
+        <div data-md-seccion="urbano">
         <h4 style="margin:<?= $inter ? '20px' : '0' ?> 0 8px;">🏙️ Los <?= count($top) ?> barrios locales con más envíos</h4>
-        <?= gofast_md_tabla_resumen($top, 'Barrio destino', $total_valor, false, count($locales) > 10 ? 'Total de estos 10 barrios' : ($inter ? 'Total locales' : 'Total general'), $extra) ?>
+        <?= gofast_md_tabla_resumen($top, 'Barrio destino', $total_valor, false, count($locales) > 10 ? 'Total de estos 10 barrios' : ($inter ? 'Total locales' : 'Total general'), $extra, $resto) ?>
         <?php if (count($locales) > 10): ?>
-            <p class="gofast-md-nota">Se muestran los 10 barrios con más envíos de <?= number_format(count($locales), 0, ',', '.') ?> barrios a los que se envió en el periodo. El detalle por envío (Excel) los incluye todos.</p>
-        <?php endif;
-    endif;
+            <p class="gofast-md-nota">Se muestran los 10 barrios con más envíos de <?= number_format(count($locales), 0, ',', '.') ?> barrios a los que se envió en el periodo. Con el buscador encuentras cualquiera de ellos; el detalle por envío (Excel) los incluye todos.</p>
+        <?php endif; ?>
+        </div>
+    <?php endif;
     return ob_get_clean();
 }
 
@@ -957,6 +1335,36 @@ function gofast_md_css() {
 .gofast-md-chips button.gofast-md-chip { background: #fff; color: #1a1a1a; border: 1px solid var(--gofast-gray-400); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; line-height: 1.2; width: auto; min-height: 0; margin: 0; box-shadow: none; cursor: pointer; }
 .gofast-md-chips button.gofast-md-chip:hover { border-color: #1a1a1a; }
 .gofast-md-chips button.gofast-md-chip-on { background: var(--gofast-yellow); border-color: var(--gofast-yellow); }
+.gofast-md-tabfiltro { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; padding: 8px 10px; background: #f7f8fa; border: 1px solid #e3e6ea; border-radius: 8px; }
+.gofast-md-tabfiltro input[type="search"], .gofast-md-tabfiltro select { flex: 0 1 260px; min-width: 160px; height: 34px; padding: 4px 10px; margin: 0; font-size: 13px; border: 1px solid var(--gofast-gray-400); border-radius: 6px; background: #fff; }
+.gofast-md-tabfiltro select { flex-basis: 180px; }
+.gofast-md-tabfiltro .select2-container { flex: 0 1 auto; max-width: 100%; }
+.gofast-md-tabfiltro .select2-container .select2-selection--single { height: 34px; border-color: var(--gofast-gray-400); border-radius: 6px; }
+.gofast-md-tabfiltro .select2-container .select2-selection__rendered { line-height: 32px; font-size: 13px; }
+.gofast-md-tabfiltro .select2-container .select2-selection__arrow { height: 32px; }
+.gofast-md-tabchips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.gofast-md-tabfiltro button[data-md-grupo] { background: #fff; color: #1a1a1a; border: 1px solid var(--gofast-gray-400); border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; line-height: 1.2; width: auto; min-height: 0; margin: 0; box-shadow: none; cursor: pointer; }
+.gofast-md-tabfiltro button[data-md-grupo].on { background: var(--gofast-yellow); border-color: var(--gofast-yellow); }
+.gofast-md-tabfiltro small { color: #555; font-size: 12px; }
+.gofast-md-tabfiltro .gofast-btn-mini { width: auto; margin: 0; }
+.gofast-home .gofast-md-tabfiltro a.gofast-btn-outline, .gofast-home .gofast-md-tabfiltro a.gofast-btn-outline:hover { color: #333; }
+.gofast-md-horas { position: relative; }
+.gofast-md-horas > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; min-height: 42px; padding: 6px 28px 6px 10px; border: 1px solid var(--gofast-gray-400); border-radius: 6px; background: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.gofast-md-horas > summary::-webkit-details-marker { display: none; }
+.gofast-md-horas > summary::after { content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #666; }
+.gofast-md-horas[open] > summary { border-color: #1a1a1a; }
+.gofast-md-horas-panel { position: absolute; z-index: 50; top: calc(100% + 4px); right: 0; width: 330px; max-width: 90vw; padding: 10px; background: #fff; border: 1px solid var(--gofast-gray-400); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+.gofast-md-horas-atajos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; font-size: 12px; color: #555; }
+.gofast-md-horas-panel button[type="button"] { background: #fff; color: #1a1a1a; border: 1px solid var(--gofast-gray-400); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; line-height: 1.2; width: auto; min-height: 0; margin: 0; box-shadow: none; cursor: pointer; }
+.gofast-md-horas-panel button[type="button"]:hover { border-color: #1a1a1a; }
+.gofast-md-horas-fila { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.gofast-md-horas-hm { display: inline-flex; align-items: center; gap: 2px; font-weight: 700; }
+.gofast-md-horas-panel .gofast-md-horas-hm select { width: 58px; min-width: 0; height: 36px; padding: 2px 4px; margin: 0; font-size: 14px; border: 1px solid var(--gofast-gray-400); border-radius: 6px; background: #fff; }
+.gofast-md-horas-fila > span:not(.gofast-md-horas-hm) { font-size: 13px; color: #555; }
+.gofast-md-horas-panel .gofast-md-horas-fila button[data-md-horas-quitar] { border-radius: 6px; padding: 6px 9px; color: #c0392b; margin-left: auto; }
+.gofast-md-horas-acciones { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.gofast-md-horas-acciones .gofast-btn-mini { width: auto; margin: 0 0 0 auto; }
+.gofast-md-horas-panel small { display: block; margin-top: 8px; color: #555; font-size: 11px; line-height: 1.35; }
 .gofast-md-rango-libre { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 3px 3px 8px; border: 1px solid var(--gofast-gray-400); border-radius: 999px; background: #fff; font-size: 13px; }
 .gofast-md-rango-libre.gofast-md-chip-on { border-color: var(--gofast-yellow); box-shadow: 0 0 0 2px var(--gofast-yellow); }
 .gofast-md-rango-libre input[type="date"] { border: 0; padding: 4px; margin: 0; height: auto; font-size: 13px; width: auto; min-height: 0; background: transparent; box-shadow: none; }
@@ -1017,6 +1425,7 @@ function gofast_md_css() {
 .gofast-home .gofast-pedidos-filtros-row.gofast-md-filtros-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 16px; align-items: end; margin-bottom: 14px; }
 .gofast-home .gofast-md-filtros-grid > div { min-width: 0 !important; max-width: none !important; width: auto; }
 .gofast-home .gofast-md-filtros-grid.gofast-md-filtros-cliente { grid-template-columns: minmax(0, 360px) auto; justify-content: start; }
+.gofast-home a.gofast-btn-outline, .gofast-home a.gofast-btn-outline:hover { color: #333; }
 .gofast-home .gofast-md-filtros-grid .gofast-pedidos-filtros-actions { display: flex; flex-direction: row !important; justify-content: flex-start !important; gap: 8px; }
 .gofast-home .gofast-md-filtros-grid .select2-container { width: 100% !important; max-width: 100%; }
 .gofast-home .gofast-md-filtros-grid .select2-selection__rendered { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1230,6 +1639,7 @@ function gofast_md_html_tarifas($datos) {
     $hay_inter = !empty($grupos['inter']['filas']);
     $hay_urbano = !empty($grupos['urbano']['filas']);
     $titulos = ['urbano' => '🏙️ Envíos urbanos', 'inter' => '🌐 Envíos intermunicipales'];
+    if ($hay_inter && $hay_urbano) echo gofast_md_tabfiltro(['' => 'Todos', 'urbano' => '🏙️ Urbanos', 'inter' => '🌐 Intermunicipales'], '');
     ?>
     <div class="gofast-md-grid-2 gofast-md-tarifas">
         <div>
@@ -1237,6 +1647,7 @@ function gofast_md_html_tarifas($datos) {
                 if (!$g['filas']) continue;
                 $es_ultimo = ($tipo === 'inter' || !$hay_inter);
                 $pct_g = $kpi['envios'] ? round($g['envios'] * 100 / $kpi['envios'], 1) : 0; ?>
+            <div data-md-seccion="<?= esc_attr($tipo) ?>">
             <?php if ($hay_inter): ?><h4 style="margin:<?= $tipo === 'inter' && $hay_urbano ? '18px' : '0' ?> 0 8px;"><?= $titulos[$tipo] ?></h4><?php endif; ?>
             <div class="gofast-table-wrap">
                 <table class="gofast-table">
@@ -1295,6 +1706,7 @@ function gofast_md_html_tarifas($datos) {
                         <?php endif; ?>
                     </tfoot>
                 </table>
+            </div>
             </div>
             <?php endforeach; ?>
             <p class="gofast-md-nota">Se cuenta cada destino como un envío: un servicio con 2 destinos suma 2 envíos. Los recargos se muestran aparte.</p>
@@ -1534,6 +1946,136 @@ function gofast_md_js() {
             document.querySelectorAll('.gofast-md-tab-input').forEach(function (i) { i.value = tab; });
         });
     });
+    var normal = function (t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); };
+    // select2 avisa el cambio solo por jQuery (no dispara el change nativo): se guardan los
+    // manejadores para conectarlos también por jQuery cuando select2 termine de cargar.
+    var alCambiar = function (el, fn) {
+        el.addEventListener('change', fn);
+        (el._mdCambios = el._mdCambios || []).push(fn);
+    };
+    var intentosS2 = 0;
+    var listasSelect2 = function () {
+        if (!(window.jQuery && jQuery.fn.select2)) {
+            if (++intentosS2 < 20) setTimeout(listasSelect2, 250);
+            return;
+        }
+        jQuery('select.gofast-md-select2').each(function () {
+            var s = this;
+            if (jQuery(s).data('select2')) return;
+            jQuery(s).select2({ width: 'style', minimumResultsForSearch: 0, language: { noResults: function () { return 'Sin resultados'; } } });
+            (s._mdCambios || []).forEach(function (fn) { jQuery(s).on('change', fn); });
+        });
+    };
+    window.addEventListener('load', listasSelect2);
+    document.querySelectorAll('select[data-md-autoenvio]').forEach(function (s) {
+        alCambiar(s, function () { s.form.submit(); });
+    });
+    // Franja horaria: cada fila "desde a hasta" (hora y minuto, final incluido) es una franja; se
+    // envían juntas como horas=08:30-10:14,14:00-15:59. Una fila de 00:00 a 23:59 es todo el día.
+    // El panel solo se cierra con su botón: los clics en las listas no deben cerrarlo.
+    document.querySelectorAll('[data-md-horas]').forEach(function (caja) {
+        var oculto = caja.querySelector('input[name="horas"]');
+        var texto = caja.querySelector('[data-md-horas-txt]');
+        var filas = caja.querySelector('[data-md-horas-filas]');
+        var molde = caja.querySelector('[data-md-horas-molde]');
+        var lado = function (f, i) {
+            var hm = f.querySelectorAll('.gofast-md-horas-hm')[i];
+            return { h: hm.querySelector('[data-md-h]'), m: hm.querySelector('[data-md-m]') };
+        };
+        var valor = function (l) { return l.h.value + ':' + l.m.value; };
+        var minutos = function (v) { return +v.slice(0, 2) * 60 + +v.slice(3, 5); };
+        var todoElDia = function (f) {
+            return (minutos(valor(lado(f, 1))) + 1) % 1440 === minutos(valor(lado(f, 0)));
+        };
+        var poner = function (f, desde, hasta) {
+            var a = lado(f, 0), b = lado(f, 1);
+            a.h.value = desde.slice(0, 2); a.m.value = desde.slice(3, 5);
+            b.h.value = hasta.slice(0, 2); b.m.value = hasta.slice(3, 5);
+        };
+        var nueva = function () {
+            filas.appendChild(molde.content.cloneNode(true));
+            return filas.lastElementChild;
+        };
+        var actualizar = function () {
+            var tramos = [], todo = false;
+            filas.querySelectorAll('[data-md-horas-fila]').forEach(function (f) {
+                if (todoElDia(f)) { todo = true; return; }
+                var t = valor(lado(f, 0)) + '-' + valor(lado(f, 1));
+                if (tramos.indexOf(t) === -1) tramos.push(t);
+            });
+            if (todo) tramos = [];
+            oculto.value = tramos.join(',');
+            texto.textContent = tramos.length ? tramos.map(function (t) { return t.replace('-', ' a '); }).join(', ') : 'Todo el día';
+        };
+        filas.addEventListener('change', actualizar);
+        filas.addEventListener('click', function (e) {
+            var q = e.target.closest('[data-md-horas-quitar]');
+            if (!q) return;
+            q.closest('[data-md-horas-fila]').remove();
+            if (!filas.children.length) nueva();
+            actualizar();
+        });
+        caja.querySelector('[data-md-horas-agregar]').addEventListener('click', function () {
+            nueva().querySelector('[data-md-h]').focus();
+            actualizar();
+        });
+        caja.querySelector('[data-md-horas-limpiar]').addEventListener('click', function () {
+            filas.innerHTML = '';
+            nueva();
+            actualizar();
+        });
+        caja.querySelectorAll('[data-md-horas-atajo]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var r = b.getAttribute('data-md-horas-atajo').split('-');
+                if (oculto.value.split(',').indexOf(r.join('-')) !== -1) return;
+                var libre = [].filter.call(filas.children, todoElDia)[0];
+                poner(libre || nueva(), r[0], r[1]);
+                actualizar();
+            });
+        });
+    });
+    document.querySelectorAll('[data-md-tabfiltro]').forEach(function (barra) {
+        var panel = barra.closest('[data-md-panel]') || barra.parentElement;
+        var buscar = barra.querySelector('[data-md-buscar]');
+        var lista = barra.querySelector('[data-md-lista]');
+        var chips = barra.querySelectorAll('[data-md-grupo]');
+        var conteo = barra.querySelector('[data-md-conteo]');
+        var grupo = '';
+        var aplicar = function () {
+            var q = buscar ? normal(buscar.value.trim()) : '';
+            var nombre = lista ? lista.value : '';
+            var secciones = panel.querySelectorAll('[data-md-seccion]');
+            var vistas = 0, suma = 0;
+            secciones.forEach(function (s) {
+                s.style.display = (!grupo || s.getAttribute('data-md-seccion') === grupo) ? '' : 'none';
+            });
+            panel.querySelectorAll('tbody tr[data-valor]').forEach(function (tr) {
+                var seccion = tr.closest('[data-md-seccion]');
+                if (seccion && seccion.style.display === 'none') return;
+                var extra = tr.classList.contains('gofast-md-fila-extra');
+                var ok = (secciones.length || !grupo || tr.getAttribute('data-md-grupo') === grupo)
+                    && (!q || normal(tr.textContent).indexOf(q) !== -1)
+                    && (!nombre || tr.getAttribute('data-md-nombre') === nombre)
+                    && (!extra || q);
+                tr.style.display = ok ? '' : 'none';
+                if (ok) { vistas++; suma += Number(tr.getAttribute('data-valor')) || 0; }
+            });
+            if (q) secciones.forEach(function (s) {
+                if (s.style.display !== 'none' && !s.querySelector('tbody tr[data-valor]:not([style*="none"])')) s.style.display = 'none';
+            });
+            if (conteo) conteo.textContent = (q || grupo || nombre) ? (vistas ? 'Mostrando ' + vistas + ' · ' + dinero(suma) : 'Sin coincidencias') : '';
+        };
+        if (buscar) buscar.addEventListener('input', aplicar);
+        if (lista) alCambiar(lista, aplicar);
+        chips.forEach(function (c) {
+            c.addEventListener('click', function () {
+                grupo = c.getAttribute('data-md-grupo');
+                chips.forEach(function (x) { x.classList.toggle('on', x === c); });
+                aplicar();
+            });
+        });
+    });
+
     var modal = document.getElementById('gofast-md-modal');
     var dinero = function (v) { return '$' + Number(v || 0).toLocaleString('es-CO'); };
     var esc = function (t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; };
@@ -1606,7 +2148,7 @@ function gofast_md_js() {
     document.body.appendChild(cargando);
     var mostrarCargando = function () { cargando.classList.add('on'); };
     document.querySelectorAll('.gofast-home form.gofast-pedidos-filtros').forEach(function (f) {
-        f.addEventListener('submit', mostrarCargando);
+        f.addEventListener('submit', function (e) { if (!e.defaultPrevented) mostrarCargando(); });
     });
     document.querySelectorAll('.gofast-md-negocio, .gofast-pagination a, .gofast-md-actualizado a').forEach(function (a) {
         a.addEventListener('click', function (e) {
@@ -1694,7 +2236,7 @@ function gofast_mis_domicilios_shortcode() {
     $filtros = gofast_md_filtros();
     $labels = gofast_md_estado_labels();
     $tab = sanitize_key($_GET['tab'] ?? 'tarifa');
-    $tabs_ok = ['tarifa', 'negocio', 'destino', 'mes', 'estado', 'detalle'];
+    $tabs_ok = ['tarifa', 'negocio', 'mensajero', 'destino', 'mes', 'estado', 'detalle'];
     if (!in_array($tab, $tabs_ok, true)) $tab = 'tarifa';
 
     // Admin sin cliente elegido: selector de cliente
@@ -1721,7 +2263,17 @@ function gofast_mis_domicilios_shortcode() {
         'desde'      => $filtros['periodo'] === 'rango' ? $filtros['desde'] : null,
         'hasta'      => $filtros['periodo'] === 'rango' ? $filtros['hasta'] : null,
         'negocio'    => $filtros['negocio'] !== 'todos' ? $filtros['negocio'] : null,
+        'mensajero'  => $filtros['mensajero'] ?: null,
+        'recargo'    => $filtros['recargo'] ?: null,
+        'tipo'       => $filtros['tipo'] ?: null,
+        'horas'      => gofast_md_horas_arg($filtros['horas']) ?: null,
     ]);
+    $mensajeros_periodo = $datos ? gofast_md_nombres_usuarios(array_keys($datos['mensajeros_periodo'])) : [];
+    if ($filtros['mensajero'] > 0 && !isset($mensajeros_periodo[$filtros['mensajero']])) {
+        $mensajeros_periodo += gofast_md_nombres_usuarios([$filtros['mensajero']]);
+    }
+    asort($mensajeros_periodo);
+    $filtros_texto = gofast_md_filtros_texto($filtros);
     $url_base = get_permalink();
     $url_export = function ($tipo) use ($url_base, $base_args) {
         return esc_url(add_query_arg(array_merge($base_args, ['gofast_md_export' => $tipo]), $url_base));
@@ -1733,8 +2285,12 @@ function gofast_mis_domicilios_shortcode() {
     };
 
     // Paginación del detalle
+    $det = gofast_md_det_filtros();
+    $det_args = gofast_md_det_args($det);
+    $servicios_det = $datos ? gofast_md_filtrar_detalle($datos['servicios'], $det) : [];
+
     $por_pagina = 25;
-    $total_servicios = $datos ? count($datos['servicios']) : 0;
+    $total_servicios = count($servicios_det);
     $total_paginas = max(1, (int) ceil($total_servicios / $por_pagina));
     $pagina = min($total_paginas, max(1, (int) ($_GET['pg'] ?? 1)));
 
@@ -1807,6 +2363,49 @@ function gofast_mis_domicilios_shortcode() {
                 </div>
             <?php endif; ?>
 
+            <?php if ($datos): ?>
+                <div class="gofast-pedidos-filtros-row gofast-md-filtros-grid gofast-md-filtros-extra">
+                    <div>
+                        <label>Mensajero</label>
+                        <select name="mensajero">
+                            <option value="0">Todos</option>
+                            <?php foreach ($mensajeros_periodo as $mid => $mnombre): ?>
+                                <option value="<?= (int) $mid ?>"<?php selected($filtros['mensajero'], (int) $mid); ?>><?= esc_html($mnombre) ?></option>
+                            <?php endforeach; ?>
+                            <option value="-1"<?php selected($filtros['mensajero'], -1); ?>>Sin asignar</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Recargo</label>
+                        <select name="recargo">
+                            <option value="">Todos</option>
+                            <option value="con"<?php selected($filtros['recargo'], 'con'); ?>>Con recargo</option>
+                            <option value="sin"<?php selected($filtros['recargo'], 'sin'); ?>>Sin recargo</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Tipo</label>
+                        <select name="tipo">
+                            <option value="">Todos</option>
+                            <option value="urbano"<?php selected($filtros['tipo'], 'urbano'); ?>>Urbano</option>
+                            <option value="inter"<?php selected($filtros['tipo'], 'inter'); ?>>Intermunicipal</option>
+                        </select>
+                    </div>
+                    <?php if ($ctx['es_admin']): ?>
+                        <div>
+                            <label>Franja horaria</label>
+                            <?= gofast_md_html_horas($filtros['horas']) ?>
+                        </div>
+                    <?php endif; ?>
+                    <div class="gofast-pedidos-filtros-actions">
+                        <button type="submit" class="gofast-btn-mini">Filtrar</button>
+                        <?php if ($filtros_texto): ?>
+                            <a href="<?= esc_url(add_query_arg(array_diff_key($base_args, ['mensajero' => 1, 'recargo' => 1, 'tipo' => 1, 'horas' => 1]) + ['tab' => $tab], $url_base)) ?>" class="gofast-btn-mini gofast-btn-outline">Quitar</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <?= gofast_md_html_periodos($filtros) ?>
         </form>
         <div style="padding:10px;background:#e7f3ff;border-radius:6px;font-size:13px;">
@@ -1815,6 +2414,9 @@ function gofast_mis_domicilios_shortcode() {
             <?php if ($filtros['negocio'] !== 'todos' && $datos): ?>
                 · <strong>Negocio:</strong>
                 <?= esc_html($filtros['negocio'] === 'personal' ? 'Pedidos personales' : ($datos['negocios_map'][(int) $filtros['negocio']] ?? '')) ?>
+            <?php endif; ?>
+            <?php if ($filtros_texto && $datos): ?>
+                · <strong>Filtros:</strong> <?= esc_html(implode(' · ', $filtros_texto)) ?>
             <?php endif; ?>
         </div>
     </div>
@@ -1872,6 +2474,7 @@ function gofast_mis_domicilios_shortcode() {
             $tabs = [
                 'tarifa'   => '💲 Por tarifa',
                 'negocio'  => '🏪 Por negocio',
+                'mensajero' => '🏍️ Por mensajero',
                 'destino'  => '📍 Por destino',
                 'mes'      => '📅 Por mes',
                 'estado'   => '🚦 Por estado',
@@ -1879,6 +2482,8 @@ function gofast_mis_domicilios_shortcode() {
             ];
             if (!$datos['negocios']) unset($tabs['negocio']);
             if ($tab === 'negocio' && !$datos['negocios']) $tab = 'tarifa';
+            if (!$datos['por_mensajero']) unset($tabs['mensajero']);
+            if ($tab === 'mensajero' && !$datos['por_mensajero']) $tab = 'tarifa';
             foreach ($tabs as $key => $label): ?>
                 <button type="button" class="gofast-config-tab <?= $tab === $key ? 'gofast-config-tab-active' : '' ?>" data-md-tab="<?= esc_attr($key) ?>">
                     <?= esc_html($label) ?>
@@ -1896,7 +2501,21 @@ function gofast_mis_domicilios_shortcode() {
         <?php if ($datos['negocios']): ?>
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="negocio" style="display:<?= $tab === 'negocio' ? 'block' : 'none' ?>;">
             <h3>🏪 Servicios por negocio</h3>
+            <?php if (count($datos['por_negocio']) > 3) echo gofast_md_tabfiltro([], '🔍 Buscar un negocio…'); ?>
             <?= gofast_md_tabla_resumen($datos['por_negocio'], 'Negocio', $kpi['total'], true) ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- Por mensajero -->
+        <?php if ($datos['por_mensajero']): ?>
+        <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="mensajero" style="display:<?= $tab === 'mensajero' ? 'block' : 'none' ?>;">
+            <h3>🏍️ Mensajeros que atendieron tus envíos</h3>
+            <?php if (count($datos['por_mensajero']) > 1) {
+                $nombres_m = array_map('strval', array_keys($datos['por_mensajero']));
+                natcasesort($nombres_m);
+                echo gofast_md_tabfiltro([], '', $nombres_m, 'Todos los mensajeros');
+            } ?>
+            <?= gofast_md_tabla_resumen($datos['por_mensajero'], 'Mensajero', $kpi['total'], true) ?>
         </div>
         <?php endif; ?>
 
@@ -1921,10 +2540,13 @@ function gofast_mis_domicilios_shortcode() {
         <!-- Detalle -->
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="detalle" style="display:<?= $tab === 'detalle' ? 'block' : 'none' ?>;">
             <h3>📋 Detalle de servicios</h3>
+            <?php if ($datos['servicios']) echo gofast_md_html_filtro_detalle(array_merge($base_args, ['tab' => 'detalle']), $url_base, $det, $total_servicios, count($datos['servicios']), $mensajeros_periodo, gofast_md_barrios_destino($datos)); ?>
             <?php if (!$datos['servicios']): ?>
                 <p style="text-align:center;color:#666;padding:20px;">No hay servicios en este periodo.</p>
+            <?php elseif (!$servicios_det): ?>
+                <p style="text-align:center;color:#666;padding:20px;">Ningún servicio coincide con el filtro.</p>
             <?php else:
-                $pagina_servicios = array_slice($datos['servicios'], ($pagina - 1) * $por_pagina, $por_pagina);
+                $pagina_servicios = array_slice($servicios_det, ($pagina - 1) * $por_pagina, $por_pagina);
 
                 $mensajeros = gofast_md_nombres_usuarios(array_column($pagina_servicios, 'mensajero_id'));
 
@@ -2001,7 +2623,7 @@ function gofast_mis_domicilios_shortcode() {
                                 if ($p === 3 || $p === $total_paginas - 2) echo '<span style="padding:0 4px;">…</span>';
                                 continue;
                             }
-                            $url = esc_url(add_query_arg(array_merge($base_args, ['tab' => 'detalle', 'pg' => $p]), $url_base)); ?>
+                            $url = esc_url(add_query_arg(array_merge($base_args, $det_args, ['tab' => 'detalle', 'pg' => $p]), $url_base)); ?>
                             <a href="<?= $url ?>" class="gofast-page-link <?= $p === $pagina ? 'gofast-page-current' : '' ?>"><?= $p ?></a>
                         <?php endfor; ?>
                     </div>
@@ -2027,7 +2649,7 @@ function gofast_mis_domicilios_shortcode() {
     <!-- Descargas -->
     <div class="gofast-box">
         <h3>📥 Descargas</h3>
-        <p style="font-size:13px;color:#666;margin-top:0;">Con el periodo y el negocio elegidos arriba.</p>
+        <p style="font-size:13px;color:#666;margin-top:0;">Con el periodo, el negocio y los filtros elegidos arriba.</p>
         <div class="gofast-md-descargas">
             <a href="<?= $url_export('imprimir') ?>" target="_blank" rel="noopener" class="gofast-btn-mini">🧾 Estado de cuenta con detalle (PDF)</a>
             <a href="<?= esc_url(add_query_arg(array_merge($base_args, ['gofast_md_export' => 'imprimir', 'detalle' => '0']), $url_base)) ?>" target="_blank" rel="noopener" class="gofast-btn-mini">🧾 Estado de cuenta sin detalle · por tarifas (PDF)</a>

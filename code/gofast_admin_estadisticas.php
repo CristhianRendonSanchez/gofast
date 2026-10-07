@@ -36,8 +36,14 @@ function gofast_ad_filtros() {
     );
     $tipo = sanitize_key($_GET['tipo'] ?? '');
     $estado = sanitize_key($_GET['estado'] ?? '');
+    $origen = sanitize_key($_GET['origen'] ?? '');
+    $recargo = sanitize_key($_GET['recargo'] ?? '');
 
     return [
+        'origen'    => isset(gofast_ad_tipos_cliente()[$origen]) ? $origen : '',
+        'rubro'     => sanitize_text_field(wp_unslash($_GET['rubro'] ?? '')),
+        'recargo'   => in_array($recargo, ['con', 'sin'], true) ? $recargo : '',
+        'horas'     => gofast_md_horas_get(),
         'periodo'   => $periodo,
         'desde'     => $desde,
         'hasta'     => $hasta,
@@ -62,7 +68,24 @@ function gofast_ad_args($f) {
         'mensajero' => $f['mensajero'] ?: null,
         'tipo'      => $f['tipo'] ?: null,
         'estado'    => $f['estado'] ?: null,
+        'origen'    => $f['origen'] ?: null,
+        'rubro'     => $f['rubro'] !== '' ? $f['rubro'] : null,
+        'recargo'   => $f['recargo'] ?: null,
+        'horas'     => gofast_md_horas_arg($f['horas']) ?: null,
     ]);
+}
+
+/**
+ * Filtro "Tipo de cliente": los mismos grupos de "Por cliente / negocio".
+ */
+function gofast_ad_tipos_cliente() {
+    return [
+        'negocio'   => '🏪 Negocios',
+        'cliente'   => '👤 Clientes personales',
+        'registro'  => '📝 Sin registro',
+        'admin'     => '🛠️ Creados por admin',
+        'mensajero' => '🏍️ Tomados por mensajero',
+    ];
 }
 
 /**
@@ -106,6 +129,51 @@ function gofast_ad_where($f, $desde = null, $hasta = null) {
         $p[] = $f['estado'];
     }
 
+    // negocio_id puede venir como número, texto o null en el JSON
+    $negocio_id = 'COALESCE(JSON_UNQUOTE(JSON_EXTRACT(destinos, \'$.origen.negocio_id\')) + 0, 0)';
+    $cat = ($f['origen'] !== '' || $f['rubro'] !== '') ? gofast_ad_catalogos() : null;
+    $ids_rol = function ($roles) use ($cat) {
+        $ids = [];
+        foreach ($cat['usuarios'] as $id => $u) {
+            if (in_array($u->rol, $roles, true)) $ids[] = (int) $id;
+        }
+        return $ids ? implode(',', $ids) : '0';
+    };
+    if ($f['origen'] === 'negocio') {
+        $w[] = "$negocio_id > 0";
+    } elseif ($f['origen'] === 'registro') {
+        $w[] = "$negocio_id = 0 AND (user_id IS NULL OR user_id = 0)";
+    } elseif ($f['origen'] === 'cliente') {
+        $w[] = "$negocio_id = 0 AND user_id > 0 AND user_id NOT IN (" . $ids_rol(['mensajero', 'admin']) . ')';
+    } elseif ($f['origen'] !== '') {
+        $w[] = "$negocio_id = 0 AND user_id IN (" . $ids_rol([$f['origen']]) . ')';
+    }
+
+    if ($f['rubro'] !== '') {
+        $ids = [];
+        foreach ($cat['negocios'] as $id => $n) {
+            if ((string) $n->tipo === $f['rubro']) $ids[] = (int) $id;
+        }
+        $w[] = "$negocio_id IN (" . ($ids ? implode(',', $ids) : '0') . ')';
+    }
+
+    // Igual que gofast_md_calcular: los intermunicipales no llevan recargos
+    if ($f['recargo'] !== '') {
+        $con_recargo = "(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(destinos, '$.tipo_servicio')), '') <> 'intermunicipal'"
+            . " AND (destinos REGEXP '\"recargo_total\":\"?[1-9]' OR destinos REGEXP '\"recargo_seleccionable_valor\":\"?[1-9]'))";
+        $w[] = $f['recargo'] === 'con' ? $con_recargo : "NOT COALESCE($con_recargo, 0)";
+    }
+
+    if ($f['horas']) {
+        $minuto = '(SUBSTR(fecha, 12, 2) * 60 + SUBSTR(fecha, 15, 2))';
+        $o = [];
+        foreach ($f['horas'] as $t) {
+            list($a, $b) = array_map('intval', $t);
+            $o[] = $a < $b ? "($minuto >= $a AND $minuto < $b)" : "($minuto >= $a OR $minuto < $b)";
+        }
+        $w[] = '(' . implode(' OR ', $o) . ')';
+    }
+
     return [implode(' AND ', $w), $p];
 }
 
@@ -121,7 +189,7 @@ function gofast_ad_catalogos() {
     foreach ((array) $wpdb->get_results("SELECT id, nombre, telefono, rol, activo FROM usuarios_gofast ORDER BY nombre ASC") as $u) {
         $cat['usuarios'][(int) $u->id] = $u;
     }
-    foreach ((array) $wpdb->get_results("SELECT id, user_id, nombre, activo FROM negocios_gofast ORDER BY nombre ASC") as $n) {
+    foreach ((array) $wpdb->get_results("SELECT id, user_id, nombre, activo, tipo FROM negocios_gofast ORDER BY nombre ASC") as $n) {
         $cat['negocios'][(int) $n->id] = $n;
     }
     return $cat;
@@ -375,6 +443,25 @@ function gofast_ad_origen_html($res) {
 /**
  * Tabla de cliente/negocio o mensajero con promedio por envío y enlace opcional.
  */
+/** Tipo de cliente de una etiqueta de gofast_ad_etiqueta según su emoji (para los chips del tab). */
+function gofast_ad_grupo_etiqueta($label) {
+    $emojis = ['🏪' => 'negocio', '👤' => 'cliente', '📝' => 'registro', '🛠' => 'admin', '🏍' => 'mensajero'];
+    foreach ($emojis as $emoji => $grupo) {
+        if (strpos($label, $emoji) === 0) return $grupo;
+    }
+    return '';
+}
+
+/** Barra de filtro del tab Por cliente: buscador y chips con los tipos de cliente presentes. */
+function gofast_ad_tabfiltro_clientes($filas) {
+    $presentes = array_flip(array_map('gofast_ad_grupo_etiqueta', array_keys($filas)));
+    $chips = ['' => 'Todos'];
+    foreach (gofast_ad_tipos_cliente() as $key => $label) {
+        if (isset($presentes[$key])) $chips[$key] = $label;
+    }
+    return gofast_md_tabfiltro(count($chips) > 2 ? $chips : [], '🔍 Buscar cliente o negocio…');
+}
+
 function gofast_ad_tabla_grupos($filas, $titulo_col, $total, $enlaces = null, $args_enlace = [], $limite = 300) {
     if (!$filas) {
         return "<p style='text-align:center;color:#666;padding:20px;'>No hay domicilios en este periodo.</p>";
@@ -400,7 +487,7 @@ function gofast_ad_tabla_grupos($filas, $titulo_col, $total, $enlaces = null, $a
             foreach (array_slice($filas, 0, $limite, true) as $label => $g):
                 $i++;
                 $pct = $total > 0 ? round($g['valor'] * 100 / $total, 1) : 0; ?>
-                <tr>
+                <tr data-valor="<?= (int) $g['valor'] ?>" data-md-grupo="<?= esc_attr(gofast_ad_grupo_etiqueta($label)) ?>" data-md-nombre="<?= esc_attr($label) ?>">
                     <td style="color:#999;"><?= $i ?></td>
                     <td><?= esc_html($label) ?></td>
                     <td style="text-align:right;"><?= number_format($g['servicios'], 0, ',', '.') ?></td>
@@ -452,11 +539,70 @@ function gofast_ad_paginacion($total_paginas, $pagina, $args, $url_base) {
 }
 
 /**
- * Una página del detalle directo desde SQL (no se guarda el periodo en memoria).
+ * WHERE del tab Detalle: los filtros generales más los propios del tab (gofast_md_det_filtros):
+ * estado, mensajero, barrio de destino y búsqueda (# de servicio, dirección, cliente, negocio o usuario).
  */
-function gofast_ad_detalle_pagina($f, $pagina, $por_pagina) {
+function gofast_ad_where_detalle($f, $det) {
     global $wpdb;
     list($where, $params) = gofast_ad_where($f);
+    $estado = $det['estado'];
+    $q = $det['q'];
+    if ($det['mensajero'] === -1) {
+        $where .= ' AND (mensajero_id IS NULL OR mensajero_id = 0)';
+    } elseif ($det['mensajero'] > 0) {
+        $where .= ' AND mensajero_id = %d';
+        $params[] = $det['mensajero'];
+    }
+    // El LIKE descarta rápido; JSON_SEARCH confirma que el barrio sea de un destino y no del origen
+    if ($det['barrio'] !== '') {
+        $where .= " AND destinos LIKE %s AND JSON_SEARCH(destinos, 'one', %s, NULL, '$.destinos[*].barrio_nombre') IS NOT NULL";
+        $params[] = '%"barrio_nombre":"' . $wpdb->esc_like($det['barrio']) . '"%';
+        $params[] = $wpdb->esc_like($det['barrio']);
+    }
+    if ($estado === 'pendiente') {
+        $where .= " AND (tracking_estado = 'pendiente' OR tracking_estado IS NULL OR tracking_estado = '')";
+    } elseif ($estado !== '') {
+        $where .= ' AND tracking_estado = %s';
+        $params[] = $estado;
+    }
+    if ($q !== '') {
+        $like = '%' . $wpdb->esc_like($q) . '%';
+        $o = ['destinos LIKE %s', 'direccion_origen LIKE %s', 'nombre_cliente LIKE %s'];
+        array_push($params, $like, $like, $like);
+        $q_num = ltrim($q, '#');
+        if (ctype_digit($q_num)) {
+            $o[] = 'id = %d';
+            $params[] = (int) $q_num;
+        }
+        $cat = gofast_ad_catalogos();
+        $q_low = mb_strtolower($q);
+        $ids_n = $ids_u = [];
+        foreach ($cat['negocios'] as $id => $n) {
+            if (strpos(mb_strtolower((string) $n->nombre), $q_low) !== false) $ids_n[] = (int) $id;
+        }
+        foreach ($cat['usuarios'] as $id => $u) {
+            if (strpos(mb_strtolower((string) $u->nombre), $q_low) !== false) $ids_u[] = (int) $id;
+        }
+        if ($ids_n) $o[] = "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(destinos, '$.origen.negocio_id')) + 0, 0) IN (" . implode(',', $ids_n) . ')';
+        if ($ids_u) $o[] = 'user_id IN (' . implode(',', $ids_u) . ') OR mensajero_id IN (' . implode(',', $ids_u) . ')';
+        $where .= ' AND (' . implode(' OR ', $o) . ')';
+    }
+    return [$where, $params];
+}
+
+function gofast_ad_detalle_total($f, $det) {
+    global $wpdb;
+    list($where, $params) = gofast_ad_where_detalle($f, $det);
+    $sql = "SELECT COUNT(*) FROM servicios_gofast WHERE $where";
+    return (int) $wpdb->get_var($params ? $wpdb->prepare($sql, $params) : $sql);
+}
+
+/**
+ * Una página del detalle directo desde SQL (no se guarda el periodo en memoria).
+ */
+function gofast_ad_detalle_pagina($f, $pagina, $por_pagina, $det) {
+    global $wpdb;
+    list($where, $params) = gofast_ad_where_detalle($f, $det);
     $params[] = $por_pagina;
     $params[] = ($pagina - 1) * $por_pagina;
 
@@ -766,15 +912,29 @@ function gofast_admin_domicilios_shortcode() {
     $url_export = function ($tipo) use ($url_base, $args) {
         return esc_url(add_query_arg(array_merge($args, ['gofast_ad_export' => $tipo]), $url_base));
     };
-    $args_cliente = ['periodo' => $f['periodo'], 'desde' => $args['desde'] ?? null, 'hasta' => $args['hasta'] ?? null];
+    $args_cliente = [
+        'periodo'   => $f['periodo'],
+        'desde'     => $args['desde'] ?? null,
+        'hasta'     => $args['hasta'] ?? null,
+        'mensajero' => $f['mensajero'] ?: null,
+        'recargo'   => $f['recargo'] ?: null,
+        'tipo'      => $f['tipo'] ?: null,
+        'horas'     => $args['horas'] ?? null,
+    ];
+
+    $det = gofast_md_det_filtros();
+    $det_args = gofast_md_det_args($det);
 
     $por_pagina = 25;
-    $total_filas = $kpi['servicios'] + $kpi['excluidos'];
+    $total_periodo = $kpi['servicios'] + $kpi['excluidos'];
+    $total_filas = $det_args ? gofast_ad_detalle_total($f, $det) : $total_periodo;
     $total_paginas = max(1, (int) ceil($total_filas / $por_pagina));
     $pagina = min($total_paginas, max(1, (int) ($_GET['pg'] ?? 1)));
 
     $clientes = array_filter($cat['usuarios'], function ($u) { return $u->rol === 'cliente'; });
     $mensajeros = array_filter($cat['usuarios'], function ($u) { return $u->rol === 'mensajero' || $u->rol === 'admin'; });
+    $mensajeros_lista = array_map(function ($u) { return (string) $u->nombre; }, $mensajeros);
+    natcasesort($mensajeros_lista);
 
     // Filtros activos (chips)
     $chips = [];
@@ -785,6 +945,13 @@ function gofast_admin_domicilios_shortcode() {
     elseif ($f['mensajero'] > 0) $chips[] = '🏍️ ' . gofast_ad_mensajero($f['mensajero'], $cat);
     if ($f['tipo'] !== '') $chips[] = $f['tipo'] === 'inter' ? '🌐 Intermunicipal' : '🏙️ Urbano';
     if ($f['estado'] !== '') $chips[] = '🚦 ' . $labels[$f['estado']];
+    if ($f['origen'] !== '') $chips[] = gofast_ad_tipos_cliente()[$f['origen']];
+    if ($f['rubro'] !== '') $chips[] = '🏷️ ' . $f['rubro'];
+    if ($f['recargo'] !== '') $chips[] = $f['recargo'] === 'con' ? '➕ Con recargo' : '➖ Sin recargo';
+    if ($f['horas']) $chips[] = '🕐 ' . gofast_md_horas_texto($f['horas']);
+
+    $rubros = array_unique(array_filter(array_map(function ($n) { return trim((string) $n->tipo); }, $cat['negocios'])));
+    natcasesort($rubros);
 
     ob_start();
     ?>
@@ -858,6 +1025,40 @@ function gofast_admin_domicilios_shortcode() {
                             <option value="<?= esc_attr($key) ?>"<?php selected($f['estado'], $key); ?>><?= esc_html($label) ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+
+                <div>
+                    <label>Tipo de cliente</label>
+                    <select name="origen">
+                        <option value="">Todos</option>
+                        <?php foreach (gofast_ad_tipos_cliente() as $key => $label): ?>
+                            <option value="<?= esc_attr($key) ?>"<?php selected($f['origen'], $key); ?>><?= esc_html($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Tipo de negocio</label>
+                    <select name="rubro" class="gofast-md-select-cliente" data-placeholder="🔍 Todos">
+                        <option value="">Todos</option>
+                        <?php foreach ($rubros as $rubro): ?>
+                            <option value="<?= esc_attr($rubro) ?>"<?php selected($f['rubro'], $rubro); ?>><?= esc_html($rubro) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Recargo</label>
+                    <select name="recargo">
+                        <option value="">Todos</option>
+                        <option value="con"<?php selected($f['recargo'], 'con'); ?>>Con recargo</option>
+                        <option value="sin"<?php selected($f['recargo'], 'sin'); ?>>Sin recargo</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Franja horaria</label>
+                    <?= gofast_md_html_horas($f['horas']) ?>
                 </div>
 
                 <div class="gofast-pedidos-filtros-actions">
@@ -959,11 +1160,17 @@ function gofast_admin_domicilios_shortcode() {
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="cliente" style="display:<?= $tab === 'cliente' ? 'block' : 'none' ?>;">
             <h3>🏪 Domicilios por cliente o negocio</h3>
             <p class="gofast-md-nota" style="margin-top:0;">🏪 negocio · 👤 cliente registrado · 🏍️ pedido que el mensajero tomó y registró a su nombre · 🛠️ creado por un admin · 📝 sin cuenta. Primero negocios y clientes, después los tomados por mensajeros. "Ver cliente" abre la vista que ve ese cliente; "Con detalle" y "Sin detalle" descargan su estado de cuenta del periodo.</p>
+            <?php if ($datos['por_negocio']) echo gofast_ad_tabfiltro_clientes($datos['por_negocio']); ?>
             <?= gofast_ad_tabla_grupos($datos['por_negocio'], 'Cliente / negocio', $kpi['total'], $datos['enlaces'], $args_cliente) ?>
         </div>
 
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="mensajero" style="display:<?= $tab === 'mensajero' ? 'block' : 'none' ?>;">
             <h3>🏍️ Domicilios por mensajero</h3>
+            <?php if (count($datos['por_mensajero']) > 1) {
+                $nombres_m = array_map('strval', array_keys($datos['por_mensajero']));
+                natcasesort($nombres_m);
+                echo gofast_md_tabfiltro([], '', $nombres_m, 'Todos los mensajeros');
+            } ?>
             <?= gofast_ad_tabla_grupos($datos['por_mensajero'], 'Mensajero', $kpi['total']) ?>
         </div>
 
@@ -984,10 +1191,11 @@ function gofast_admin_domicilios_shortcode() {
 
         <div class="gofast-config-tab-content gofast-md-panel" data-md-panel="detalle" style="display:<?= $tab === 'detalle' ? 'block' : 'none' ?>;">
             <h3>📋 Detalle de servicios <small style="color:#666;font-weight:400;">(<?= number_format($total_filas, 0, ',', '.') ?>)</small></h3>
+            <?php if ($total_periodo) echo gofast_md_html_filtro_detalle(array_merge($args, ['tab' => 'detalle']), $url_base, $det, $total_filas, $total_periodo, $mensajeros_lista, gofast_md_barrios_destino($datos)); ?>
             <?php if (!$total_filas): ?>
                 <p style="text-align:center;color:#666;padding:20px;">No hay domicilios con estos filtros.</p>
             <?php else:
-                $pagina_servicios = gofast_ad_detalle_pagina($f, $pagina, $por_pagina);
+                $pagina_servicios = gofast_ad_detalle_pagina($f, $pagina, $por_pagina, $det);
                 $nombres = [];
                 foreach ($pagina_servicios as $s) {
                     $nombres[$s['mensajero_id']] = $s['mensajero'];
@@ -1054,7 +1262,7 @@ function gofast_admin_domicilios_shortcode() {
                 <?= gofast_md_html_modal() ?>
                 <script>window.gofastMdDetalle = <?= wp_json_encode($detalle_js) ?>;</script>
 
-                <?= gofast_ad_paginacion($total_paginas, $pagina, $args, $url_base) ?>
+                <?= gofast_ad_paginacion($total_paginas, $pagina, array_merge($args, $det_args), $url_base) ?>
                 <p class="gofast-md-nota">Los servicios en gris (cancelados) no se suman a los totales.</p>
             <?php endif; ?>
         </div>
@@ -1104,6 +1312,10 @@ function gofast_admin_domicilios_shortcode() {
                 'desde'      => $args['desde'] ?? null,
                 'hasta'      => $args['hasta'] ?? null,
                 'negocio'    => $f['negocio'] > 0 ? $f['negocio'] : null,
+                'mensajero'  => $f['mensajero'] ?: null,
+                'recargo'    => $f['recargo'] ?: null,
+                'tipo'       => $f['tipo'] ?: null,
+                'horas'      => $args['horas'] ?? null,
             ]);
             $url_md = function ($extra) use ($args_md, $url_base) {
                 return esc_url(add_query_arg(array_merge($args_md, $extra), $url_base));
